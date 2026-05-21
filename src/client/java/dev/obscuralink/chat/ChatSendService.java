@@ -47,7 +47,7 @@ public final class ChatSendService {
                     .orElseThrow(() -> new IllegalStateException("No public key for " + receiver + ". Use /enc key import first."));
             ensureSendAllowed(receiver, identity);
             EncryptedPacket packet = cryptoService.encryptFor(identity, keyStoreService.local(),
-                    keyStoreService.local().kemPublicKey().owner(), message, sign);
+                    keyStoreService.local().kemPublicKey().owner(), message, sign, config.enableCompression);
             sendPacket(packet);
             system.accept("[ObscuraLink] Sent encrypted message to " + receiver + ".");
         } catch (Exception e) {

@@ -37,9 +37,14 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 
 public final class CryptoService {
     public static final int MESSAGE_ID_BYTES = 16;
+    public static final byte FLAG_SIGNED = 0x01;
+    public static final byte FLAG_COMPRESSED = 0x02;
     private static final int NONCE_BYTES = 12;
     private static final int AES_KEY_BYTES = 32;
     private static final int GCM_TAG_BITS = 128;
@@ -89,6 +94,12 @@ public final class CryptoService {
 
     public EncryptedPacket encryptFor(PublicIdentity receiver, LocalKeyMaterial senderKeys, String sender, String message, boolean sign)
             throws CryptoException {
+        return encryptFor(receiver, senderKeys, sender, message, sign, false);
+    }
+
+    public EncryptedPacket encryptFor(PublicIdentity receiver, LocalKeyMaterial senderKeys, String sender, String message,
+                                      boolean sign, boolean compress)
+            throws CryptoException {
         try {
             byte[] messageId = randomMessageId();
             PublicKey kemPublic = decodePublicKey("CMCE", receiver.kemPublicKey().keyData());
@@ -98,13 +109,16 @@ public final class CryptoService {
             byte[] encapsulation = kemSecret.getEncapsulation();
             byte[] derivedKey = hkdf(kemSecret.getEncoded(), messageId, "obscuralink message aead".getBytes(StandardCharsets.UTF_8), AES_KEY_BYTES);
             byte[] nonce = randomNonce();
+            byte[] plaintext = message.getBytes(StandardCharsets.UTF_8);
+            byte flags = (byte) ((sign ? FLAG_SIGNED : 0) | (compress ? FLAG_COMPRESSED : 0));
+            byte[] payload = compress ? deflate(plaintext) : plaintext;
 
             EncryptedPacket packetTemplate = new EncryptedPacket(EncryptedPacket.VERSION,
                     sign ? PacketType.SIGNED_KEM_MESSAGE : PacketType.KEM_MESSAGE,
-                    (byte) (sign ? 1 : 0), sender, receiver.owner(), System.currentTimeMillis(), messageId,
+                    flags, sender, receiver.owner(), System.currentTimeMillis(), messageId,
                     (short) 0, (short) 1, AlgorithmSuite.defaults(), nonce, encapsulation, new byte[0], new byte[0]);
 
-            byte[] ciphertext = aeadEncrypt(derivedKey, nonce, packetCodec.aadFor(packetTemplate), message.getBytes(StandardCharsets.UTF_8));
+            byte[] ciphertext = aeadEncrypt(derivedKey, nonce, packetCodec.aadFor(packetTemplate), payload);
             EncryptedPacket unsigned = new EncryptedPacket(packetTemplate.protocolVersion(), packetTemplate.type(), packetTemplate.flags(),
                     packetTemplate.sender(), packetTemplate.receiver(), packetTemplate.timestampMillis(), packetTemplate.messageId(),
                     packetTemplate.aadFragmentIndex(), packetTemplate.aadFragmentTotal(), packetTemplate.algorithms(), nonce,
@@ -139,7 +153,8 @@ public final class CryptoService {
                     throw new CryptoException("Signature verification failed for " + packet.sender());
                 }
             }
-            return new String(plaintext, StandardCharsets.UTF_8);
+            byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
+            return new String(payload, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
             throw new CryptoException("Unable to decrypt message", e);
         }
@@ -244,6 +259,42 @@ public final class CryptoService {
             return okm;
         } catch (GeneralSecurityException e) {
             throw new CryptoException("HKDF failed", e);
+        }
+    }
+
+    private static byte[] deflate(byte[] plaintext) {
+        Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+        deflater.setInput(plaintext);
+        deflater.finish();
+        byte[] buffer = new byte[512];
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        while (!deflater.finished()) {
+            int count = deflater.deflate(buffer);
+            out.write(buffer, 0, count);
+        }
+        deflater.end();
+        return out.toByteArray();
+    }
+
+    private static byte[] inflate(byte[] compressed) throws CryptoException {
+        Inflater inflater = new Inflater(true);
+        inflater.setInput(compressed);
+        byte[] buffer = new byte[512];
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            while (!inflater.finished()) {
+                int count = inflater.inflate(buffer);
+                if (count == 0) {
+                    throw new CryptoException("Compressed message is truncated or invalid");
+                } else {
+                    out.write(buffer, 0, count);
+                }
+            }
+            return out.toByteArray();
+        } catch (DataFormatException e) {
+            throw new CryptoException("Compressed message is invalid", e);
+        } finally {
+            inflater.end();
         }
     }
 }

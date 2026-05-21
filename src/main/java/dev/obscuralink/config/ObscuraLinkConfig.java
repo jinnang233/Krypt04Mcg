@@ -9,6 +9,7 @@ public final class ObscuraLinkConfig implements ConfigData {
     public boolean showProgress = true;
     public boolean hideEncryptedRawMessage = true;
     public boolean verboseMessages = false;
+    public boolean enableCompression = true;
 
     @ConfigEntry.BoundedDiscrete(min = 64, max = 200)
     public int fragmentSize = 180;

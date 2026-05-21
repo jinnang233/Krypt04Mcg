@@ -51,6 +51,20 @@ final class CryptoServiceTest {
         assertThrows(CryptoException.class, () -> crypto.decrypt(tampered, bob, publicIdentity(alice)));
     }
 
+    @Test
+    void compressedMessagesRoundTrip() throws Exception {
+        CryptoService crypto = new CryptoService();
+        LocalKeyMaterial alice = crypto.generateLocalKeys("alice", "alice-uuid");
+        LocalKeyMaterial bob = crypto.generateLocalKeys("bob", "bob-uuid");
+        String message = "hello bob ".repeat(80);
+
+        EncryptedPacket packet = crypto.encryptFor(publicIdentity(bob), alice, "alice", message, true, true);
+        String plaintext = crypto.decrypt(packet, bob, publicIdentity(alice));
+
+        assertEquals(message, plaintext);
+        assertTrue((packet.flags() & CryptoService.FLAG_COMPRESSED) != 0);
+    }
+
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());
