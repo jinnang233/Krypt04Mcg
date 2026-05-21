@@ -18,6 +18,14 @@ public final class ObscuraLinkConfig implements ConfigData {
     @ConfigEntry.BoundedDiscrete(min = 0, max = 5000)
     public int sendDelayMs = 250;
 
+    @ConfigEntry.BoundedDiscrete(min = 5, max = 1440)
+    public int sessionTtlMinutes = 60;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 10000)
+    public int maxMessagesPerSession = 100;
+
+    public long rotateAfterBytes = 1024L * 1024L;
+
     public boolean receiveRegexMode = false;
     public String receiveRegex = "^\\[OBSCURA\\] .+";
     public boolean shadowListenMode = false;

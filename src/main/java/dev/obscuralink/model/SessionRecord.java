@@ -8,6 +8,8 @@ public record SessionRecord(
         String sessionId,
         Instant createdAt,
         Instant lastUsedAt,
-        String secret
+        String secret,
+        int messageCount,
+        long bytesUsed
 ) {
 }

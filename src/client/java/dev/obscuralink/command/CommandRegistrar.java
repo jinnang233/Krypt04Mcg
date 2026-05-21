@@ -77,6 +77,46 @@ public final class CommandRegistrar {
                                             chatSendService.resend(StringArgumentType.getString(ctx, "messageId"));
                                             return 1;
                                         })))
+                        .then(ClientCommandManager.literal("session")
+                                .then(ClientCommandManager.literal("list")
+                                        .executes(ctx -> {
+                                            try {
+                                                List<SessionRecord> sessions = sessionService.list();
+                                                if (sessions.isEmpty()) {
+                                                    feedback(ctx.getSource(), "No sessions.");
+                                                }
+                                                for (SessionRecord session : sessions) {
+                                                    String status = sessionService.isExpired(session, config.sessionTtlMinutes,
+                                                            config.maxMessagesPerSession, config.rotateAfterBytes) ? "expired" : "active";
+                                                    feedback(ctx.getSource(), session.peer() + " " + status
+                                                            + " messages=" + session.messageCount()
+                                                            + " bytes=" + session.bytesUsed());
+                                                }
+                                                return sessions.size();
+                                            } catch (Exception e) {
+                                                feedback(ctx.getSource(), "ERROR: " + e.getMessage());
+                                                return 0;
+                                            }
+                                        }))
+                                .then(ClientCommandManager.literal("clear")
+                                        .then(ClientCommandManager.argument("player", StringArgumentType.word())
+                                                .executes(ctx -> {
+                                                    String player = StringArgumentType.getString(ctx, "player");
+                                                    try {
+                                                        sessionService.clear(player);
+                                                        feedback(ctx.getSource(), "Cleared session for " + player + ".");
+                                                    } catch (Exception e) {
+                                                        feedback(ctx.getSource(), "ERROR: " + e.getMessage());
+                                                        return 0;
+                                                    }
+                                                    return 1;
+                                                })))
+                                .then(ClientCommandManager.literal("refresh")
+                                        .then(ClientCommandManager.argument("player", StringArgumentType.word())
+                                                .executes(ctx -> {
+                                                    chatSendService.exchange(StringArgumentType.getString(ctx, "player"));
+                                                    return 1;
+                                                }))))
                         .then(ClientCommandManager.literal("showalgs")
                                 .executes(ctx -> {
                                     feedback(ctx.getSource(), "KEM=" + config.kemAlgorithm
@@ -231,7 +271,12 @@ public final class CommandRegistrar {
             TrustState trustState = keyTrustService.trustState(player, identity.isPresent());
             String keyStatus = identity.map(value -> "已导入 / " + trustState).orElse("未导入");
             String signatureStatus = identity.map(value -> value.signaturePublicKey() == null ? "不可用" : "可用").orElse("不可用");
-            String sessionStatus = session.map(value -> "已建立，sessionId=" + value.sessionId()).orElse("未建立");
+            String sessionStatus = session.map(value -> {
+                boolean expired = sessionService.isExpired(value, config.sessionTtlMinutes,
+                        config.maxMessagesPerSession, config.rotateAfterBytes);
+                return (expired ? "已过期，" : "已建立，") + "sessionId=" + value.sessionId()
+                        + " messages=" + value.messageCount() + " bytes=" + value.bytesUsed();
+            }).orElse("未建立");
             String lastDecrypt = decryptionHistoryService.lastSuccess(player)
                     .map(STATUS_TIME_FORMATTER::format)
                     .orElse("无记录");

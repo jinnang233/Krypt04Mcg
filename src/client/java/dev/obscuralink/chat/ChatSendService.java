@@ -74,9 +74,17 @@ public final class ChatSendService {
     }
 
     public void sendSessionMessage(String receiver, String message) {
-        // The current transport sends session payloads through the same authenticated KEM envelope.
-        // Session records are persisted and command-compatible; a future packet type can swap in direct PSK AEAD.
-        sendKemMessage(receiver, message, true);
+        try {
+            SessionRecord session = sessionService.find(receiver)
+                    .orElseThrow(() -> new IllegalStateException("No active session for " + receiver + ". Use /enc exchange first."));
+            if (sessionService.isExpired(session, config.sessionTtlMinutes, config.maxMessagesPerSession, config.rotateAfterBytes)) {
+                throw new IllegalStateException("Session for " + receiver + " is expired. Use /enc session refresh " + receiver + ".");
+            }
+            sendKemMessage(receiver, message, true);
+            sessionService.recordMessage(receiver, message.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        } catch (Exception e) {
+            system.accept("[ObscuraLink][ERROR] " + e.getMessage());
+        }
     }
 
     public void resendLatest() {
