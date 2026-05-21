@@ -1,0 +1,180 @@
+package dev.krypt04mcg.chat;
+
+import dev.krypt04mcg.client.ClientMessages;
+import dev.krypt04mcg.config.Krypt04McgConfig;
+import dev.krypt04mcg.crypto.CryptoService;
+import dev.krypt04mcg.fragment.FragmentService;
+import dev.krypt04mcg.model.CachedSentMessage;
+import dev.krypt04mcg.model.EncryptedPacket;
+import dev.krypt04mcg.model.PublicIdentity;
+import dev.krypt04mcg.model.SessionRecord;
+import dev.krypt04mcg.model.TrustState;
+import dev.krypt04mcg.protocol.PacketCodec;
+import dev.krypt04mcg.service.KeyStoreService;
+import dev.krypt04mcg.service.KeyTrustService;
+import dev.krypt04mcg.service.SentMessageCacheService;
+import dev.krypt04mcg.service.SessionService;
+import dev.krypt04mcg.util.Base64Url;
+import dev.krypt04mcg.util.Hex;
+
+import java.util.List;
+import java.util.function.Consumer;
+
+public final class ChatSendService {
+    private final Krypt04McgConfig config;
+    private final KeyStoreService keyStoreService;
+    private final KeyTrustService keyTrustService;
+    private final SessionService sessionService;
+    private final SentMessageCacheService sentMessageCacheService;
+    private final CryptoService cryptoService;
+    private final PacketCodec packetCodec;
+    private final FragmentService fragmentService;
+    private final Consumer<String> chatSender;
+    private final Consumer<String> system;
+
+    public ChatSendService(Krypt04McgConfig config, KeyStoreService keyStoreService, KeyTrustService keyTrustService,
+                           SessionService sessionService, SentMessageCacheService sentMessageCacheService,
+                           CryptoService cryptoService, PacketCodec packetCodec, FragmentService fragmentService,
+                           Consumer<String> chatSender, Consumer<String> system) {
+        this.config = config;
+        this.keyStoreService = keyStoreService;
+        this.keyTrustService = keyTrustService;
+        this.sessionService = sessionService;
+        this.sentMessageCacheService = sentMessageCacheService;
+        this.cryptoService = cryptoService;
+        this.packetCodec = packetCodec;
+        this.fragmentService = fragmentService;
+        this.chatSender = chatSender;
+        this.system = system;
+    }
+
+    public void sendKemMessage(String receiver, String message, boolean sign) {
+        try {
+            PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
+                    .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_public_key", receiver)));
+            ensureSendAllowed(receiver, identity);
+            EncryptedPacket packet = cryptoService.encryptFor(identity, keyStoreService.local(),
+                    keyStoreService.local().kemPublicKey().owner(), message, sign, config.enableCompression);
+            sendPacket(packet, receiver);
+            system.accept(ClientMessages.tr("text.krypt04mcg.sent_encrypted", receiver));
+        } catch (Exception e) {
+            error(e);
+        }
+    }
+
+    public void exchange(String receiver) {
+        try {
+            PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
+                    .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_public_key", receiver)));
+            ensureSendAllowed(receiver, identity);
+            SessionRecord record = sessionService.createLocalSession(receiver, identity.kemPublicKey().fingerprint());
+            sendKemMessage(receiver, "/session " + record.sessionId() + " " + record.secret(), true);
+            system.accept(ClientMessages.tr("text.krypt04mcg.session_prepared", receiver));
+        } catch (Exception e) {
+            error(e);
+        }
+    }
+
+    public void sendSessionMessage(String receiver, String message) {
+        try {
+            SessionRecord session = sessionService.find(receiver)
+                    .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_session", receiver)));
+            if (sessionService.isExpired(session, config.sessionTtlMinutes, config.maxMessagesPerSession, config.rotateAfterBytes)) {
+                throw new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.session_expired", receiver));
+            }
+            PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
+                    .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_public_key", receiver)));
+            ensureSendAllowed(receiver, identity);
+            EncryptedPacket packet = cryptoService.encryptWithSession(receiver, keyStoreService.local(),
+                    keyStoreService.local().kemPublicKey().owner(), Base64Url.decode(session.secret()), message,
+                    true, config.enableCompression);
+            sendPacket(packet, receiver);
+            sessionService.recordMessage(receiver, message.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+            system.accept(ClientMessages.tr("text.krypt04mcg.sent_encrypted", receiver));
+        } catch (Exception e) {
+            error(e);
+        }
+    }
+
+    public void sendGroupMessage(String groupName, List<String> members, String message) {
+        if (members.isEmpty()) {
+            system.accept(ClientMessages.tr("text.krypt04mcg.error.group_empty", groupName));
+            return;
+        }
+        system.accept(ClientMessages.tr("text.krypt04mcg.group_sending", groupName, members.size()));
+        for (String member : members) {
+            sendKemMessage(member, message, true);
+        }
+    }
+
+    public void resendLatest() {
+        try {
+            CachedSentMessage cached = sentMessageCacheService.latest()
+                    .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_cached_message")));
+            resend(cached);
+        } catch (Exception e) {
+            error(e);
+        }
+    }
+
+    public void resend(String messageId) {
+        try {
+            CachedSentMessage cached = sentMessageCacheService.find(messageId)
+                    .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_cached_message_id", messageId)));
+            resend(cached);
+        } catch (Exception e) {
+            error(e);
+        }
+    }
+
+    private void resend(CachedSentMessage cached) {
+        sendFragments(cached.fragments());
+        system.accept(ClientMessages.tr("text.krypt04mcg.resending", cached.receiver(), cached.messageId()));
+    }
+
+    private void sendPacket(EncryptedPacket packet, String receiver) throws Exception {
+        byte[] encoded = packetCodec.encode(packet);
+        List<String> fragments = fragmentService.fragment(encoded, packet.messageId(), config.fragmentSize);
+        sentMessageCacheService.remember(Hex.encode(packet.messageId()), receiver, fragments);
+        sendFragments(fragments);
+    }
+
+    private void sendFragments(List<String> fragments) {
+        Thread sender = new Thread(() -> {
+            for (String fragment : fragments) {
+                chatSender.accept(fragment);
+                if (config.showProgress) {
+                    system.accept(ClientMessages.tr("text.krypt04mcg.fragment_sent"));
+                }
+                sleep(config.sendDelayMs);
+            }
+        }, "Krypt04Mcg Sender");
+        sender.setDaemon(true);
+        sender.start();
+    }
+
+    private void ensureSendAllowed(String receiver, PublicIdentity identity) throws Exception {
+        TrustState trustState = keyTrustService.trustState(receiver, true);
+        if (trustState == TrustState.DISTRUSTED) {
+            throw new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.distrusted_key", receiver));
+        }
+        if (trustState == TrustState.TOFU_TRUSTED) {
+            system.accept(ClientMessages.tr("text.krypt04mcg.warning.tofu_unverified", identity.owner()));
+        }
+    }
+
+    private void error(Exception e) {
+        system.accept(ClientMessages.tr("text.krypt04mcg.error.generic", e.getMessage()));
+    }
+
+    private static void sleep(int millis) {
+        if (millis <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}

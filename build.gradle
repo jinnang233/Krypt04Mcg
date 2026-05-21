@@ -20,7 +20,7 @@ loom {
     splitEnvironmentSourceSets()
 
     mods {
-        obscuralink {
+        krypt04mcg {
             sourceSet sourceSets.main
             sourceSet sourceSets.client
         }

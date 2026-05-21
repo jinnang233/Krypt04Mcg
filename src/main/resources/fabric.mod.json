@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "id": "obscuralink",
+  "id": "krypt04mcg",
   "version": "${version}",
-  "name": "ObscuraLink-MC",
+  "name": "Krypt04Mcg",
   "description": "Post-quantum encrypted chat over Minecraft chat fragments.",
-  "authors": ["ObscuraLink contributors"],
+  "authors": ["Krypt04Mcg contributors"],
   "contact": {
-    "sources": "https://github.com/jinnang233/ObscuraLink-MC"
+    "sources": "https://github.com/jinnang233/Krypt04Mcg"
   },
   "license": "0BSD",
   "environment": "client",
   "entrypoints": {
     "client": [
-      "dev.obscuralink.ObscuraLinkMod"
+      "dev.krypt04mcg.Krypt04McgMod"
     ],
     "modmenu": [
-      "dev.obscuralink.config.ObscuraLinkModMenu"
+      "dev.krypt04mcg.config.Krypt04McgModMenu"
     ]
   },
   "depends": {

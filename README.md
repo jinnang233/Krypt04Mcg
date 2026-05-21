@@ -1,12 +1,14 @@
-# ObscuraLink-MC
+# Krypt04Mcg
+
+Krypt04Mcg (Aka: Krypt04Msg) means "Crypto for message (MineCraft message)".
 
 > [!WARNING]
 > This codebase was generated with AI assistance. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
 
 > [!WARNING]
-> ObscuraLink-MC is experimental software and has not undergone independent security auditing. The protocol, implementation, and cryptographic design may contain vulnerabilities or design flaws. Do not rely on this mod to protect highly sensitive, important, or production-critical data. If you require mature and battle-tested end-to-end encrypted communication, consider using established tools such as Signal or SimpleX instead.
+> Krypt04Mcg is experimental software and has not undergone independent security auditing. The protocol, implementation, and cryptographic design may contain vulnerabilities or design flaws. Do not rely on this mod to protect highly sensitive, important, or production-critical data. If you require mature and battle-tested end-to-end encrypted communication, consider using established tools such as Signal or SimpleX instead.
 
-ObscuraLink-MC is a Fabric client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
+Krypt04Mcg is a Fabric client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
 
 ## Features
 
@@ -31,7 +33,7 @@ This first implementation targets:
 - Loom `1.11-SNAPSHOT`
 - Java `21`
 
-Compatibility Notes: Minecraft/Fabric 26.1+ introduced larger mapping and toolchain changes. ObscuraLink-MC keeps its protocol and crypto layers independent from Minecraft APIs so a future 26.x port is mostly limited to the client entrypoint, command, and chat-event adapters.
+Compatibility Notes: Minecraft/Fabric 26.1+ introduced larger mapping and toolchain changes. Krypt04Mcg keeps its protocol and crypto layers independent from Minecraft APIs so a future 26.x port is mostly limited to the client entrypoint, command, and chat-event adapters.
 
 ## Build
 
@@ -51,15 +53,15 @@ gradle wrapper
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag v0.4.3
-git push origin v0.4.3
+git tag v0.4.4
+git push origin v0.4.4
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published as prereleases.
 
 ## License
 
-ObscuraLink-MC is licensed under the BSD Zero Clause License (`0BSD`), a very permissive license with no attribution requirement.
+Krypt04Mcg is licensed under the BSD Zero Clause License (`0BSD`), a very permissive license with no attribution requirement.
 
 ## Run Client
 
@@ -69,14 +71,14 @@ gradle runClient
 
 ## Install
 
-Build the project, then copy `build/libs/obscuralink-<version>.jar` into the client `mods` directory together with Fabric API. Cloth Config is included in the mod jar.
+Build the project, then copy `build/libs/krypt04mcg-<version>.jar` into the client `mods` directory together with Fabric API. Cloth Config is included in the mod jar.
 
 ## Key Storage
 
-ObscuraLink-MC stores data under:
+Krypt04Mcg stores data under:
 
 ```text
-config/obscuralink/
+config/krypt04mcg/
   keys/
     private/local.json
     public/*.json
@@ -105,7 +107,7 @@ Import flow:
 1. The other player runs `/enc key export`.
 2. They send you the exported Base64URL blob through a trusted side channel.
 3. You run `/enc key import <player> <blob>`.
-4. First import is trusted automatically. If a key changes later, ObscuraLink-MC refuses to overwrite it silently.
+4. First import is trusted automatically. If a key changes later, Krypt04Mcg refuses to overwrite it silently.
 
 ## Protocol Format
 
@@ -166,7 +168,7 @@ Packet types:
 Each chat fragment has this form:
 
 ```text
-[OBSCURA] <messageIdHex> <index> <total> <payload>
+[KRYPT04MCG] <messageIdHex> <index> <total> <payload>
 ```
 
 The receiver supports out-of-order fragments, ignores duplicate fragments, cleans up timed-out partial messages, caps pending messages, and rejects excessive fragment counts.
