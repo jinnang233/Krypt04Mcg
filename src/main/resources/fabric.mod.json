@@ -21,5 +21,14 @@
     "java": ">=21",
     "fabric-api": "*",
     "cloth-config": "*"
+  },
+  "custom": {
+    "modmenu": {
+      "links": {
+        "modmenu.github": "https://github.com/jinnang233/ObscuraLink",
+        "modmenu.modrinth": "https://modrinth.com/mod/obscuralink"
+      },
+      "update_checker": true
+    }
   }
 }
