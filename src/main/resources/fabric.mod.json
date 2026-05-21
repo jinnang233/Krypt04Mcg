@@ -6,7 +6,7 @@
   "description": "Post-quantum encrypted chat over Minecraft chat fragments.",
   "authors": ["ObscuraLink contributors"],
   "contact": {
-    "sources": "https://example.invalid/obscuralink"
+    "sources": "https://github.com/jinnang233/ObscuraLink"
   },
   "license": "0BSD",
   "environment": "client",
