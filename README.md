@@ -1,12 +1,12 @@
-# ObscuraLink
+# ObscuraLink-MC
 
 > [!WARNING]
 > This codebase was generated with AI assistance. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
 
 > [!WARNING]
-> ObscuraLink is experimental software and has not undergone independent security auditing. The protocol, implementation, and cryptographic design may contain vulnerabilities or design flaws. Do not rely on this mod to protect highly sensitive, important, or production-critical data. If you require mature and battle-tested end-to-end encrypted communication, consider using established tools such as Signal or SimpleX instead.
+> ObscuraLink-MC is experimental software and has not undergone independent security auditing. The protocol, implementation, and cryptographic design may contain vulnerabilities or design flaws. Do not rely on this mod to protect highly sensitive, important, or production-critical data. If you require mature and battle-tested end-to-end encrypted communication, consider using established tools such as Signal or SimpleX instead.
 
-ObscuraLink is a Fabric client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
+ObscuraLink-MC is a Fabric client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
 
 ## Features
 
@@ -31,7 +31,7 @@ This first implementation targets:
 - Loom `1.11-SNAPSHOT`
 - Java `21`
 
-Compatibility Notes: Minecraft/Fabric 26.1+ introduced larger mapping and toolchain changes. ObscuraLink keeps its protocol and crypto layers independent from Minecraft APIs so a future 26.x port is mostly limited to the client entrypoint, command, and chat-event adapters.
+Compatibility Notes: Minecraft/Fabric 26.1+ introduced larger mapping and toolchain changes. ObscuraLink-MC keeps its protocol and crypto layers independent from Minecraft APIs so a future 26.x port is mostly limited to the client entrypoint, command, and chat-event adapters.
 
 ## Build
 
@@ -59,7 +59,7 @@ The release workflow can also be triggered manually from the Actions tab. Manual
 
 ## License
 
-ObscuraLink is licensed under the BSD Zero Clause License (`0BSD`), a very permissive license with no attribution requirement.
+ObscuraLink-MC is licensed under the BSD Zero Clause License (`0BSD`), a very permissive license with no attribution requirement.
 
 ## Run Client
 
@@ -73,7 +73,7 @@ Build the project, then copy `build/libs/obscuralink-<version>.jar` into the cli
 
 ## Key Storage
 
-ObscuraLink stores data under:
+ObscuraLink-MC stores data under:
 
 ```text
 config/obscuralink/
@@ -105,7 +105,7 @@ Import flow:
 1. The other player runs `/enc key export`.
 2. They send you the exported Base64URL blob through a trusted side channel.
 3. You run `/enc key import <player> <blob>`.
-4. First import is trusted automatically. If a key changes later, ObscuraLink refuses to overwrite it silently.
+4. First import is trusted automatically. If a key changes later, ObscuraLink-MC refuses to overwrite it silently.
 
 ## Protocol Format
 
