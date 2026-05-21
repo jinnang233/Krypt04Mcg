@@ -1,13 +1,13 @@
 package dev.obscuralink.service;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import dev.obscuralink.crypto.CryptoException;
 import dev.obscuralink.crypto.CryptoService;
 import dev.obscuralink.model.KeyRecord;
 import dev.obscuralink.model.LocalKeyMaterial;
 import dev.obscuralink.model.PublicIdentity;
 import dev.obscuralink.util.Base64Url;
+import dev.obscuralink.util.JsonSupport;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +22,7 @@ import java.util.UUID;
 public final class KeyStoreService {
     private final Path root;
     private final Path keysDir;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Gson gson = JsonSupport.prettyGson();
     private final CryptoService cryptoService;
     private LocalKeyMaterial local;
 

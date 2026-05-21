@@ -1,9 +1,9 @@
 package dev.obscuralink.service;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import dev.obscuralink.model.SessionRecord;
 import dev.obscuralink.util.Base64Url;
+import dev.obscuralink.util.JsonSupport;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +16,7 @@ import java.util.Optional;
 public final class SessionService {
     private final Path sessionsDir;
     private final SecureRandom random = new SecureRandom();
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Gson gson = JsonSupport.prettyGson();
 
     public SessionService(Path root) {
         this.sessionsDir = root.resolve("sessions");
