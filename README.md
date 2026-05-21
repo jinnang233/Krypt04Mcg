@@ -2,6 +2,8 @@
 
 Krypt04Mcg (Aka: Krypt04Msg) means "Crypto for message (MineCraft message)".
 
+The project was renamed from ObscuraLink-MC/ObscuraLink because "Obscura" is already used by a Minecraft modding organization. Krypt04Mcg is the chosen name to avoid that naming conflict.
+
 > [!WARNING]
 > This codebase was generated with AI assistance. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
 
