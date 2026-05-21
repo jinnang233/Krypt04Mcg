@@ -36,7 +36,22 @@ public final class CommandRegistrar {
                                 DecryptionHistoryService decryptionHistoryService, GroupService groupService,
                                 ObscuraLinkConfig config) {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            LiteralArgumentBuilder<FabricClientCommandSource> root = ClientCommandManager.literal("enc")
+            dispatcher.register(rootCommand("ObscuraLink:enc", chatSendService, keyStoreService, keyTrustService,
+                    sessionService, decryptionHistoryService, groupService, config));
+            dispatcher.register(rootCommand("enc", chatSendService, keyStoreService, keyTrustService,
+                    sessionService, decryptionHistoryService, groupService, config));
+        });
+    }
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource> rootCommand(String name,
+                                                                                 ChatSendService chatSendService,
+                                                                                 KeyStoreService keyStoreService,
+                                                                                 KeyTrustService keyTrustService,
+                                                                                 SessionService sessionService,
+                                                                                 DecryptionHistoryService decryptionHistoryService,
+                                                                                 GroupService groupService,
+                                                                                 ObscuraLinkConfig config) {
+        return ClientCommandManager.literal(name)
                     .then(tellCommand(chatSendService, false))
                     .then(tellCommand(chatSendService, true))
                     .then(exchangeCommand(chatSendService))
@@ -48,8 +63,6 @@ public final class CommandRegistrar {
                     .then(showAlgorithmsCommand(config))
                     .then(statusCommand(keyStoreService, keyTrustService, sessionService, decryptionHistoryService, config))
                     .then(keyCommand(keyStoreService, keyTrustService));
-            dispatcher.register(root);
-        });
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> tellCommand(ChatSendService chatSendService, boolean signed) {
@@ -371,27 +384,33 @@ public final class CommandRegistrar {
             Optional<PublicIdentity> identity = keyStoreService.findPublicIdentity(player);
             Optional<SessionRecord> session = sessionService.find(player);
             TrustState trustState = keyTrustService.trustState(player, identity.isPresent());
-            String keyStatus = identity.map(value -> "imported / " + trustState).orElse("not imported");
-            String signatureStatus = identity.map(value -> value.signaturePublicKey() == null ? "unavailable" : "available")
-                    .orElse("unavailable");
+            String keyStatus = identity.map(value -> tr("text.obscuralink.status.key_imported", trustStateLabel(trustState)))
+                    .orElse(tr("text.obscuralink.status.key_not_imported"));
+            String signatureStatus = identity.map(value -> value.signaturePublicKey() == null
+                            ? tr("text.obscuralink.status.unavailable")
+                            : tr("text.obscuralink.status.available"))
+                    .orElse(tr("text.obscuralink.status.unavailable"));
             String sessionStatus = session.map(value -> {
                 boolean expired = sessionService.isExpired(value, config.sessionTtlMinutes,
                         config.maxMessagesPerSession, config.rotateAfterBytes);
-                return (expired ? "expired, " : "established, ") + "sessionId=" + value.sessionId()
-                        + " messages=" + value.messageCount() + " bytes=" + value.bytesUsed();
-            }).orElse("not established");
+                String state = expired ? tr("text.obscuralink.status.session_expired")
+                        : tr("text.obscuralink.status.session_established");
+                return tr("text.obscuralink.status.session_details", state, value.sessionId(),
+                        value.messageCount(), value.bytesUsed());
+            }).orElse(tr("text.obscuralink.status.session_not_established"));
             String lastDecrypt = decryptionHistoryService.lastSuccess(player)
                     .map(STATUS_TIME_FORMATTER::format)
-                    .orElse("never");
+                    .orElse(tr("text.obscuralink.status.never"));
 
-            feedback(source, "Player: " + player);
-            feedback(source, "Public key: " + keyStatus);
-            identity.ifPresent(value -> feedback(source, "Fingerprint: kem=" + value.kemPublicKey().fingerprint()
-                    + " sig=" + value.signaturePublicKey().fingerprint()));
-            feedback(source, "Signature verification: " + signatureStatus);
-            feedback(source, "Session: " + sessionStatus);
-            feedback(source, "Last successful decrypt: " + lastDecrypt);
-            feedback(source, "Algorithms: " + config.kemAlgorithm + " + " + config.signatureAlgorithm + " + " + config.aeadAlgorithm);
+            feedback(source, tr("text.obscuralink.status.player", player));
+            feedback(source, tr("text.obscuralink.status.public_key", keyStatus));
+            identity.ifPresent(value -> feedback(source, tr("text.obscuralink.status.fingerprint",
+                    value.kemPublicKey().fingerprint(), value.signaturePublicKey().fingerprint())));
+            feedback(source, tr("text.obscuralink.status.signature", signatureStatus));
+            feedback(source, tr("text.obscuralink.status.session", sessionStatus));
+            feedback(source, tr("text.obscuralink.status.last_decrypt", lastDecrypt));
+            feedback(source, tr("text.obscuralink.status.algorithms",
+                    config.kemAlgorithm, config.signatureAlgorithm, config.aeadAlgorithm));
         } catch (Exception e) {
             feedback(source, "ERROR: " + e.getMessage());
         }
@@ -406,5 +425,13 @@ public final class CommandRegistrar {
 
     private static void feedback(FabricClientCommandSource source, String message) {
         source.sendFeedback(Text.literal("[ObscuraLink] " + message));
+    }
+
+    private static String trustStateLabel(TrustState trustState) {
+        return tr("text.obscuralink.trust." + trustState.name());
+    }
+
+    private static String tr(String key, Object... args) {
+        return dev.obscuralink.client.ClientMessages.tr(key, args);
     }
 }
