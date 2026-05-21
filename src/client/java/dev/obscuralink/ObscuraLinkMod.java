@@ -69,11 +69,11 @@ public final class ObscuraLinkMod implements ClientModInitializer {
                 reassembler, this::system);
 
         CommandRegistrar.register(chatSendService, keyStoreService, sessionService, config);
-        ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-                !chatReceiveHandler.shouldHide(message.getString()));
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
+        ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
             String senderName = sender == null ? "unknown" : sender.getName();
-            chatReceiveHandler.handle(senderName, message.getString());
+            String raw = message.getString();
+            chatReceiveHandler.handle(senderName, raw);
+            return !chatReceiveHandler.shouldHide(raw);
         });
         LOGGER.info("ObscuraLink initialized");
     }
