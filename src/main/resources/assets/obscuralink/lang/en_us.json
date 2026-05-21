@@ -1,0 +1,13 @@
+{
+  "text.autoconfig.obscuralink.title": "ObscuraLink",
+  "text.autoconfig.obscuralink.option.showProgress": "Show Progress",
+  "text.autoconfig.obscuralink.option.hideEncryptedRawMessage": "Hide Encrypted Raw Messages",
+  "text.autoconfig.obscuralink.option.verboseMessages": "Verbose Messages",
+  "text.autoconfig.obscuralink.option.fragmentSize": "Fragment Size",
+  "text.autoconfig.obscuralink.option.sendDelayMs": "Send Delay (ms)",
+  "text.autoconfig.obscuralink.option.receiveRegexMode": "Regex Receive Mode",
+  "text.autoconfig.obscuralink.option.receiveRegex": "Receive Regex",
+  "text.autoconfig.obscuralink.option.kemAlgorithm": "KEM Algorithm",
+  "text.autoconfig.obscuralink.option.signatureAlgorithm": "Signature Algorithm",
+  "text.autoconfig.obscuralink.option.aeadAlgorithm": "AEAD Algorithm"
+}

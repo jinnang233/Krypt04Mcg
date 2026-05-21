@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "obscuralink",
+  "version": "${version}",
+  "name": "ObscuraLink",
+  "description": "Post-quantum encrypted chat over Minecraft chat fragments.",
+  "authors": ["ObscuraLink contributors"],
+  "contact": {
+    "sources": "https://example.invalid/obscuralink"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.obscuralink.ObscuraLinkMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": "1.21.8",
+    "java": ">=21",
+    "fabric-api": "*",
+    "cloth-config": "*"
+  }
+}
