@@ -7,7 +7,8 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    // Fabric Loom adds project-level remapped repositories during plugin setup.
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         maven { url = "https://maven.fabricmc.net/" }
         maven { url = "https://maven.shedaniel.me/" }
