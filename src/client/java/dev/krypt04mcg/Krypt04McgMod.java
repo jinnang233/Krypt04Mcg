@@ -20,8 +20,8 @@ import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,9 +68,9 @@ public final class Krypt04McgMod implements ClientModInitializer {
         keyTrustService = new KeyTrustService(root);
         sentMessageCacheService = new SentMessageCacheService(root);
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        String owner = client.getSession().getUsername();
-        String uuid = client.getSession().getUuidOrNull() == null ? "" : client.getSession().getUuidOrNull().toString();
+        Minecraft client = Minecraft.getInstance();
+        String owner = client.getUser().getName();
+        String uuid = client.getUser().getProfileId() == null ? "" : client.getUser().getProfileId().toString();
         try {
             keyStoreService.init(owner, uuid);
         } catch (Exception e) {
@@ -87,7 +87,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
         CommandRegistrar.register(chatSendService, keyStoreService, keyTrustService, sessionService, decryptionHistoryService,
                 groupService, config);
         ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
-            String senderName = sender == null ? "unknown" : sender.getName();
+            String senderName = sender == null ? "unknown" : sender.name();
             String raw = message.getString();
             if (!isLocalSender(senderName, owner)) {
                 chatReceiveHandler.handle(senderName, raw);
@@ -105,17 +105,17 @@ public final class Krypt04McgMod implements ClientModInitializer {
     }
 
     private void sendChatLine(String line) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.getNetworkHandler() != null) {
-            client.getNetworkHandler().sendChatMessage(line);
+        Minecraft client = Minecraft.getInstance();
+        if (client.getConnection() != null) {
+            client.getConnection().sendChat(line);
         }
     }
 
     private void system(String message) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         client.execute(() -> {
-            if (client.inGameHud != null) {
-                client.inGameHud.getChatHud().addMessage(Text.literal(message));
+            if (client.gui != null) {
+                client.gui.getChat().addClientSystemMessage(Component.literal(message));
             }
         });
     }

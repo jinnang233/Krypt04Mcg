@@ -13,10 +13,10 @@ import dev.krypt04mcg.service.GroupService;
 import dev.krypt04mcg.service.KeyStoreService;
 import dev.krypt04mcg.service.KeyTrustService;
 import dev.krypt04mcg.service.SessionService;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -51,7 +51,7 @@ public final class CommandRegistrar {
                                                                                  DecryptionHistoryService decryptionHistoryService,
                                                                                  GroupService groupService,
                                                                                  Krypt04McgConfig config) {
-        return ClientCommandManager.literal(name)
+        return ClientCommands.literal(name)
                     .then(tellCommand(chatSendService, false))
                     .then(tellCommand(chatSendService, true))
                     .then(exchangeCommand(chatSendService))
@@ -66,9 +66,9 @@ public final class CommandRegistrar {
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> tellCommand(ChatSendService chatSendService, boolean signed) {
-        return ClientCommandManager.literal(signed ? "stell" : "tell")
-                .then(ClientCommandManager.argument("receiver", StringArgumentType.word())
-                        .then(ClientCommandManager.argument("message", StringArgumentType.greedyString())
+        return ClientCommands.literal(signed ? "stell" : "tell")
+                .then(ClientCommands.argument("receiver", StringArgumentType.word())
+                        .then(ClientCommands.argument("message", StringArgumentType.greedyString())
                                 .executes(ctx -> {
                                     chatSendService.sendKemMessage(
                                             StringArgumentType.getString(ctx, "receiver"),
@@ -79,8 +79,8 @@ public final class CommandRegistrar {
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> exchangeCommand(ChatSendService chatSendService) {
-        return ClientCommandManager.literal("exchange")
-                .then(ClientCommandManager.argument("receiver", StringArgumentType.word())
+        return ClientCommands.literal("exchange")
+                .then(ClientCommands.argument("receiver", StringArgumentType.word())
                         .executes(ctx -> {
                             chatSendService.exchange(StringArgumentType.getString(ctx, "receiver"));
                             return 1;
@@ -88,9 +88,9 @@ public final class CommandRegistrar {
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> etellCommand(ChatSendService chatSendService) {
-        return ClientCommandManager.literal("etell")
-                .then(ClientCommandManager.argument("receiver", StringArgumentType.word())
-                        .then(ClientCommandManager.argument("message", StringArgumentType.greedyString())
+        return ClientCommands.literal("etell")
+                .then(ClientCommands.argument("receiver", StringArgumentType.word())
+                        .then(ClientCommands.argument("message", StringArgumentType.greedyString())
                                 .executes(ctx -> {
                                     chatSendService.sendSessionMessage(
                                             StringArgumentType.getString(ctx, "receiver"),
@@ -101,9 +101,9 @@ public final class CommandRegistrar {
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> gtellCommand(ChatSendService chatSendService,
                                                                                  GroupService groupService) {
-        return ClientCommandManager.literal("gtell")
-                .then(ClientCommandManager.argument("group", StringArgumentType.word())
-                        .then(ClientCommandManager.argument("message", StringArgumentType.greedyString())
+        return ClientCommands.literal("gtell")
+                .then(ClientCommands.argument("group", StringArgumentType.word())
+                        .then(ClientCommands.argument("message", StringArgumentType.greedyString())
                                 .executes(ctx -> {
                                     String group = StringArgumentType.getString(ctx, "group");
                                     try {
@@ -121,10 +121,10 @@ public final class CommandRegistrar {
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> groupCommand(GroupService groupService) {
-        return ClientCommandManager.literal("group")
-                .then(ClientCommandManager.literal("create")
-                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("members", StringArgumentType.greedyString())
+        return ClientCommands.literal("group")
+                .then(ClientCommands.literal("create")
+                        .then(ClientCommands.argument("name", StringArgumentType.word())
+                                .then(ClientCommands.argument("members", StringArgumentType.greedyString())
                                         .executes(ctx -> {
                                             String name = StringArgumentType.getString(ctx, "name");
                                             List<String> members = parseMembers(StringArgumentType.getString(ctx, "members"));
@@ -138,7 +138,7 @@ public final class CommandRegistrar {
                                                 return 0;
                                             }
                                         }))))
-                .then(ClientCommandManager.literal("list")
+                .then(ClientCommands.literal("list")
                         .executes(ctx -> {
                             try {
                                 List<GroupRecord> groups = groupService.list();
@@ -155,8 +155,8 @@ public final class CommandRegistrar {
                                 return 0;
                             }
                         }))
-                .then(ClientCommandManager.literal("delete")
-                        .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                .then(ClientCommands.literal("delete")
+                        .then(ClientCommands.argument("name", StringArgumentType.word())
                                 .executes(ctx -> {
                                     String name = StringArgumentType.getString(ctx, "name");
                                     try {
@@ -171,12 +171,12 @@ public final class CommandRegistrar {
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> resendCommand(ChatSendService chatSendService) {
-        return ClientCommandManager.literal("resend")
+        return ClientCommands.literal("resend")
                 .executes(ctx -> {
                     chatSendService.resendLatest();
                     return 1;
                 })
-                .then(ClientCommandManager.argument("messageId", StringArgumentType.word())
+                .then(ClientCommands.argument("messageId", StringArgumentType.word())
                         .executes(ctx -> {
                             chatSendService.resend(StringArgumentType.getString(ctx, "messageId"));
                             return 1;
@@ -186,8 +186,8 @@ public final class CommandRegistrar {
     private static LiteralArgumentBuilder<FabricClientCommandSource> sessionCommand(ChatSendService chatSendService,
                                                                                    SessionService sessionService,
                                                                                    Krypt04McgConfig config) {
-        return ClientCommandManager.literal("session")
-                .then(ClientCommandManager.literal("list")
+        return ClientCommands.literal("session")
+                .then(ClientCommands.literal("list")
                         .executes(ctx -> {
                             try {
                                 List<SessionRecord> sessions = sessionService.list();
@@ -208,8 +208,8 @@ public final class CommandRegistrar {
                                 return 0;
                             }
                         }))
-                .then(ClientCommandManager.literal("clear")
-                        .then(ClientCommandManager.argument("player", StringArgumentType.word())
+                .then(ClientCommands.literal("clear")
+                        .then(ClientCommands.argument("player", StringArgumentType.word())
                                 .executes(ctx -> {
                                     String player = StringArgumentType.getString(ctx, "player");
                                     try {
@@ -221,8 +221,8 @@ public final class CommandRegistrar {
                                         return 0;
                                     }
                                 })))
-                .then(ClientCommandManager.literal("refresh")
-                        .then(ClientCommandManager.argument("player", StringArgumentType.word())
+                .then(ClientCommands.literal("refresh")
+                        .then(ClientCommands.argument("player", StringArgumentType.word())
                                 .executes(ctx -> {
                                     chatSendService.exchange(StringArgumentType.getString(ctx, "player"));
                                     return 1;
@@ -230,7 +230,7 @@ public final class CommandRegistrar {
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> showAlgorithmsCommand(Krypt04McgConfig config) {
-        return ClientCommandManager.literal("showalgs")
+        return ClientCommands.literal("showalgs")
                 .executes(ctx -> {
                     feedback(ctx.getSource(), tr("text.krypt04mcg.command.algorithms",
                             config.kemAlgorithm, config.signatureAlgorithm, config.aeadAlgorithm));
@@ -243,8 +243,8 @@ public final class CommandRegistrar {
                                                                                   SessionService sessionService,
                                                                                   DecryptionHistoryService decryptionHistoryService,
                                                                                   Krypt04McgConfig config) {
-        return ClientCommandManager.literal("status")
-                .then(ClientCommandManager.argument("player", StringArgumentType.word())
+        return ClientCommands.literal("status")
+                .then(ClientCommands.argument("player", StringArgumentType.word())
                         .executes(ctx -> {
                             showStatus(ctx.getSource(), StringArgumentType.getString(ctx, "player"),
                                     keyStoreService, keyTrustService, sessionService, decryptionHistoryService, config);
@@ -254,8 +254,8 @@ public final class CommandRegistrar {
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> keyCommand(KeyStoreService keyStoreService,
                                                                                KeyTrustService keyTrustService) {
-        return ClientCommandManager.literal("key")
-                .then(ClientCommandManager.literal("list")
+        return ClientCommands.literal("key")
+                .then(ClientCommands.literal("list")
                         .executes(ctx -> {
                             try {
                                 List<PublicIdentity> identities = keyStoreService.listPublicIdentities();
@@ -273,8 +273,8 @@ public final class CommandRegistrar {
                                 return 0;
                             }
                         }))
-                .then(ClientCommandManager.literal("fingerprint")
-                        .then(ClientCommandManager.argument("player", StringArgumentType.word())
+                .then(ClientCommands.literal("fingerprint")
+                        .then(ClientCommands.argument("player", StringArgumentType.word())
                                 .executes(ctx -> {
                                     String player = StringArgumentType.getString(ctx, "player");
                                     try {
@@ -290,7 +290,7 @@ public final class CommandRegistrar {
                                         return 0;
                                     }
                                 })))
-                .then(ClientCommandManager.literal("export")
+                .then(ClientCommands.literal("export")
                         .executes(ctx -> {
                             try {
                                 feedback(ctx.getSource(), keyStoreService.exportOwnPublic());
@@ -300,9 +300,9 @@ public final class CommandRegistrar {
                                 return 0;
                             }
                         }))
-                .then(ClientCommandManager.literal("import")
-                        .then(ClientCommandManager.argument("player", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("data_or_file", StringArgumentType.greedyString())
+                .then(ClientCommands.literal("import")
+                        .then(ClientCommands.argument("player", StringArgumentType.word())
+                                .then(ClientCommands.argument("data_or_file", StringArgumentType.greedyString())
                                         .executes(ctx -> {
                                             String player = StringArgumentType.getString(ctx, "player");
                                             try {
@@ -326,8 +326,8 @@ public final class CommandRegistrar {
     private static LiteralArgumentBuilder<FabricClientCommandSource> trustCommand(String name, KeyStoreService keyStoreService,
                                                                                  KeyTrustService keyTrustService,
                                                                                  TrustState trustState) {
-        return ClientCommandManager.literal(name)
-                .then(ClientCommandManager.argument("player", StringArgumentType.word())
+        return ClientCommands.literal(name)
+                .then(ClientCommands.argument("player", StringArgumentType.word())
                         .executes(ctx -> {
                             String player = StringArgumentType.getString(ctx, "player");
                             try {
@@ -360,9 +360,9 @@ public final class CommandRegistrar {
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> verifyCommand(KeyStoreService keyStoreService,
                                                                                   KeyTrustService keyTrustService) {
-        return ClientCommandManager.literal("verify")
-                .then(ClientCommandManager.argument("player", StringArgumentType.word())
-                        .then(ClientCommandManager.argument("fingerprint", StringArgumentType.word())
+        return ClientCommands.literal("verify")
+                .then(ClientCommands.argument("player", StringArgumentType.word())
+                        .then(ClientCommands.argument("fingerprint", StringArgumentType.word())
                                 .executes(ctx -> {
                                     String player = StringArgumentType.getString(ctx, "player");
                                     String fingerprint = StringArgumentType.getString(ctx, "fingerprint");
@@ -432,7 +432,7 @@ public final class CommandRegistrar {
     }
 
     private static void feedback(FabricClientCommandSource source, String message) {
-        source.sendFeedback(Text.literal("[Krypt04Mcg] " + message));
+        source.sendFeedback(Component.literal("[Krypt04Mcg] " + message));
     }
 
     private static void error(FabricClientCommandSource source, Exception e) {

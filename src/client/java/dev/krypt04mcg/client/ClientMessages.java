@@ -1,12 +1,12 @@
 package dev.krypt04mcg.client;
 
-import net.minecraft.client.resource.language.I18n;
+import net.minecraft.client.resources.language.I18n;
 
 public final class ClientMessages {
     private ClientMessages() {
     }
 
     public static String tr(String key, Object... args) {
-        return I18n.translate(key, args);
+        return I18n.get(key, args);
     }
 }
