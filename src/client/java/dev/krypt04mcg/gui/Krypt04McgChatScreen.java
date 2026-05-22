@@ -26,6 +26,7 @@ public final class Krypt04McgChatScreen extends Screen {
     private static final int SELECTED_COLOR = 0xFF2D5F73;
     private static final int OUTGOING_COLOR = 0xFF8DDBA4;
     private static final int INCOMING_COLOR = 0xFFE6EEF7;
+    private static final int BUTTON_GAP = 6;
 
     private final ChatSendService chatSendService;
     private final KeyStoreService keyStoreService;
@@ -70,7 +71,9 @@ public final class Krypt04McgChatScreen extends Screen {
         }
         addRenderableWidget(playerBox);
 
-        messageBox = new EditBox(font, rightX, panelY + panelHeight - 34, rightWidth - 178, 20,
+        int buttonWidth = Math.max(62, (rightWidth - BUTTON_GAP * 3) / 4);
+        int buttonY = panelY + panelHeight - 28;
+        messageBox = new EditBox(font, rightX, panelY + panelHeight - 54, rightWidth, 20,
                 Component.translatable("text.krypt04mcg.gui.message"));
         messageBox.setMaxLength(512);
         messageBox.setHint(Component.translatable("text.krypt04mcg.gui.message_hint"));
@@ -78,13 +81,16 @@ public final class Krypt04McgChatScreen extends Screen {
         setInitialFocus(messageBox);
 
         addRenderableWidget(Button.builder(Component.translatable("text.krypt04mcg.gui.exchange"), button -> exchange())
-                .bounds(rightX, panelY + panelHeight - 60, 86, 20)
+                .bounds(rightX, buttonY, buttonWidth, 20)
+                .build());
+        addRenderableWidget(Button.builder(Component.translatable("text.krypt04mcg.gui.send_unsigned"), button -> sendUnsigned())
+                .bounds(rightX + buttonWidth + BUTTON_GAP, buttonY, buttonWidth, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("text.krypt04mcg.gui.session"), button -> sendSession())
-                .bounds(rightX + rightWidth - 174, panelY + panelHeight - 34, 82, 20)
+                .bounds(rightX + (buttonWidth + BUTTON_GAP) * 2, buttonY, buttonWidth, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.translatable("text.krypt04mcg.gui.send"), button -> sendSigned())
-                .bounds(rightX + rightWidth - 86, panelY + panelHeight - 34, 86, 20)
+                .bounds(rightX + rightWidth - buttonWidth, buttonY, buttonWidth, 20)
                 .build());
     }
 
@@ -93,20 +99,22 @@ public final class Krypt04McgChatScreen extends Screen {
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, PANEL_COLOR);
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 26, HEADER_COLOR);
         graphics.fill(panelX, panelY + 26, panelX + listWidth, panelY + panelHeight, LIST_COLOR);
-        graphics.text(font, title, panelX + 12, panelY + 9, 0xE8F3FF, false);
-        graphics.text(font, Component.translatable("text.krypt04mcg.gui.players"), panelX + 12, panelY + 36, 0xAFC4D6, false);
-        drawPlayerList(graphics);
+        drawPlayerSelection(graphics);
 
         String receiver = currentReceiver();
         int rightX = panelX + listWidth + 14;
         int rightWidth = panelWidth - listWidth - 28;
+        int historyTop = panelY + 78;
+        int historyBottom = panelY + panelHeight - 62;
+        graphics.fill(rightX, historyTop, rightX + rightWidth, historyBottom, 0x6A071016);
+
+        graphics.nextStratum();
+        graphics.text(font, title, panelX + 12, panelY + 9, 0xE8F3FF, false);
+        graphics.text(font, Component.translatable("text.krypt04mcg.gui.players"), panelX + 12, panelY + 36, 0xAFC4D6, false);
+        drawPlayerListText(graphics);
         graphics.text(font, Component.translatable("text.krypt04mcg.gui.player"), rightX, panelY + 28, 0xAFC4D6, false);
         graphics.text(font, Component.translatable("text.krypt04mcg.gui.conversation", receiver.isEmpty() ? "-" : receiver),
                 rightX, panelY + 66, 0xAFC4D6, false);
-
-        int historyTop = panelY + 78;
-        int historyBottom = panelY + panelHeight - 66;
-        graphics.fill(rightX, historyTop, rightX + rightWidth, historyBottom, 0x6A071016);
         drawHistory(graphics, receiver, rightX + 8, historyTop + 8, rightWidth - 16, historyBottom - historyTop - 16);
 
         if (players.isEmpty()) {
@@ -158,7 +166,21 @@ public final class Krypt04McgChatScreen extends Screen {
         return false;
     }
 
-    private void drawPlayerList(GuiGraphicsExtractor graphics) {
+    private void drawPlayerSelection(GuiGraphicsExtractor graphics) {
+        int listX = panelX + 8;
+        int listY = panelY + 50;
+        int rowHeight = 20;
+        int rows = Math.min(players.size() - listScrollOffset, visiblePlayerRows());
+        for (int i = 0; i < rows; i++) {
+            int playerIndex = listScrollOffset + i;
+            if (playerIndex == selectedPlayer) {
+                int y = listY + i * rowHeight;
+                graphics.fill(listX, y, panelX + listWidth - 8, y + 18, SELECTED_COLOR);
+            }
+        }
+    }
+
+    private void drawPlayerListText(GuiGraphicsExtractor graphics) {
         int listX = panelX + 8;
         int listY = panelY + 50;
         int rowHeight = 20;
@@ -166,9 +188,6 @@ public final class Krypt04McgChatScreen extends Screen {
         for (int i = 0; i < rows; i++) {
             int playerIndex = listScrollOffset + i;
             int y = listY + i * rowHeight;
-            if (playerIndex == selectedPlayer) {
-                graphics.fill(listX, y, panelX + listWidth - 8, y + 18, SELECTED_COLOR);
-            }
             graphics.text(font, truncate(players.get(playerIndex), listWidth - 28), listX + 6, y + 5, 0xE8F3FF, false);
         }
     }
@@ -254,12 +273,20 @@ public final class Krypt04McgChatScreen extends Screen {
     }
 
     private void sendSigned() {
+        sendKem(true);
+    }
+
+    private void sendUnsigned() {
+        sendKem(false);
+    }
+
+    private void sendKem(boolean sign) {
         String receiver = currentReceiver();
         String message = messageBox.getValue().trim();
         if (receiver.isEmpty() || message.isEmpty()) {
             return;
         }
-        if (chatSendService.sendKemMessage(receiver, message, true)) {
+        if (chatSendService.sendKemMessage(receiver, message, sign)) {
             conversationStore.outgoing(receiver, message);
             rememberPlayer(receiver);
             messageBox.setValue("");

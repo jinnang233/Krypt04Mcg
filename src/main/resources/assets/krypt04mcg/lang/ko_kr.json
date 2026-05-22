@@ -32,6 +32,7 @@
   "text.krypt04mcg.gui.exchange": "교환",
   "text.krypt04mcg.gui.session": "세션",
   "text.krypt04mcg.gui.send": "보내기",
+  "text.krypt04mcg.gui.send_unsigned": "무서명",
   "text.krypt04mcg.gui.no_players": "가져온 키가 없습니다. 오른쪽에 플레이어 이름을 입력하세요.",
   "text.krypt04mcg.gui.empty_conversation": "아직 메시지가 없습니다.",
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s에게 암호화 메시지를 보냈습니다.",

@@ -32,6 +32,7 @@
   "text.krypt04mcg.gui.exchange": "Intercambiar",
   "text.krypt04mcg.gui.session": "Sesión",
   "text.krypt04mcg.gui.send": "Enviar",
+  "text.krypt04mcg.gui.send_unsigned": "Sin firma",
   "text.krypt04mcg.gui.no_players": "No hay claves importadas; escribe un jugador a la derecha.",
   "text.krypt04mcg.gui.empty_conversation": "Aún no hay mensajes.",
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Mensaje cifrado enviado a %s.",

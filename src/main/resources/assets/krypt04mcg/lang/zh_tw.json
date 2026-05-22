@@ -32,6 +32,7 @@
   "text.krypt04mcg.gui.exchange": "交換",
   "text.krypt04mcg.gui.session": "會話",
   "text.krypt04mcg.gui.send": "傳送",
+  "text.krypt04mcg.gui.send_unsigned": "不簽名",
   "text.krypt04mcg.gui.no_players": "沒有已匯入金鑰；可在右側輸入玩家名稱。",
   "text.krypt04mcg.gui.empty_conversation": "尚無訊息。",
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] 已向 %s 傳送加密訊息。",

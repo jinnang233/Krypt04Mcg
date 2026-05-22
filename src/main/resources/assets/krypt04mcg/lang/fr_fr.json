@@ -32,6 +32,7 @@
   "text.krypt04mcg.gui.exchange": "Échanger",
   "text.krypt04mcg.gui.session": "Session",
   "text.krypt04mcg.gui.send": "Envoyer",
+  "text.krypt04mcg.gui.send_unsigned": "Non signé",
   "text.krypt04mcg.gui.no_players": "Aucune clé importée ; saisissez un joueur à droite.",
   "text.krypt04mcg.gui.empty_conversation": "Aucun message pour l’instant.",
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Message chiffré envoyé à %s.",

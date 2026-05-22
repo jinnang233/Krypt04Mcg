@@ -3,6 +3,7 @@ package dev.krypt04mcg.input;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.krypt04mcg.Krypt04McgMod;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
@@ -17,12 +18,12 @@ public final class Krypt04McgKeyBindings {
     }
 
     public static void register(Krypt04McgMod mod) {
-        openChatGui = new KeyMapping(
+        openChatGui = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.krypt04mcg.open_chat_gui",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
                 CATEGORY
-        );
+        ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openChatGui.consumeClick()) {

@@ -32,6 +32,7 @@
   "text.krypt04mcg.gui.exchange": "交換",
   "text.krypt04mcg.gui.session": "セッション",
   "text.krypt04mcg.gui.send": "送信",
+  "text.krypt04mcg.gui.send_unsigned": "未署名",
   "text.krypt04mcg.gui.no_players": "インポート済み鍵がありません。右側にプレイヤー名を入力できます。",
   "text.krypt04mcg.gui.empty_conversation": "まだメッセージはありません。",
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s に暗号化メッセージを送信しました。",
