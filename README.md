@@ -7,16 +7,16 @@ Krypt04Mcg (Aka: Krypt04Msg) means "Crypto for message (MineCraft message)".
 The project was renamed from ObscuraLink-MC/ObscuraLink because "Obscura" is already used by a Minecraft modding organization. Krypt04Mcg is the chosen name to avoid that naming conflict.
 
 > [!WARNING]
-> This codebase was generated with AI assistance. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
+> This codebase was **generated with AI assistance**. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
 
 > [!WARNING]
-> Krypt04Mcg is experimental software and has not undergone independent security auditing. The protocol, implementation, and cryptographic design may contain vulnerabilities or design flaws. Do not rely on this mod to protect highly sensitive, important, or production-critical data. If you require mature and battle-tested end-to-end encrypted communication, consider using established tools such as Signal or SimpleX instead.
+> Krypt04Mcg is **experimental** software and has not undergone independent security auditing. The protocol, implementation, and cryptographic design **may contain vulnerabilities or design flaws**. Do not rely on this mod to protect highly sensitive, important, or production-critical data. If you require mature and battle-tested end-to-end encrypted communication, consider using established tools such as Signal or SimpleX instead.
 
 ## Disclaimer
 
-Krypt04Mcg is an experimental mod project. Its build environment, release artifacts, dependencies, and runtime behavior are provided as-is, with no guarantee that they are secure, trustworthy, virus-free, or suitable for any particular use. Before installing or running any downloaded artifact, scan it with VirusTotal or a comparable malware-scanning service whenever possible.
+Krypt04Mcg is an **experimental** mod project. Its build environment, release artifacts, dependencies, and runtime behavior are provided as-is, with **no guarantee** that they are secure, trustworthy, virus-free, or suitable for any particular use. Before installing or running any downloaded artifact, **scan it with VirusTotal** or a comparable malware-scanning service whenever possible.
 
-Never use this project in production environments, and never use it to protect sensitive, important, private, regulated, or high-value data. This project is not expected to receive active long-term maintenance, security response, or compatibility updates.
+**Never use this project in production environments, and never use it to protect sensitive, important, private, regulated, or high-value data. This project is not expected to receive active long-term maintenance, security response, or compatibility updates.**
 
 Krypt04Mcg is a Fabric client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
 
