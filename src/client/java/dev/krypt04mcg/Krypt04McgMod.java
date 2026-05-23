@@ -124,6 +124,10 @@ public final class Krypt04McgMod implements ClientModInitializer {
 
     private void sendChatLine(String line) {
         Minecraft client = Minecraft.getInstance();
+        if (!line.startsWith(FragmentService.PREFIX + " ")) {
+            LOGGER.warn("Refusing to send non-Krypt04Mcg chat line");
+            return;
+        }
         if (client.getConnection() != null) {
             client.getConnection().sendChat(line);
         }
