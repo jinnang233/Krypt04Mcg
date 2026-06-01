@@ -8,6 +8,8 @@ The project was renamed from ObscuraLink-MC/ObscuraLink because "Obscura" is alr
 
 > [!WARNING]
 > This codebase was **generated with AI assistance**. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
+>
+> If you discover any code security issues, or any copyright or licensing concerns, please report them in Issues. Thank you for your understanding.
 
 > [!WARNING]
 > Krypt04Mcg is **experimental** software and has not undergone independent security auditing. The protocol, implementation, and cryptographic design **may contain vulnerabilities or design flaws**. Do not rely on this mod to protect highly sensitive, important, or production-critical data. If you require mature and battle-tested end-to-end encrypted communication, consider using established tools such as Signal or SimpleX instead.
