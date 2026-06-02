@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 public final class ChatConversationStore {
     private static final int MAX_MESSAGES = 300;
@@ -24,11 +25,12 @@ public final class ChatConversationStore {
     private final List<Entry> entries = new ArrayList<>();
     private final Gson gson = JsonSupport.prettyGson();
     private final Path historyFile;
-    private final boolean enabled;
+    private final BooleanSupplier enabled;
+    private boolean loaded;
 
     public ChatConversationStore() {
         this.historyFile = null;
-        this.enabled = true;
+        this.enabled = () -> true;
     }
 
     public ChatConversationStore(Path root) {
@@ -36,6 +38,10 @@ public final class ChatConversationStore {
     }
 
     public ChatConversationStore(Path root, boolean enabled) {
+        this(root, () -> enabled);
+    }
+
+    public ChatConversationStore(Path root, BooleanSupplier enabled) {
         this.historyFile = root.resolve("cache").resolve("conversations.json");
         this.enabled = enabled;
         load();
@@ -86,9 +92,10 @@ public final class ChatConversationStore {
     }
 
     private void record(String target, String message, boolean outgoing, boolean group) {
-        if (!enabled) {
+        if (!enabled.getAsBoolean()) {
             return;
         }
+        load();
         if (target == null || target.isBlank() || message == null || message.isBlank()) {
             return;
         }
@@ -98,7 +105,11 @@ public final class ChatConversationStore {
     }
 
     private void load() {
-        if (!enabled || historyFile == null || !Files.exists(historyFile)) {
+        if (loaded || !enabled.getAsBoolean()) {
+            return;
+        }
+        loaded = true;
+        if (historyFile == null || !Files.exists(historyFile)) {
             return;
         }
         try {
@@ -115,7 +126,7 @@ public final class ChatConversationStore {
     }
 
     private void save() {
-        if (!enabled || historyFile == null) {
+        if (!enabled.getAsBoolean() || historyFile == null) {
             return;
         }
         try {

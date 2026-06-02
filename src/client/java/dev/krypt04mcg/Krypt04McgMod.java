@@ -72,7 +72,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
         groupService = new GroupService(root);
         keyTrustService = new KeyTrustService(root);
         sentMessageCacheService = new SentMessageCacheService(root);
-        conversationStore = new ChatConversationStore(root, config.enableConversationHistory);
+        conversationStore = new ChatConversationStore(root, () -> config.enableConversationHistory);
 
         Minecraft client = Minecraft.getInstance();
         String owner = client.getUser().getName();

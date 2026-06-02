@@ -37,6 +37,11 @@ public final class ClothKrypt04McgConfig implements ConfigData {
 
     Krypt04McgConfig toCoreConfig() {
         Krypt04McgConfig config = new Krypt04McgConfig();
+        copyTo(config);
+        return config;
+    }
+
+    void copyTo(Krypt04McgConfig config) {
         config.showProgress = showProgress;
         config.hideEncryptedRawMessage = hideEncryptedRawMessage;
         config.verboseMessages = verboseMessages;
@@ -55,6 +60,5 @@ public final class ClothKrypt04McgConfig implements ConfigData {
         config.kemAlgorithm = kemAlgorithm;
         config.signatureAlgorithm = signatureAlgorithm;
         config.aeadAlgorithm = aeadAlgorithm;
-        return config;
     }
 }
