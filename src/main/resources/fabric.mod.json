@@ -4,6 +4,7 @@
   "version": "${version}",
   "name": "Krypt04Mcg",
   "description": "Post-quantum encrypted chat over Minecraft chat fragments.",
+  "icon": "assets/krypt04mcg/icon.png",
   "authors": ["Krypt04Mcg contributors"],
   "contact": {
     "sources": "https://github.com/jinnang233/Krypt04Mcg"
