@@ -22,7 +22,8 @@ jobs:
               alpine/openssl version
       - name: Checkout
         uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -59,7 +60,56 @@ jobs:
           vt_api_key: ${{ secrets.VT_API_KEY }}
           files: |
             release-artifacts/*.jar
+      - name: Generate release notes
+        shell: bash
+        run: |
+          set -euo pipefail
 
+          RELEASE_TAG="${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.tag }}"
+          RELEASE_NAME="${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.name }}"
+
+          PREVIOUS_TAG="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
+
+          {
+            echo "# ${RELEASE_NAME}"
+            echo
+            echo "## Changelog"
+            echo
+
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "Changes since \`${PREVIOUS_TAG}\`:"
+              echo
+              git log "${PREVIOUS_TAG}..HEAD" --pretty=format:'- %s (%h)' || true
+            else
+              echo "No previous tag was found. Recent changes:"
+              echo
+              git log -20 --pretty=format:'- %s (%h)' || true
+            fi
+
+            echo
+            echo
+            echo "## Build Artifacts"
+            echo
+
+            shopt -s nullglob
+            for file in release-artifacts/*.jar; do
+              sha256="$(sha256sum "$file" | awk '{print $1}')"
+              filename="$(basename "$file")"
+
+              echo "### ${filename}"
+              echo
+              echo "- SHA256: \`${sha256}\`"
+              echo "- VirusTotal: https://www.virustotal.com/gui/file/${sha256}"
+              echo
+            done
+
+            echo "## Signature"
+            echo
+            echo "Each JAR file is signed with the detached \`.sign\` file."
+            echo "The public key is included as \`public_key.pem\`."
+          } > RELEASE_NOTE.md
+
+          cat RELEASE_NOTE.md
       - name: Sign release artifacts
         shell: bash
         env:
@@ -99,8 +149,8 @@ jobs:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.tag }}
           name: ${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.name }}
           target_commitish: ${{ github.sha }}
+          body_path: RELEASE_NOTE.md
           files: |
             release-artifacts/*.jar
             release-artifacts/*.jar.sign
             public_key.pem
-          generate_release_notes: true
