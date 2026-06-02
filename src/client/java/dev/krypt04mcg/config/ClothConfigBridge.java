@@ -11,7 +11,7 @@ public final class ClothConfigBridge {
 
     public static Krypt04McgConfig load() {
         register();
-        return AutoConfig.getConfigHolder(ClothKrypt04McgConfig.class).getConfig();
+        return AutoConfig.getConfigHolder(ClothKrypt04McgConfig.class).getConfig().toCoreConfig();
     }
 
     private static void register() {
