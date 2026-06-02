@@ -5,6 +5,9 @@
   "text.autoconfig.krypt04mcg.option.verboseMessages": "顯示詳細訊息",
   "text.autoconfig.krypt04mcg.option.enableCompression": "壓縮訊息",
   "text.autoconfig.krypt04mcg.option.showReceiveProgress": "顯示接收進度",
+
+  "text.autoconfig.krypt04mcg.option.enableConversationHistory": "啟用對話記錄",
+
   "text.autoconfig.krypt04mcg.option.fragmentSize": "分片大小",
   "text.autoconfig.krypt04mcg.option.sendDelayMs": "傳送延遲（毫秒）",
   "text.autoconfig.krypt04mcg.option.sessionTtlMinutes": "會話有效期（分鐘）",
@@ -18,8 +21,8 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm": "簽章演算法",
   "text.autoconfig.krypt04mcg.option.aeadAlgorithm": "AEAD 演算法",
   "modmenu.nameTranslation.krypt04mcg": "Krypt04Mcg",
-  "modmenu.descriptionTranslation.krypt04mcg": "透過普通 Minecraft 聊天分片傳輸的後量子加密聊天 Mod。",
-  "modmenu.summaryTranslation.krypt04mcg": "後量子加密 Minecraft 聊天。",
+  "modmenu.descriptionTranslation.krypt04mcg": "透過一般 Minecraft 聊天分片傳輸的後量子加密聊天 Mod。需要 Cloth Config。",
+  "modmenu.summaryTranslation.krypt04mcg": "後量子加密 Minecraft 聊天。需要 Cloth Config。",
   "key.category.krypt04mcg.krypt04mcg": "Krypt04Mcg",
   "key.krypt04mcg.open_chat_gui": "開啟加密聊天面板",
   "text.krypt04mcg.gui.title": "Krypt04Mcg 聊天",
@@ -35,6 +38,9 @@
   "text.krypt04mcg.gui.send_unsigned": "不簽名",
   "text.krypt04mcg.gui.no_players": "沒有已匯入金鑰；可在右側輸入玩家名稱。",
   "text.krypt04mcg.gui.empty_conversation": "尚無訊息。",
+
+  "text.krypt04mcg.gui.target": "目標：%s",
+
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] 已向 %s 傳送加密訊息。",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] 已為 %s 準備會話材料。",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] 分片已傳送。",

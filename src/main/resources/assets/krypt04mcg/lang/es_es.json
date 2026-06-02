@@ -5,6 +5,9 @@
   "text.autoconfig.krypt04mcg.option.verboseMessages": "Mensajes detallados",
   "text.autoconfig.krypt04mcg.option.enableCompression": "Comprimir mensajes",
   "text.autoconfig.krypt04mcg.option.showReceiveProgress": "Mostrar progreso de recepción",
+
+  "text.autoconfig.krypt04mcg.option.enableConversationHistory": "Activar historial de conversaciones",
+
   "text.autoconfig.krypt04mcg.option.fragmentSize": "Tamaño de fragmento",
   "text.autoconfig.krypt04mcg.option.sendDelayMs": "Retraso de envío (ms)",
   "text.autoconfig.krypt04mcg.option.sessionTtlMinutes": "Session TTL (minutes)",
@@ -18,8 +21,8 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm": "Signature Algorithm",
   "text.autoconfig.krypt04mcg.option.aeadAlgorithm": "AEAD Algorithm",
   "modmenu.nameTranslation.krypt04mcg": "Krypt04Mcg",
-  "modmenu.descriptionTranslation.krypt04mcg": "Chat de Minecraft cifrado poscuántico transmitido mediante fragmentos de chat normales.",
-  "modmenu.summaryTranslation.krypt04mcg": "Chat de Minecraft cifrado poscuántico.",
+  "modmenu.descriptionTranslation.krypt04mcg": "Chat de Minecraft cifrado poscuántico mediante fragmentos de chat normales. Requiere Cloth Config.",
+  "modmenu.summaryTranslation.krypt04mcg": "Chat de Minecraft cifrado poscuántico. Requiere Cloth Config.",
   "key.category.krypt04mcg.krypt04mcg": "Krypt04Mcg",
   "key.krypt04mcg.open_chat_gui": "Abrir panel de chat cifrado",
   "text.krypt04mcg.gui.title": "Chat de Krypt04Mcg",
@@ -35,6 +38,9 @@
   "text.krypt04mcg.gui.send_unsigned": "Sin firma",
   "text.krypt04mcg.gui.no_players": "No hay claves importadas; escribe un jugador a la derecha.",
   "text.krypt04mcg.gui.empty_conversation": "Aún no hay mensajes.",
+
+  "text.krypt04mcg.gui.target": "Destino: %s",
+
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Mensaje cifrado enviado a %s.",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] Session material prepared for %s.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] Fragment sent.",

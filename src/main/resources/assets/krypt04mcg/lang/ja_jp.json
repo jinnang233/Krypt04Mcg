@@ -5,6 +5,9 @@
   "text.autoconfig.krypt04mcg.option.verboseMessages": "詳細メッセージ",
   "text.autoconfig.krypt04mcg.option.enableCompression": "メッセージを圧縮",
   "text.autoconfig.krypt04mcg.option.showReceiveProgress": "受信進捗を表示",
+
+  "text.autoconfig.krypt04mcg.option.enableConversationHistory": "会話履歴を有効化",
+
   "text.autoconfig.krypt04mcg.option.fragmentSize": "フラグメントサイズ",
   "text.autoconfig.krypt04mcg.option.sendDelayMs": "送信遅延 (ms)",
   "text.autoconfig.krypt04mcg.option.sessionTtlMinutes": "セッション TTL (分)",
@@ -18,8 +21,8 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm": "署名アルゴリズム",
   "text.autoconfig.krypt04mcg.option.aeadAlgorithm": "AEAD アルゴリズム",
   "modmenu.nameTranslation.krypt04mcg": "Krypt04Mcg",
-  "modmenu.descriptionTranslation.krypt04mcg": "通常の Minecraft チャット断片を使って送る、耐量子暗号チャット Mod。",
-  "modmenu.summaryTranslation.krypt04mcg": "耐量子 Minecraft 暗号化チャット。",
+  "modmenu.descriptionTranslation.krypt04mcg": "通常の Minecraft チャット断片で送る耐量子暗号チャット Mod。Cloth Config が必要です。",
+  "modmenu.summaryTranslation.krypt04mcg": "耐量子 Minecraft 暗号化チャット。Cloth Config が必要です。",
   "key.category.krypt04mcg.krypt04mcg": "Krypt04Mcg",
   "key.krypt04mcg.open_chat_gui": "暗号化チャットパネルを開く",
   "text.krypt04mcg.gui.title": "Krypt04Mcg チャット",
@@ -35,6 +38,9 @@
   "text.krypt04mcg.gui.send_unsigned": "未署名",
   "text.krypt04mcg.gui.no_players": "インポート済み鍵がありません。右側にプレイヤー名を入力できます。",
   "text.krypt04mcg.gui.empty_conversation": "まだメッセージはありません。",
+
+  "text.krypt04mcg.gui.target": "宛先: %s",
+
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s に暗号化メッセージを送信しました。",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] %s 用のセッション素材を準備しました。",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] フラグメントを送信しました。",

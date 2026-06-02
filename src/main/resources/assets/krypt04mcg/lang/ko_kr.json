@@ -5,6 +5,9 @@
   "text.autoconfig.krypt04mcg.option.verboseMessages": "자세한 메시지",
   "text.autoconfig.krypt04mcg.option.enableCompression": "메시지 압축",
   "text.autoconfig.krypt04mcg.option.showReceiveProgress": "수신 진행 표시",
+
+  "text.autoconfig.krypt04mcg.option.enableConversationHistory": "대화 기록 활성화",
+
   "text.autoconfig.krypt04mcg.option.fragmentSize": "조각 크기",
   "text.autoconfig.krypt04mcg.option.sendDelayMs": "전송 지연 (ms)",
   "text.autoconfig.krypt04mcg.option.sessionTtlMinutes": "세션 TTL (분)",
@@ -18,8 +21,8 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm": "서명 알고리즘",
   "text.autoconfig.krypt04mcg.option.aeadAlgorithm": "AEAD 알고리즘",
   "modmenu.nameTranslation.krypt04mcg": "Krypt04Mcg",
-  "modmenu.descriptionTranslation.krypt04mcg": "일반 Minecraft 채팅 조각으로 전송하는 후양자 암호화 채팅 Mod.",
-  "modmenu.summaryTranslation.krypt04mcg": "후양자 Minecraft 암호화 채팅.",
+  "modmenu.descriptionTranslation.krypt04mcg": "일반 Minecraft 채팅 조각을 통해 전송되는 양자 내성 암호화 채팅 모드입니다. Cloth Config가 필요합니다.",
+  "modmenu.summaryTranslation.krypt04mcg": "양자 내성 Minecraft 암호화 채팅입니다. Cloth Config가 필요합니다.",
   "key.category.krypt04mcg.krypt04mcg": "Krypt04Mcg",
   "key.krypt04mcg.open_chat_gui": "암호화 채팅 패널 열기",
   "text.krypt04mcg.gui.title": "Krypt04Mcg 채팅",
@@ -35,6 +38,9 @@
   "text.krypt04mcg.gui.send_unsigned": "무서명",
   "text.krypt04mcg.gui.no_players": "가져온 키가 없습니다. 오른쪽에 플레이어 이름을 입력하세요.",
   "text.krypt04mcg.gui.empty_conversation": "아직 메시지가 없습니다.",
+
+  "text.krypt04mcg.gui.target": "대상: %s",
+
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s에게 암호화 메시지를 보냈습니다.",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] %s용 세션 자료를 준비했습니다.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] 조각을 보냈습니다.",

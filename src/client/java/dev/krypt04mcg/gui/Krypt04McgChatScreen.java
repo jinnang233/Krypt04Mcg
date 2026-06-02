@@ -442,7 +442,9 @@ public final class Krypt04McgChatScreen extends Screen {
         private void refresh() {
             int targetIndex = targetIndex();
             visible = targetIndex < targets.size();
-            setMessage(visible ? Component.literal(targets.get(targetIndex).displayName()) : Component.empty());
+            setMessage(visible
+                    ? Component.translatable("text.krypt04mcg.gui.target", targets.get(targetIndex).displayName())
+                    : Component.empty());
         }
 
         private int targetIndex() {
