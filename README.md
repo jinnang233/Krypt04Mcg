@@ -33,7 +33,7 @@ Krypt04Mcg is a Fabric client mod that transports post-quantum encrypted chat pa
 - Public-key import/export with Trust On First Use checks.
 - Automatic chat fragmentation and out-of-order reassembly.
 - Timeout cleanup and bounded receive caches.
-- Cloth AutoConfig-backed configuration.
+- Optional Cloth AutoConfig-backed configuration.
 
 ## Supported Versions
 
@@ -65,8 +65,8 @@ gradle wrapper
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag v0.8.2
-git push origin v0.8.2
+git tag v0.8.3
+git push origin v0.8.3
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -80,7 +80,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.8.2.jar.sign krypt04mcg-0.8.2.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.8.3.jar.sign krypt04mcg-0.8.3.jar
 ```
 
 ## License
@@ -95,7 +95,7 @@ gradle runClient
 
 ## Install
 
-Build the project, then copy `build/libs/krypt04mcg-<version>.jar` into the client `mods` directory together with Fabric API and Cloth Config.
+Build the project, then copy `build/libs/krypt04mcg-<version>.jar` into the client `mods` directory together with Fabric API. Cloth Config is optional and only needed for the ModMenu settings screen.
 
 ## Key Storage
 

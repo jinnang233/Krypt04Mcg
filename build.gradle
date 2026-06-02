@@ -32,7 +32,7 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-    api "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
+    compileOnly "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
     compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 
     implementation "org.bouncycastle:bcprov-jdk18on:${project.bouncycastle_version}"

@@ -6,6 +6,7 @@ import dev.krypt04mcg.chat.ChatSendService;
 import dev.krypt04mcg.client.ClientMessages;
 import dev.krypt04mcg.command.CommandRegistrar;
 import dev.krypt04mcg.config.Krypt04McgConfig;
+import dev.krypt04mcg.config.OptionalClothConfig;
 import dev.krypt04mcg.crypto.CryptoService;
 import dev.krypt04mcg.fragment.FragmentReassembler;
 import dev.krypt04mcg.fragment.FragmentService;
@@ -18,8 +19,6 @@ import dev.krypt04mcg.service.KeyStoreService;
 import dev.krypt04mcg.service.KeyTrustService;
 import dev.krypt04mcg.service.SentMessageCacheService;
 import dev.krypt04mcg.service.SessionService;
-import me.shedaniel.autoconfig.AutoConfig;
-import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -60,8 +59,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         instance = this;
-        AutoConfig.register(Krypt04McgConfig.class, GsonConfigSerializer::new);
-        config = AutoConfig.getConfigHolder(Krypt04McgConfig.class).getConfig();
+        config = OptionalClothConfig.loadOrDefault();
 
         PacketCodec packetCodec = new PacketCodec();
         CryptoService cryptoService = new CryptoService();
