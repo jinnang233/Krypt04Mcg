@@ -349,13 +349,13 @@ public final class CryptoService {
         try {
             while (!inflater.finished()) {
                 int count = inflater.inflate(buffer);
-                if (count == 0) {
-                    throw new CryptoException("Compressed message is truncated or invalid");
-                } else {
+                if (count > 0) {
                     if (out.size() + count > MAX_PLAINTEXT_BYTES) {
                         throw new CryptoException("Compressed message expands beyond limit");
                     }
                     out.write(buffer, 0, count);
+                } else if (!inflater.finished()) {
+                    throw new CryptoException("Compressed message is truncated or invalid");
                 }
             }
             return out.toByteArray();

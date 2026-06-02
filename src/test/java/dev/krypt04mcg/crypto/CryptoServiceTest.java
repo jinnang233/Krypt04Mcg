@@ -73,6 +73,19 @@ final class CryptoServiceTest {
     }
 
     @Test
+    void compressedEmptyMessageRoundTrips() throws Exception {
+        CryptoService crypto = new CryptoService();
+        LocalKeyMaterial alice = crypto.generateLocalKeys("alice", "alice-uuid");
+        LocalKeyMaterial bob = crypto.generateLocalKeys("bob", "bob-uuid");
+
+        EncryptedPacket packet = crypto.encryptFor(publicIdentity(bob), alice, "alice", "", true, true);
+        String plaintext = crypto.decrypt(packet, bob, publicIdentity(alice));
+
+        assertEquals("", plaintext);
+        assertTrue((packet.flags() & CryptoService.FLAG_COMPRESSED) != 0);
+    }
+
+    @Test
     void sessionMessagesUseSessionSecret() throws Exception {
         CryptoService crypto = new CryptoService();
         LocalKeyMaterial alice = crypto.generateLocalKeys("alice", "alice-uuid");
