@@ -2,7 +2,9 @@ package dev.krypt04mcg.gui;
 
 import dev.krypt04mcg.chat.ChatConversationStore;
 import dev.krypt04mcg.chat.ChatSendService;
+import dev.krypt04mcg.model.GroupRecord;
 import dev.krypt04mcg.model.PublicIdentity;
+import dev.krypt04mcg.service.GroupService;
 import dev.krypt04mcg.service.KeyStoreService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -19,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public final class Krypt04McgChatScreen extends Screen {
@@ -32,12 +35,13 @@ public final class Krypt04McgChatScreen extends Screen {
 
     private final ChatSendService chatSendService;
     private final KeyStoreService keyStoreService;
+    private final GroupService groupService;
     private final ChatConversationStore conversationStore;
-    private final List<String> players = new ArrayList<>();
-    private final List<PlayerRowWidget> playerRows = new ArrayList<>();
+    private final List<Target> targets = new ArrayList<>();
+    private final List<TargetRowWidget> targetRows = new ArrayList<>();
     private EditBox playerBox;
     private EditBox messageBox;
-    private int selectedPlayer;
+    private int selectedTarget;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -46,23 +50,25 @@ public final class Krypt04McgChatScreen extends Screen {
     private int listScrollOffset;
 
     public Krypt04McgChatScreen(ChatSendService chatSendService, KeyStoreService keyStoreService,
+                                GroupService groupService,
                                 ChatConversationStore conversationStore) {
         super(Component.translatable("text.krypt04mcg.gui.title"));
         this.chatSendService = chatSendService;
         this.keyStoreService = keyStoreService;
+        this.groupService = groupService;
         this.conversationStore = conversationStore;
     }
 
     @Override
     protected void init() {
-        loadPlayers();
+        loadTargets();
         panelWidth = Math.min(620, width - 32);
         panelHeight = Math.min(320, height - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(16, (height - panelHeight) / 2);
         listWidth = Math.min(170, Math.max(126, panelWidth / 3));
 
-        addPlayerRows();
+        addTargetRows();
 
         int rightX = panelX + listWidth + 14;
         int rightWidth = panelWidth - listWidth - 28;
@@ -70,9 +76,9 @@ public final class Krypt04McgChatScreen extends Screen {
                 Component.translatable("text.krypt04mcg.gui.player"));
         playerBox.setMaxLength(32);
         playerBox.setHint(Component.translatable("text.krypt04mcg.gui.player_hint"));
-        if (!players.isEmpty()) {
-            selectedPlayer = Math.min(selectedPlayer, players.size() - 1);
-            playerBox.setValue(players.get(selectedPlayer));
+        if (!targets.isEmpty()) {
+            selectedTarget = Math.min(selectedTarget, targets.size() - 1);
+            playerBox.setValue(targets.get(selectedTarget).inputName());
         }
         addRenderableWidget(playerBox);
 
@@ -105,7 +111,8 @@ public final class Krypt04McgChatScreen extends Screen {
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 26, HEADER_COLOR);
         graphics.fill(panelX, panelY + 26, panelX + listWidth, panelY + panelHeight, LIST_COLOR);
 
-        String receiver = currentReceiver();
+        Target target = currentTarget();
+        String receiver = target.displayName();
         int rightX = panelX + listWidth + 14;
         int rightWidth = panelWidth - listWidth - 28;
         int historyTop = panelY + 78;
@@ -120,7 +127,7 @@ public final class Krypt04McgChatScreen extends Screen {
                 rightX, panelY + 66, 0xAFC4D6, false);
         drawHistory(graphics, receiver, rightX + 8, historyTop + 8, rightWidth - 16, historyBottom - historyTop - 16);
 
-        if (players.isEmpty()) {
+        if (targets.isEmpty()) {
             graphics.text(font, Component.translatable("text.krypt04mcg.gui.no_players"), panelX + 12,
                     panelY + 56, 0xD8A657, false);
         }
@@ -140,9 +147,9 @@ public final class Krypt04McgChatScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mouseX >= panelX && mouseX <= panelX + listWidth
                 && mouseY >= panelY + 26 && mouseY <= panelY + panelHeight) {
-            int maxOffset = Math.max(0, players.size() - visiblePlayerRows());
+            int maxOffset = Math.max(0, targets.size() - visibleTargetRows());
             listScrollOffset = Math.clamp(listScrollOffset - (int) Math.signum(scrollY), 0, maxOffset);
-            refreshPlayerRows();
+            refreshTargetRows();
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -153,45 +160,45 @@ public final class Krypt04McgChatScreen extends Screen {
         return false;
     }
 
-    private void addPlayerRows() {
-        playerRows.clear();
+    private void addTargetRows() {
+        targetRows.clear();
         int rowHeight = 20;
         int listX = panelX + 8;
         int listY = panelY + 50;
-        for (int i = 0; i < visiblePlayerRows(); i++) {
-            PlayerRowWidget row = new PlayerRowWidget(i, listX, listY + i * rowHeight, listWidth - 16, 18);
-            playerRows.add(row);
+        for (int i = 0; i < visibleTargetRows(); i++) {
+            TargetRowWidget row = new TargetRowWidget(i, listX, listY + i * rowHeight, listWidth - 16, 18);
+            targetRows.add(row);
             addRenderableWidget(row);
         }
     }
 
-    private int visiblePlayerRows() {
+    private int visibleTargetRows() {
         return Math.max(0, (panelHeight - 64) / 20);
     }
 
-    private void selectPlayer(int index) {
-        if (index < 0 || index >= players.size()) {
+    private void selectTarget(int index) {
+        if (index < 0 || index >= targets.size()) {
             return;
         }
-        selectedPlayer = index;
-        ensureSelectedPlayerVisible();
-        refreshPlayerRows();
-        playerBox.setValue(players.get(selectedPlayer));
+        selectedTarget = index;
+        ensureSelectedTargetVisible();
+        refreshTargetRows();
+        playerBox.setValue(targets.get(selectedTarget).inputName());
     }
 
-    private void ensureSelectedPlayerVisible() {
-        int visibleRows = visiblePlayerRows();
-        if (selectedPlayer < listScrollOffset) {
-            listScrollOffset = selectedPlayer;
-        } else if (selectedPlayer >= listScrollOffset + visibleRows) {
-            listScrollOffset = selectedPlayer - visibleRows + 1;
+    private void ensureSelectedTargetVisible() {
+        int visibleRows = visibleTargetRows();
+        if (selectedTarget < listScrollOffset) {
+            listScrollOffset = selectedTarget;
+        } else if (selectedTarget >= listScrollOffset + visibleRows) {
+            listScrollOffset = selectedTarget - visibleRows + 1;
         }
-        listScrollOffset = Math.clamp(listScrollOffset, 0, Math.max(0, players.size() - visibleRows));
-        refreshPlayerRows();
+        listScrollOffset = Math.clamp(listScrollOffset, 0, Math.max(0, targets.size() - visibleRows));
+        refreshTargetRows();
     }
 
-    private void refreshPlayerRows() {
-        for (PlayerRowWidget row : playerRows) {
+    private void refreshTargetRows() {
+        for (TargetRowWidget row : targetRows) {
             row.refresh();
         }
     }
@@ -201,7 +208,8 @@ public final class Krypt04McgChatScreen extends Screen {
             graphics.text(font, Component.translatable("text.krypt04mcg.gui.empty_conversation"), x, y, 0x8899A6, false);
             return;
         }
-        List<String> lines = historyLines(receiver, width);
+        Target target = currentTarget();
+        List<String> lines = historyLines(target, width);
         int maxLines = Math.max(1, height / 10);
         int start = Math.max(0, lines.size() - maxLines);
         for (int i = start; i < lines.size(); i++) {
@@ -211,9 +219,12 @@ public final class Krypt04McgChatScreen extends Screen {
         }
     }
 
-    private List<String> historyLines(String receiver, int width) {
+    private List<String> historyLines(Target target, int width) {
         List<String> lines = new ArrayList<>();
-        for (ChatConversationStore.Entry entry : conversationStore.messagesFor(receiver)) {
+        List<ChatConversationStore.Entry> entries = target.group()
+                ? conversationStore.messagesForGroup(target.name())
+                : conversationStore.messagesFor(target.name());
+        for (ChatConversationStore.Entry entry : entries) {
             String prefix = entry.outgoing() ? "> " : "< ";
             for (String wrapped : wrap(prefix + entry.message(), width)) {
                 lines.add(wrapped);
@@ -262,56 +273,78 @@ public final class Krypt04McgChatScreen extends Screen {
     }
 
     private void sendKem(boolean sign) {
-        String receiver = currentReceiver();
+        Target target = currentTarget();
         String message = messageBox.getValue().trim();
-        if (receiver.isEmpty() || message.isEmpty()) {
+        if (target.name().isEmpty() || message.isEmpty()) {
             return;
         }
-        if (chatSendService.sendKemMessage(receiver, message, sign)) {
-            conversationStore.outgoing(receiver, message);
-            rememberPlayer(receiver);
+        if (target.group()) {
+            if (target.members().isEmpty()) {
+                return;
+            }
+            chatSendService.sendGroupMessage(target.name(), target.members(), message);
+            conversationStore.outgoingGroup(target.name(), message);
+            rememberTarget(target);
+            messageBox.setValue("");
+        } else if (chatSendService.sendKemMessage(target.name(), message, sign)) {
+            conversationStore.outgoing(target.name(), message);
+            rememberTarget(target);
             messageBox.setValue("");
         }
         messageBox.setFocused(true);
     }
 
     private void sendSession() {
-        String receiver = currentReceiver();
+        Target target = currentTarget();
         String message = messageBox.getValue().trim();
-        if (receiver.isEmpty() || message.isEmpty()) {
+        if (target.group() || target.name().isEmpty() || message.isEmpty()) {
             return;
         }
-        if (chatSendService.sendSessionMessage(receiver, message)) {
-            conversationStore.outgoing(receiver, message);
-            rememberPlayer(receiver);
+        if (chatSendService.sendSessionMessage(target.name(), message)) {
+            conversationStore.outgoing(target.name(), message);
+            rememberTarget(target);
             messageBox.setValue("");
         }
         messageBox.setFocused(true);
     }
 
     private void exchange() {
-        String receiver = currentReceiver();
-        if (!receiver.isEmpty()) {
-            if (chatSendService.exchange(receiver)) {
-                rememberPlayer(receiver);
+        Target target = currentTarget();
+        if (!target.group() && !target.name().isEmpty()) {
+            if (chatSendService.exchange(target.name())) {
+                rememberTarget(target);
             }
         }
     }
 
-    private String currentReceiver() {
-        return playerBox == null ? "" : playerBox.getValue().trim();
+    private Target currentTarget() {
+        String value = playerBox == null ? "" : playerBox.getValue().trim();
+        if (value.startsWith("#")) {
+            String groupName = value.substring(1).trim();
+            return findGroupTarget(groupName).orElse(new Target(groupName, true, List.of()));
+        }
+        if (selectedTarget >= 0 && selectedTarget < targets.size()) {
+            Target selected = targets.get(selectedTarget);
+            if (selected.inputName().equalsIgnoreCase(value)) {
+                return selected;
+            }
+        }
+        return new Target(value, false, List.of());
     }
 
-    private void rememberPlayer(String player) {
-        if (players.stream().noneMatch(value -> value.equalsIgnoreCase(player))) {
-            players.add(player);
-            players.sort(Comparator.comparing(String::toLowerCase));
-            refreshPlayerRows();
+    private void rememberTarget(Target target) {
+        if (target.name().isEmpty()) {
+            return;
+        }
+        if (targets.stream().noneMatch(value -> value.sameTarget(target))) {
+            targets.add(target);
+            targets.sort(Target::compareTo);
+            refreshTargetRows();
         }
     }
 
-    private void loadPlayers() {
-        players.clear();
+    private void loadTargets() {
+        targets.clear();
         try {
             String localOwner = keyStoreService.local().kemPublicKey().owner();
             Set<String> names = new LinkedHashSet<>();
@@ -323,16 +356,56 @@ public final class Krypt04McgChatScreen extends Screen {
             names.addAll(conversationStore.peers());
             names.stream()
                     .sorted(Comparator.comparing(String::toLowerCase))
-                    .forEach(players::add);
+                    .map(name -> new Target(name, false, List.of()))
+                    .forEach(targets::add);
+            Set<String> groupNames = new LinkedHashSet<>(conversationStore.groups());
+            for (GroupRecord group : groupService.list()) {
+                groupNames.add(group.name());
+                rememberTarget(new Target(group.name(), true, group.members()));
+            }
+            groupNames.stream()
+                    .map(name -> findGroupTarget(name).orElse(new Target(name, true, List.of())))
+                    .forEach(this::rememberTarget);
         } catch (Exception e) {
             Minecraft.getInstance().gui.getChat().addClientSystemMessage(Component.literal("[Krypt04Mcg][ERROR] " + e.getMessage()));
         }
     }
 
-    private final class PlayerRowWidget extends AbstractWidget {
+    private Optional<Target> findGroupTarget(String groupName) {
+        try {
+            return groupService.find(groupName)
+                    .map(group -> new Target(group.name(), true, group.members()));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    private record Target(String name, boolean group, List<String> members) implements Comparable<Target> {
+        private String inputName() {
+            return group ? "#" + name : name;
+        }
+
+        private String displayName() {
+            return inputName();
+        }
+
+        private boolean sameTarget(Target other) {
+            return group == other.group && name.equalsIgnoreCase(other.name);
+        }
+
+        @Override
+        public int compareTo(Target other) {
+            if (group != other.group) {
+                return group ? 1 : -1;
+            }
+            return name.compareToIgnoreCase(other.name);
+        }
+    }
+
+    private final class TargetRowWidget extends AbstractWidget {
         private final int visibleIndex;
 
-        private PlayerRowWidget(int visibleIndex, int x, int y, int width, int height) {
+        private TargetRowWidget(int visibleIndex, int x, int y, int width, int height) {
             super(x, y, width, height, Component.empty());
             this.visibleIndex = visibleIndex;
             refresh();
@@ -340,23 +413,24 @@ public final class Krypt04McgChatScreen extends Screen {
 
         @Override
         protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            int playerIndex = playerIndex();
-            if (playerIndex >= players.size()) {
+            int targetIndex = targetIndex();
+            if (targetIndex >= targets.size()) {
                 return;
             }
-            boolean selected = playerIndex == selectedPlayer;
+            boolean selected = targetIndex == selectedTarget;
             if (selected || isHovered()) {
                 graphics.fill(getX(), getY(), getRight(), getBottom(), selected ? SELECTED_COLOR : 0x66344952);
             }
             graphics.nextStratum();
-            graphics.text(font, truncate(players.get(playerIndex), getWidth() - 8), getX() + 6, getY() + 5, 0xFFFFFFFF, false);
+            graphics.text(font, truncate(targets.get(targetIndex).displayName(), getWidth() - 8),
+                    getX() + 6, getY() + 5, 0xFFFFFFFF, false);
         }
 
         @Override
         public void onClick(MouseButtonEvent event, boolean doubleClick) {
-            int playerIndex = playerIndex();
-            if (playerIndex < players.size()) {
-                selectPlayer(playerIndex);
+            int targetIndex = targetIndex();
+            if (targetIndex < targets.size()) {
+                selectTarget(targetIndex);
             }
         }
 
@@ -366,12 +440,12 @@ public final class Krypt04McgChatScreen extends Screen {
         }
 
         private void refresh() {
-            int playerIndex = playerIndex();
-            visible = playerIndex < players.size();
-            setMessage(visible ? Component.literal(players.get(playerIndex)) : Component.empty());
+            int targetIndex = targetIndex();
+            visible = targetIndex < targets.size();
+            setMessage(visible ? Component.literal(targets.get(targetIndex).displayName()) : Component.empty());
         }
 
-        private int playerIndex() {
+        private int targetIndex() {
             return listScrollOffset + visibleIndex;
         }
     }

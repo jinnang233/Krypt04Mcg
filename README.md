@@ -119,11 +119,24 @@ Private and public key material are stored separately. Public-key records includ
 /enc stell <receiver> <message>
 /enc exchange <receiver>
 /enc etell <receiver> <message>
+/enc gtell <group> <message>
+/enc group create <name> <members>
+/enc group list
+/enc group delete <name>
+/enc resend [messageId]
+/enc session list
+/enc session clear <player>
+/enc session refresh <player>
 /enc showalgs
+/enc status <player>
 /enc key list
 /enc key fingerprint <player>
 /enc key export
 /enc key import <player> <data-or-file>
+/enc key verify <player> <fingerprint>
+/enc key confirm <player>
+/enc key trust <player>
+/enc key distrust <player>
 ```
 
 Import flow:
@@ -200,6 +213,19 @@ The receiver supports out-of-order fragments, ignores duplicate fragments, clean
 ## Session Design
 
 `/enc exchange` creates and persists local session material, then sends the session data inside a signed encrypted KEM envelope. `/enc etell` currently uses the same signed KEM envelope while keeping the session API and storage in place. The protocol already reserves packet types for direct PSK session packets.
+
+## GUI Chat
+
+The encrypted chat panel can be opened with the configured Krypt04Mcg key binding. It lists imported players, recent peers, and configured groups. Group targets are shown with a `#` prefix and send through the existing group fan-out flow.
+
+Recent plaintext conversation history is cached locally under:
+
+```text
+config/krypt04mcg/cache/conversations.json
+```
+
+The cache is bounded to the most recent 300 entries.
+This can be disabled with the `enableConversationHistory` config option.
 
 ## Known Limitations
 

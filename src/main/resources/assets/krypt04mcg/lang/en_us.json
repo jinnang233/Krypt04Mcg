@@ -5,6 +5,7 @@
   "text.autoconfig.krypt04mcg.option.verboseMessages": "Verbose Messages",
   "text.autoconfig.krypt04mcg.option.enableCompression": "Compress Messages",
   "text.autoconfig.krypt04mcg.option.showReceiveProgress": "Show Receive Progress",
+  "text.autoconfig.krypt04mcg.option.enableConversationHistory": "Enable Conversation History",
   "text.autoconfig.krypt04mcg.option.fragmentSize": "Fragment Size",
   "text.autoconfig.krypt04mcg.option.sendDelayMs": "Send Delay (ms)",
   "text.autoconfig.krypt04mcg.option.sessionTtlMinutes": "Session TTL (minutes)",

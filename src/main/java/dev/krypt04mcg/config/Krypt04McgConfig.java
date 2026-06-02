@@ -11,6 +11,7 @@ public final class Krypt04McgConfig implements ConfigData {
     public boolean verboseMessages = false;
     public boolean enableCompression = true;
     public boolean showReceiveProgress = true;
+    public boolean enableConversationHistory = true;
 
     @ConfigEntry.BoundedDiscrete(min = 64, max = 200)
     public int fragmentSize = 180;

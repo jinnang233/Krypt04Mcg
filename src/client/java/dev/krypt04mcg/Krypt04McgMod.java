@@ -74,7 +74,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
         groupService = new GroupService(root);
         keyTrustService = new KeyTrustService(root);
         sentMessageCacheService = new SentMessageCacheService(root);
-        conversationStore = new ChatConversationStore();
+        conversationStore = new ChatConversationStore(root, config.enableConversationHistory);
 
         Minecraft client = Minecraft.getInstance();
         String owner = client.getUser().getName();
@@ -119,7 +119,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
         if (chatSendService == null || keyStoreService == null || client.player == null) {
             return;
         }
-        client.setScreen(new Krypt04McgChatScreen(chatSendService, keyStoreService, conversationStore));
+        client.setScreen(new Krypt04McgChatScreen(chatSendService, keyStoreService, groupService, conversationStore));
     }
 
     private void sendChatLine(String line) {
