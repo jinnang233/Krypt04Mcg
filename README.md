@@ -65,8 +65,8 @@ gradle wrapper
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag v0.8.0
-git push origin v0.8.0
+git tag v0.8.1
+git push origin v0.8.1
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -80,7 +80,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.8.0.jar.sign krypt04mcg-0.8.0.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.8.1.jar.sign krypt04mcg-0.8.1.jar
 ```
 
 ## License
