@@ -47,6 +47,63 @@ jobs:
             -exec cp {} release-artifacts/ \;
           ls -la release-artifacts
 
+      - name: Add third-party license notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          BOUNCY_CASTLE_VERSION="$(sed -n 's/^bouncycastle_version=//p' gradle.properties)"
+          if [ -z "$BOUNCY_CASTLE_VERSION" ]; then
+            echo "Could not determine Bouncy Castle version from gradle.properties"
+            exit 1
+          fi
+
+          mkdir -p legal/META-INF
+          cat > release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE
+          # Third-party notices
+
+          This distribution bundles third-party dependencies inside the release JAR.
+
+          ## Bouncy Castle
+
+          Dependency: \`org.bouncycastle:bcprov-jdk18on:${BOUNCY_CASTLE_VERSION}\`
+          Project: https://www.bouncycastle.org/
+          License: MIT License / Bouncy Castle License
+
+          MIT License (https://opensource.org/licenses/MIT)
+
+          Copyright (c) 2000-2026 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org).
+          Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+          associated documentation files (the "Software"), to deal in the Software without restriction,
+          including without limitation the rights to use, copy, modify, merge, publish, distribute,
+          sub license, and/or sell copies of the Software, and to permit persons to whom the Software is
+          furnished to do so, subject to the following conditions: The above copyright notice and this
+          permission notice shall be included in all copies or substantial portions of the Software.
+
+          **THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+          NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+          NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+          DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+          OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.**
+
+          NOTICE
+          sed -i 's/^          //' release-artifacts/THIRD_PARTY_NOTICES.md
+          cp release-artifacts/THIRD_PARTY_NOTICES.md legal/META-INF/THIRD-PARTY-NOTICES.md
+
+          jars=(release-artifacts/*.jar)
+          if [ ${#jars[@]} -eq 0 ]; then
+            echo "No JAR files found for license notice embedding"
+            exit 1
+          fi
+
+          for file in "${jars[@]}"; do
+            (cd legal && jar uf "../${file}" META-INF/THIRD-PARTY-NOTICES.md)
+            jar tf "$file" | grep -Fx 'META-INF/THIRD-PARTY-NOTICES.md' >/dev/null
+          done
+
+          ls -la release-artifacts
+
       - name: Generate snapshot tag
         id: snapshot
         shell: bash
@@ -103,6 +160,11 @@ jobs:
               echo
             done
 
+            echo "## Third-party Notices"
+            echo
+            echo "Release JARs include bundled dependency notices at \`META-INF/THIRD-PARTY-NOTICES.md\`."
+            echo "The same notice file is attached as \`THIRD_PARTY_NOTICES.md\`."
+            echo
             echo "## Signature"
             echo
             echo "Each JAR file is signed with the detached \`.sign\` file."
@@ -153,4 +215,5 @@ jobs:
           files: |
             release-artifacts/*.jar
             release-artifacts/*.jar.sign
+            release-artifacts/THIRD_PARTY_NOTICES.md
             public_key.pem
