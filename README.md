@@ -8,6 +8,8 @@ The project was renamed from ObscuraLink-MC/ObscuraLink because "Obscura" is alr
 
 > [!WARNING]
 > This codebase was **generated with AI assistance**. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
+> 
+> If possible, please run it in an **ISOLATED** environment, such as a virtual machine, to avoid potential security risks from build artifacts, such as the possibility that the maintainer’s computer has been infected with malware.
 >
 > If you discover any code security issues, or any copyright or licensing concerns, please report them in Issues. Thank you for your understanding.
 
