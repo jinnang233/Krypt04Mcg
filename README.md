@@ -230,7 +230,7 @@ This can be disabled with the `enableConversationHistory` config option.
 ## Known Limitations
 
 - This is a client-only chat transport. Server chat filtering, signing, rate limits, and antispam plugins may interfere with large encrypted payloads.
-- Classic McEliece public keys and encapsulations are large, so fragmentation is expected.
+- Minecraft chat channels have a limited number of characters per message, so fragmentation is expected.
 - Direct PSK-only session packets are reserved but not yet enabled as the default sending path.
 - Public-key authenticity is TOFU-based; verify fingerprints out of band for stronger protection.
 
