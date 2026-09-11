@@ -13,6 +13,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 final class FragmentServiceTest {
     @Test
@@ -65,6 +67,53 @@ final class FragmentServiceTest {
         assertTrue(lines.getFirst().startsWith("[CUSTOM] "));
         assertTrue(service.isFragment(lines.getFirst(), "[CUSTOM]"));
         assertEquals(0, service.parse(lines.getFirst(), "[CUSTOM]").index());
+    }
+
+    @Test
+    void rejectsPrefixesThatCannotFitPayloadWithoutHanging() {
+        FragmentService service = new FragmentService();
+
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
+            for (int length : new int[]{185, 218, 256}) {
+                assertThrows(IllegalArgumentException.class,
+                        () -> service.fragment(new byte[3000], fixedId(), 96, "P".repeat(length)));
+            }
+            // Initially fits the minimum payload, but the multi-digit fragment count needs more space.
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.fragment(new byte[3000], fixedId(), 96, "P".repeat(184)));
+        });
+    }
+
+    @Test
+    void roundTripsPrefixContainingSpaces() {
+        FragmentService service = new FragmentService();
+        FragmentReassembler reassembler = new FragmentReassembler();
+        String prefix = "[CUSTOM CHAT]";
+        byte[] packet = new byte[300];
+        List<String> lines = service.fragment(packet, fixedId(), 96, prefix);
+        Optional<byte[]> result = Optional.empty();
+
+        for (String line : lines) {
+            assertTrue(service.isFragment(line, prefix));
+            result = reassembler.accept(service.parse(line, prefix));
+        }
+        assertArrayEquals(packet, result.orElseThrow());
+    }
+
+    @Test
+    void rejectsMessagesBeyondReceiverFragmentLimit() {
+        FragmentService service = new FragmentService();
+        byte[] packet = new byte[12_288];
+        List<String> lines = service.fragment(packet, fixedId(), 32);
+        assertEquals(FragmentReassembler.DEFAULT_MAX_FRAGMENTS_PER_MESSAGE, lines.size());
+        FragmentReassembler reassembler = new FragmentReassembler();
+        Optional<byte[]> result = Optional.empty();
+        for (String line : lines) {
+            result = reassembler.accept(service.parse(line));
+        }
+        assertArrayEquals(packet, result.orElseThrow());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.fragment(new byte[packet.length + 1], fixedId(), 32));
     }
 
     @Test

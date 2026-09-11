@@ -26,6 +26,9 @@ public final class FragmentService {
         String normalizedPrefix = normalizePrefix(prefix);
         int payloadSize = payloadSizeFor(encoded.length(), id, configuredPayloadSize, normalizedPrefix);
         int total = Math.max(1, (int) Math.ceil(encoded.length() / (double) payloadSize));
+        if (total > FragmentReassembler.DEFAULT_MAX_FRAGMENTS_PER_MESSAGE) {
+            throw new IllegalArgumentException("Message requires too many fragments: " + total);
+        }
         List<String> result = new ArrayList<>(total);
         for (int i = 0; i < total; i++) {
             int start = i * payloadSize;
@@ -105,13 +108,16 @@ public final class FragmentService {
         int requested = Math.max(MIN_PAYLOAD_SIZE, configuredPayloadSize);
         int payloadSize = Math.min(requested, maxPayloadFor(id, 0, 1, prefix));
         while (true) {
+            if (payloadSize < MIN_PAYLOAD_SIZE) {
+                throw new IllegalArgumentException("Packet prefix leaves too little room for fragment payload");
+            }
             int total = Math.max(1, (int) Math.ceil(encodedLength / (double) payloadSize));
             int maxPayload = maxPayloadFor(id, total - 1, total, prefix);
             int adjusted = Math.min(requested, maxPayload);
             if (adjusted == payloadSize) {
-                return Math.max(MIN_PAYLOAD_SIZE, adjusted);
+                return adjusted;
             }
-            payloadSize = Math.max(MIN_PAYLOAD_SIZE, adjusted);
+            payloadSize = adjusted;
         }
     }
 
@@ -125,12 +131,9 @@ public final class FragmentService {
     }
 
     private static FragmentParts parts(String message, String prefix) {
-        if (prefix.isEmpty()) {
-            String[] parts = message.split("\\s+", 4);
-            return parts.length == 4 ? new FragmentParts(parts[0], parts[1], parts[2], parts[3]) : null;
-        }
-        String[] parts = message.split("\\s+", 5);
-        return parts.length == 5 ? new FragmentParts(parts[1], parts[2], parts[3], parts[4]) : null;
+        String body = prefix.isEmpty() ? message : message.substring(prefix.length() + 1);
+        String[] parts = body.split("\\s+", 4);
+        return parts.length == 4 ? new FragmentParts(parts[0], parts[1], parts[2], parts[3]) : null;
     }
 
     private static String headerPrefix(String prefix) {
