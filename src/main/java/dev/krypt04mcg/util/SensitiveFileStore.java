@@ -11,6 +11,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,6 +41,7 @@ public final class SensitiveFileStore {
     }
 
     public synchronized String readString(Path path) throws IOException {
+        byte[] aad = label(path);
         byte[] encoded = Files.readAllBytes(path);
         if (!startsWith(encoded, FILE_MAGIC)) {
             String plaintext = new String(encoded, StandardCharsets.UTF_8);
@@ -52,9 +55,9 @@ public final class SensitiveFileStore {
         byte[] ciphertext = Arrays.copyOfRange(encoded, FILE_MAGIC.length + NONCE_BYTES, encoded.length);
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(masterKey(), "AES"),
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(masterKey(false), "AES"),
                     new GCMParameterSpec(GCM_TAG_BITS, nonce));
-            cipher.updateAAD(label(path));
+            cipher.updateAAD(aad);
             return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
             throw new IOException("Unable to decrypt sensitive file " + path, e);
@@ -66,14 +69,15 @@ public final class SensitiveFileStore {
     }
 
     public synchronized void writeString(Path path, String value) throws IOException {
+        byte[] aad = label(path);
         byte[] plaintext = value.getBytes(StandardCharsets.UTF_8);
         byte[] nonce = new byte[NONCE_BYTES];
         random.nextBytes(nonce);
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(masterKey(), "AES"),
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(masterKey(!isEncrypted(path)), "AES"),
                     new GCMParameterSpec(GCM_TAG_BITS, nonce));
-            cipher.updateAAD(label(path));
+            cipher.updateAAD(aad);
             byte[] ciphertext = cipher.doFinal(plaintext);
             ByteArrayOutputStream bytes = new ByteArrayOutputStream(FILE_MAGIC.length + nonce.length + ciphertext.length);
             bytes.write(FILE_MAGIC);
@@ -99,11 +103,31 @@ public final class SensitiveFileStore {
         }
     }
 
-    private byte[] masterKey() throws IOException {
-        if (masterKey != null) {
-            return masterKey;
+    private byte[] masterKey(boolean create) throws IOException {
+        // The JVM lock avoids overlapping locks; the file lock covers other game processes.
+        synchronized (SensitiveFileStore.class) {
+            SecureFiles.rejectLinks(masterKeyFile);
+            if (!Files.exists(masterKeyFile) && (!create || masterKey != null)) {
+                throw new IOException("Local master key is missing; restore it from backup");
+            }
+            if (masterKey != null) {
+                return masterKey;
+            }
+            SecureFiles.createPrivateDirectories(masterKeyFile.getParent());
+            Path lockFile = masterKeyFile.resolveSibling("master.key.lock");
+            SecureFiles.rejectLinks(lockFile);
+            try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var lock = channel.lock()) {
+                return loadMasterKey(create);
+            }
         }
+    }
+
+    private byte[] loadMasterKey(boolean create) throws IOException {
         if (!Files.exists(masterKeyFile)) {
+            if (!create) {
+                throw new IOException("Local master key is missing; restore it from backup");
+            }
             byte[] generated = new byte[KEY_BYTES];
             random.nextBytes(generated);
             try {
@@ -115,6 +139,7 @@ public final class SensitiveFileStore {
                 throw e;
             }
         }
+        SecureFiles.restrictToOwner(masterKeyFile, false);
         byte[] stored = Files.readAllBytes(masterKeyFile);
         try {
             if (!startsWith(stored, KEY_MAGIC) || stored.length <= KEY_MAGIC.length + 1) {
@@ -180,6 +205,7 @@ public final class SensitiveFileStore {
         if (!normalized.startsWith(root)) {
             throw new IOException("Sensitive file is outside the configured storage root: " + path);
         }
+        SecureFiles.rejectLinks(normalized);
         return root.relativize(normalized).toString().replace('\\', '/').getBytes(StandardCharsets.UTF_8);
     }
 

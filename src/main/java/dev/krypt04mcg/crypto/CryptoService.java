@@ -269,6 +269,12 @@ public final class CryptoService {
         if (!packet.receiver().equalsIgnoreCase(receiver)) {
             throw new CryptoException("Packet receiver mismatch: expected " + receiver + ", got " + packet.receiver());
         }
+        if (packet.signed() && (claimedSender == null
+                || !packet.sender().equalsIgnoreCase(claimedSender.owner())
+                || claimedSender.signaturePublicKey() == null
+                || !packet.sender().equalsIgnoreCase(claimedSender.signaturePublicKey().owner()))) {
+            throw new CryptoException("Signature identity does not match packet sender");
+        }
         SignatureAlgorithm packetSignature = packet.signed()
                 ? signatureAlgorithm(packet.algorithms().signature()) : null;
         AeadAlgorithm packetAead = aeadAlgorithm(packet.algorithms().aead());
@@ -293,6 +299,7 @@ public final class CryptoService {
                 }
             }
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
+            ensurePlaintextSize(payload);
             return new String(payload, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt message", e);
@@ -307,6 +314,12 @@ public final class CryptoService {
         }
         if (packet.type() != PacketType.SESSION_MESSAGE) {
             throw new CryptoException("Packet is not a session message: " + packet.type());
+        }
+        if (packet.signed() && (claimedSender == null
+                || !packet.sender().equalsIgnoreCase(claimedSender.owner())
+                || claimedSender.signaturePublicKey() == null
+                || !packet.sender().equalsIgnoreCase(claimedSender.signaturePublicKey().owner()))) {
+            throw new CryptoException("Signature identity does not match packet sender");
         }
         SignatureAlgorithm packetSignature = packet.signed()
                 ? signatureAlgorithm(packet.algorithms().signature()) : null;
@@ -327,6 +340,7 @@ public final class CryptoService {
                 }
             }
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
+            ensurePlaintextSize(payload);
             return new String(payload, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt session message", e);

@@ -284,6 +284,20 @@ The encrypted cache is bounded to the most recent 300 entries and is disabled by
 
 ## Tests
 
+Run all unit, regression, and fuzz tests:
+
+    ./gradlew test
+    .\gradlew.bat test  # Windows
+
+The report is written to build/reports/tests/test/index.html. GitHub Actions runs the tests
+on Linux and Windows for pushes and pull requests, including Windows DPAPI storage tests.
+
+Back up account storage as a unit. If secrets/master.key is missing, restore the original;
+encrypted files cannot be recovered by generating a replacement key. Storage directories must
+support owner-only permissions and must not be symbolic links or directory junctions.
+System-message (shadow-listen) transport has no authenticated player identity; use signed
+messages (stell, exchange, etell) there. Unsigned tell messages require authenticated chat or payload transport.
+
 Implemented test coverage:
 
 - packet encode/decode

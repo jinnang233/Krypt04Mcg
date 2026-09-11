@@ -17,6 +17,15 @@ final class AccountStorageTest {
     private Path tempDir;
 
     @Test
+    void rejectsEscapingOrCollidingAccountIdentifiers() {
+        for (String uuid : java.util.List.of(".", "..", "../alice", "alice/uuid", "alice?uuid")) {
+            org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
+                    () -> AccountStorage.resolve(tempDir, "alice", uuid));
+        }
+        assertFalse(Files.exists(tempDir.resolve("accounts")));
+    }
+
+    @Test
     void migratesMatchingLegacyStorageIntoAccountNamespace() throws Exception {
         CryptoService crypto = new CryptoService();
         KeyStoreService legacy = new KeyStoreService(tempDir, crypto);

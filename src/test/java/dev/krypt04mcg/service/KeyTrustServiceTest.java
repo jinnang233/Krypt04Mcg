@@ -37,6 +37,17 @@ final class KeyTrustServiceTest {
         assertTrue(SensitiveFileStore.isEncrypted(tempDir.resolve("keys").resolve("trust.json")));
     }
 
+    @Test
+    void corruptedTrustEntriesDoNotFallBackToTofu() throws Exception {
+        Path file = tempDir.resolve("keys/trust.json");
+        for (String entry : java.util.List.of("null", "{}", "{\"state\":\"UNKNOWN\"}",
+                "{\"state\":\"VERIFIED\",\"kemFingerprint\":\"partial\"}")) {
+            new SensitiveFileStore(tempDir).writeString(file, "{\"bob\":" + entry + "}");
+            org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
+                    () -> new KeyTrustService(tempDir).trustState("bob", null));
+        }
+    }
+
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

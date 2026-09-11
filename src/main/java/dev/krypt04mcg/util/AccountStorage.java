@@ -78,7 +78,10 @@ public final class AccountStorage {
         }
     }
 
-    private static String normalize(String uuid) {
-        return uuid.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
+    private static String normalize(String uuid) throws IOException {
+        if (!uuid.matches("[A-Za-z0-9_-]{1,64}")) {
+            throw new IOException("Invalid account storage identifier");
+        }
+        return uuid.toLowerCase(Locale.ROOT);
     }
 }

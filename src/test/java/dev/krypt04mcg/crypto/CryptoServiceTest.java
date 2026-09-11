@@ -21,6 +21,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class CryptoServiceTest {
     @Test
+    void rejectsValidSignaturesUnderAnotherPlayersName() throws Exception {
+        CryptoService crypto = new CryptoService();
+        LocalKeyMaterial mallory = crypto.generateLocalKeys("mallory", "mallory-uuid",
+                KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        LocalKeyMaterial bob = crypto.generateLocalKeys("bob", "bob-uuid",
+                KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        EncryptedPacket packet = crypto.encryptFor(publicIdentity(bob), mallory, "alice", "forged", true);
+        assertThrows(CryptoException.class, () -> crypto.decrypt(packet, bob, publicIdentity(mallory)));
+        byte[] secret = new byte[32];
+        EncryptedPacket session = crypto.encryptWithSession("bob", mallory, "alice", secret, "forged", true, false);
+        assertThrows(CryptoException.class,
+                () -> crypto.decryptWithSession(session, bob, publicIdentity(mallory), secret));
+    }
+
+    @Test
     void encryptDecryptAndSignVerify() throws Exception {
         CryptoService crypto = new CryptoService();
         LocalKeyMaterial alice = crypto.generateLocalKeys("alice", "alice-uuid");
@@ -161,6 +176,28 @@ final class CryptoServiceTest {
                 inflate.invoke(null, (Object) compressed));
 
         assertTrue(exception.getCause() instanceof CryptoException);
+    }
+
+    @Test
+    void oversizedUncompressedDecryptionIsRejected() throws Exception {
+        CryptoService crypto = new CryptoService();
+        LocalKeyMaterial bob = crypto.generateLocalKeys("bob", "bob-uuid",
+                KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        byte[] secret = new byte[32];
+        EncryptedPacket template = crypto.encryptWithSession("bob", bob, "bob", secret, "", false, false);
+        var codec = new dev.krypt04mcg.protocol.PacketCodec();
+        javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,
+                new javax.crypto.spec.SecretKeySpec(crypto.deriveSessionSecret(secret, template.messageId()), "AES"),
+                new javax.crypto.spec.GCMParameterSpec(128, template.nonce()));
+        cipher.updateAAD(codec.aadFor(template));
+        byte[] ciphertext = cipher.doFinal(new byte[CryptoService.MAX_PLAINTEXT_BYTES + 1]);
+        EncryptedPacket oversized = new EncryptedPacket(template.protocolVersion(), template.type(), template.flags(),
+                template.sender(), template.receiver(), template.timestampMillis(), template.messageId(),
+                template.aadFragmentIndex(), template.aadFragmentTotal(), template.algorithms(), template.nonce(),
+                template.kemCiphertext(), ciphertext, template.signature());
+        assertThrows(CryptoException.class,
+                () -> crypto.decryptWithSession(oversized, bob, publicIdentity(bob), secret));
     }
 
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {

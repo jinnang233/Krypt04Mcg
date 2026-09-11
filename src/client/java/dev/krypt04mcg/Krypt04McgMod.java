@@ -125,7 +125,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
                 groupService, config);
         Krypt04McgKeyBindings.register(this);
         ClientReceiveMessageEvents.ALLOW_CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
-            String senderName = sender == null ? "unknown" : sender.name();
+            String senderName = sender == null ? null : sender.name();
             String raw = message.getString();
             if (!isLocalSender(senderName, owner)) {
                 chatReceiveHandler.handle(senderName, raw);
@@ -136,7 +136,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
             Optional<ShadowMessage> shadowMessage = extractShadowMessage(message.getString());
             shadowMessage
                     .filter(value -> !isLocalSender(value.player(), owner))
-                    .ifPresent(value -> chatReceiveHandler.handle(value.player(), value.message()));
+                    .ifPresent(value -> chatReceiveHandler.handle(null, value.message()));
             return shadowMessage.map(value -> !chatReceiveHandler.shouldHide(value.message())).orElse(true);
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, joinedClient) -> showDisclaimer(joinedClient));

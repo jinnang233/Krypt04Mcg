@@ -139,7 +139,11 @@ public final class KeyStoreService {
     public Optional<PublicIdentity> findPublicIdentity(String player) throws IOException {
         Path path = keysDir.resolve("public").resolve(normalize(player) + ".json");
         if (Files.exists(path)) {
-            return Optional.of(readPublicIdentity(path));
+            PublicIdentity identity = readPublicIdentity(path);
+            if (!player.equalsIgnoreCase(identity.owner())) {
+                throw new IOException("Stored public key owner does not match player " + player);
+            }
+            return Optional.of(identity);
         }
         if (!Files.exists(keysDir.resolve("public"))) {
             return Optional.empty();
@@ -287,7 +291,8 @@ public final class KeyStoreService {
     }
 
     private static boolean sameIdentity(PublicIdentity first, PublicIdentity second) {
-        return first.kemPublicKey().fingerprint().equals(second.kemPublicKey().fingerprint())
+        return first.owner().equalsIgnoreCase(second.owner()) && first.uuid().equalsIgnoreCase(second.uuid())
+                && first.kemPublicKey().fingerprint().equals(second.kemPublicKey().fingerprint())
                 && first.signaturePublicKey().fingerprint().equals(second.signaturePublicKey().fingerprint());
     }
 

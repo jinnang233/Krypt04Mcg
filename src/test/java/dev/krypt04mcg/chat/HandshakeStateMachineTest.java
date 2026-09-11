@@ -210,6 +210,19 @@ final class HandshakeStateMachineTest {
         return bytes;
     }
 
+    @Test
+    void unauthenticatedTransportRequiresValidSignature() throws Exception {
+        Fixture fixture = fixture();
+        for (boolean signed : new boolean[]{false, true}) {
+            EncryptedPacket packet = fixture.crypto.encryptFor(fixture.bobKeys.ownPublicIdentity(),
+                    fixture.aliceMaterial, "alice", "authenticated", signed, false);
+            for (String fragment : fixture.fragments.fragment(fixture.codec.encode(packet), packet.messageId(), 96)) {
+                fixture.handler.handle(null, fragment);
+            }
+            assertEquals(signed ? List.of("authenticated") : List.of(), fixture.decryptedMessages);
+        }
+    }
+
     private record Fixture(CryptoService crypto, KeyStoreService bobKeys, LocalKeyMaterial aliceMaterial,
                            PacketCodec codec, FragmentService fragments, SessionService sessionService,
                            DecryptionHistoryService history, KeyTrustService trust, List<String> systemMessages,

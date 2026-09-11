@@ -96,9 +96,11 @@ public final class KeyTrustService {
             Map<String, TrustBinding> trust = new HashMap<>();
             for (Map.Entry<String, JsonElement> entry : parsed.getAsJsonObject().entrySet()) {
                 TrustBinding binding = parseBinding(entry.getValue());
-                if (binding != null && binding.state() != null) {
-                    trust.put(normalize(entry.getKey()), binding);
+                if (binding == null || binding.state() == null
+                        || (binding.kemFingerprint() == null) != (binding.signatureFingerprint() == null)) {
+                    throw new IOException("Trust binding is invalid for " + entry.getKey());
                 }
+                trust.put(normalize(entry.getKey()), binding);
             }
             if (legacyPlaintext) {
                 sensitiveFiles.writeString(trustFile, gson.toJson(trust));

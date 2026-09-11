@@ -237,6 +237,8 @@ final class KeyStoreServiceTest {
         assertEquals(peer.kemPublicKey().fingerprint(), imported.kemPublicKey().fingerprint());
         assertNotEquals(forgedKem.fingerprint(), imported.kemPublicKey().fingerprint());
         assertEquals(64, imported.kemPublicKey().fingerprint().length());
+        assertThrows(java.io.IOException.class, () -> keyStoreService.importPublicIdentity("bob",
+                JsonSupport.prettyGson().toJson(peer).replace("bob-uuid", "another-uuid")));
     }
 
     @Test
@@ -259,6 +261,18 @@ final class KeyStoreServiceTest {
                 JsonSupport.prettyGson().toJson(ownerMismatch)));
         assertThrows(Exception.class, () -> keyStoreService.importPublicIdentity("bob",
                 JsonSupport.prettyGson().toJson(roleMismatch)));
+    }
+
+    @Test
+    void filenameCannotSubstituteAnotherPlayersIdentity() throws Exception {
+        CryptoService crypto = new CryptoService();
+        KeyStoreService store = new KeyStoreService(tempDir, crypto);
+        PublicIdentity mallory = publicIdentity(crypto.generateLocalKeys("mallory", "mallory-uuid",
+                dev.krypt04mcg.config.KemAlgorithm.ML_KEM_768,
+                dev.krypt04mcg.config.SignatureAlgorithm.ML_DSA_44));
+        Path publicDir = Files.createDirectories(tempDir.resolve("keys/public"));
+        Files.writeString(publicDir.resolve("alice.json"), JsonSupport.prettyGson().toJson(mallory));
+        assertThrows(java.io.IOException.class, () -> store.findPublicIdentity("alice"));
     }
 
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
