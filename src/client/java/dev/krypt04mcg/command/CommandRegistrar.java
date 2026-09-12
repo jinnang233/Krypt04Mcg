@@ -310,9 +310,15 @@ public final class CommandRegistrar {
                             try {
                                 KeyStoreService.PublicKeyExport exported = keyStoreService.exportOwnPublicFile();
                                 PublicIdentity identity = exported.identity();
-                                feedback(ctx.getSource(), tr("text.krypt04mcg.command.key_exported",
-                                        exported.path(), identity.kemPublicKey().fingerprint(),
-                                        identity.signaturePublicKey().fingerprint()));
+                                String path = exported.path().toString();
+                                Component copyablePath = Component.literal(path).withStyle(style -> style
+                                        .withColor(ChatFormatting.AQUA)
+                                        .withUnderlined(true)
+                                        .withClickEvent(new ClickEvent.CopyToClipboard(path)));
+                                ctx.getSource().sendFeedback(Component.literal(ClientMessages.messagePrefixWithSpace())
+                                        .append(Component.translatable("text.krypt04mcg.command.key_exported",
+                                                copyablePath, identity.kemPublicKey().fingerprint(),
+                                                identity.signaturePublicKey().fingerprint())));
                                 return 1;
                             } catch (Exception e) {
                                 error(ctx.getSource(), e);
