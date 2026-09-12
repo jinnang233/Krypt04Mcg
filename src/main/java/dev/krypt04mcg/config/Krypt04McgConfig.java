@@ -1,6 +1,9 @@
 package dev.krypt04mcg.config;
 
 public class Krypt04McgConfig {
+    public boolean enableFileSending = false;
+    public boolean enableFileReceiving = false;
+    public boolean permanentlyDisableFileSharing = false;
     public boolean showProgress = true;
     public boolean hideEncryptedRawMessage = true;
     public boolean verboseMessages = false;

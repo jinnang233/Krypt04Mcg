@@ -6,6 +6,9 @@ import me.shedaniel.autoconfig.annotation.ConfigEntry;
 
 @Config(name = "krypt04mcg")
 public final class ClothKrypt04McgConfig implements ConfigData {
+    public boolean enableFileSending = false;
+    public boolean enableFileReceiving = false;
+    public boolean permanentlyDisableFileSharing = false;
     public boolean showProgress = true;
     public boolean hideEncryptedRawMessage = true;
     public boolean verboseMessages = false;
@@ -57,6 +60,9 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     }
 
     void copyTo(Krypt04McgConfig config) {
+        config.enableFileSending = enableFileSending;
+        config.enableFileReceiving = enableFileReceiving;
+        config.permanentlyDisableFileSharing = permanentlyDisableFileSharing;
         config.showProgress = showProgress;
         config.hideEncryptedRawMessage = hideEncryptedRawMessage;
         config.verboseMessages = verboseMessages;

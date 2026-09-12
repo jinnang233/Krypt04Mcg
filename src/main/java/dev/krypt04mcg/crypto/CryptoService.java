@@ -57,15 +57,29 @@ public final class CryptoService {
 
     private final SecureRandom secureRandom;
     private final PacketCodec packetCodec;
+    private final int maxPlaintextBytes;
+
+    /** A separate instance for bounded optional file envelopes; chat keeps its default limit. */
+    public CryptoService(int maxPlaintextBytes) {
+        this(new SecureRandom(), new PacketCodec(maxPlaintextBytes + 65536), maxPlaintextBytes);
+    }
 
     public CryptoService() {
         this(new SecureRandom(), new PacketCodec());
     }
 
     public CryptoService(SecureRandom secureRandom, PacketCodec packetCodec) {
+        this(secureRandom, packetCodec, MAX_PLAINTEXT_BYTES);
+    }
+
+    private CryptoService(SecureRandom secureRandom, PacketCodec packetCodec, int maxPlaintextBytes) {
+        if (maxPlaintextBytes < 1 || maxPlaintextBytes > 16 * 1024 * 1024) {
+            throw new IllegalArgumentException("Invalid plaintext limit");
+        }
         ensureProviders();
         this.secureRandom = secureRandom;
         this.packetCodec = packetCodec;
+        this.maxPlaintextBytes = maxPlaintextBytes;
     }
 
     public LocalKeyMaterial generateLocalKeys(String owner, String uuid) throws CryptoException {
@@ -550,8 +564,8 @@ public final class CryptoService {
         return nonce;
     }
 
-    private static void ensurePlaintextSize(byte[] plaintext) throws CryptoException {
-        if (plaintext.length > MAX_PLAINTEXT_BYTES) {
+    private void ensurePlaintextSize(byte[] plaintext) throws CryptoException {
+        if (plaintext.length > maxPlaintextBytes) {
             throw new CryptoException("Plaintext message is too large: " + plaintext.length);
         }
     }

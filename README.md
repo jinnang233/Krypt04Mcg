@@ -317,3 +317,39 @@ Implemented test coverage:
 - timeout cleanup
 - wrong receiver rejection
 - modified ciphertext rejection
+
+## Public-key and file sharing over optional payload channels
+
+These features require `CUSTOM_PAYLOAD` mode and an updated Krypt04McgRelay plugin.
+The three independent optional channels are `krypt04mcg:chat_fragment`, `krypt04mcg:public_key`,
+and `krypt04mcg:file_share`. Sharing does not fall back to ordinary chat when a channel is unavailable.
+
+- `/k04m-share key` announces your public key to all online clients subscribed to the channel.
+- `/k04m-share key <player>` sends your public key to a specific player.
+- Recipients see the key fingerprints and clickable `[√]` and `[×]` buttons in chat.
+  Keys are imported only after acceptance; rejection leaves the key store unchanged.
+  Requests expire after 60 seconds or upon disconnect. Different existing keys are never overwritten.
+  Acceptance establishes TOFU trust, not out-of-band verification.
+- `/k04m-share file <player> <path>` sends an encrypted file with a mandatory signature. Paths may be double-quoted.
+  Both players must first accept each other's public keys. The limit is **10 MiB** (10,485,760 bytes) per file.
+  Both the filename and contents are encrypted and signed. Both clients must support this limit.
+  File encryption uses separate limits; ordinary chat retains its 64 KiB plaintext limit.
+- `enableFileSending` and `enableFileReceiving` control sending and receiving independently; **both default to false**.
+  Enable them through the Cloth Config screen. Without Cloth Config, both remain disabled by default.
+- Received files are saved to `received-files` within the current account's storage directory only after
+  signature verification and explicit acceptance. Saved names include a random identifier and have path
+  characters filtered out. Files are never opened or executed automatically.
+- Set `permanentlyDisableFileSharing=true` or run `/k04m-share disable-files` to permanently disable file
+  sending and receiving for the current account. This writes `file-sharing.disabled` to the account directory.
+  Restarting or toggling the sending and receiving settings does not remove the lock. Anyone with write access
+  to the configuration directory can still remove this local marker manually.
+
+Transfers use chunks of 12,000 characters. Public keys allow up to four concurrent assemblies with 128 chunks each;
+files allow one assembly with up to 2048 chunks. File sending is limited to four chunks per client tick and one
+outgoing file at a time. Disconnecting or disabling sending clears the outgoing queue.
+Assembly expires after 60 seconds. Up to four requests may await confirmation, including at most one file.
+The file replay cache holds up to 1024 entries per connection; reconnect after reaching this limit to receive
+more files. The relay obtains the authenticated sender name from the server connection.
+
+Sharing messages, confirmation buttons, and settings support Simplified Chinese, Traditional Chinese, English,
+German, Spanish, French, Japanese, and Korean. They follow the client language and use the configured message prefix.

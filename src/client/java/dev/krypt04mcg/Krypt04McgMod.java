@@ -120,6 +120,10 @@ public final class Krypt04McgMod implements ClientModInitializer {
                 packetCodec, fragmentService, reassembler, decryptionHistoryService, sessionService,
                 sessionHandshakeService, chatSendService::sendPacket, this::system, conversationStore::incoming);
         registerCustomPayloadNetworking();
+        var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
+                keyTrustService, cryptoService, root);
+        optionalSharing.register();
+        OptionalClothConfig.registerSaveListener(updated -> optionalSharing.applySettings());
 
         CommandRegistrar.register(chatSendService, keyStoreService, keyTrustService, sessionService, decryptionHistoryService,
                 groupService, config);

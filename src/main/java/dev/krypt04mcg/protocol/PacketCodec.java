@@ -17,6 +17,16 @@ import java.util.Arrays;
 public final class PacketCodec {
     private static final int MAX_STRING_BYTES = 4096;
     private static final int MAX_BYTES32_FIELD_BYTES = 1024 * 1024;
+    private final int maxFieldBytes;
+
+    public PacketCodec() { this(MAX_BYTES32_FIELD_BYTES); }
+
+    public PacketCodec(int maxFieldBytes) {
+        if (maxFieldBytes < 1 || maxFieldBytes > 17 * 1024 * 1024) {
+            throw new IllegalArgumentException("Invalid packet field limit");
+        }
+        this.maxFieldBytes = maxFieldBytes;
+    }
 
     public byte[] encode(EncryptedPacket packet) {
         if (isSessionV4(packet.protocolVersion(), packet.type())
@@ -205,24 +215,24 @@ public final class PacketCodec {
         return readExact(in, length, "bytes16");
     }
 
-    private static void writeBytes32(DataOutputStream out, byte[] bytes) throws IOException {
+    private void writeBytes32(DataOutputStream out, byte[] bytes) throws IOException {
         if (bytes == null) {
             out.writeInt(0);
             return;
         }
-        if (bytes.length > MAX_BYTES32_FIELD_BYTES) {
+        if (bytes.length > maxFieldBytes) {
             throw new IOException("Field too long: " + bytes.length);
         }
         out.writeInt(bytes.length);
         out.write(bytes);
     }
 
-    private static byte[] readBytes32(DataInputStream in) throws IOException {
+    private byte[] readBytes32(DataInputStream in) throws IOException {
         int length = in.readInt();
         if (length < 0) {
             throw new IOException("Negative length");
         }
-        if (length > MAX_BYTES32_FIELD_BYTES) {
+        if (length > maxFieldBytes) {
             throw new IOException("Field too long: " + length);
         }
         return readExact(in, length, "bytes32");

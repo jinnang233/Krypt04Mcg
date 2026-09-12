@@ -1,83 +1,83 @@
-# 安全代码审查（2026-09-12）
+# Security Code Review (2026-09-12)
 
-本轮重点检查 `CryptoService`、`PacketCodec`、分片接收、会话握手及序号处理，并检查了密钥导入、信任绑定和本地敏感文件存储的主要路径。以下问题已修复，未更改正常消息的协议线格式。
+This review focused on `CryptoService`, `PacketCodec`, fragment reception, session handshakes, and sequence handling. It also examined the main paths for key import, trust bindings, and local sensitive-file storage. The issues below were fixed without changing the wire format of normal messages.
 
-## 已确认并修复的问题
+## Confirmed and fixed issues
 
-### 1. [P2] 密钥标签未绑定实际算法参数
+### 1. [P2] Key labels were not bound to actual algorithm parameters
 
-位置：`CryptoService.validatePublicRecord` / `validatePrivateRecord`。
+Location: `CryptoService.validatePublicRecord` / `validatePrivateRecord`.
 
-原实现仅使用算法族的通用 `KeyFactory` 解码，再以记录中的算法标签生成规范化记录。实验确认：ML-KEM-512 公钥可以标成 ML-KEM-1024，ML-DSA-44 公钥可以标成 ML-DSA-87，导入校验仍成功。本地成对密钥同时改标签也可绕过原来的密钥对一致性检查。这会让算法显示及握手声明与实际使用的参数不一致；不意味着已证明能够伪造签名或破解这些算法。
+The original implementation decoded keys using the algorithm family's generic `KeyFactory`, then generated a normalized record using the algorithm label from the input record. Experiments confirmed that an ML-KEM-512 public key labeled as ML-KEM-1024, or an ML-DSA-44 public key labeled as ML-DSA-87, still passed import validation. Relabeling both keys in a local key pair also bypassed the original key-pair consistency check. This allowed displayed algorithms and handshake declarations to differ from the parameters actually used; it did not demonstrate signature forgery or a break of these algorithms.
 
-修复：读取解码后密钥的参数对象，核对参数类型与名称，覆盖长期公钥、私钥和握手临时公钥。支持项目现有的七类密钥。Bouncy Castle 的密钥接口提供实际参数查询，例如 [MLKEMKey.getParameterSpec](https://downloads.bouncycastle.org/java/docs/bcprov-jdk15to18-javadoc/org/bouncycastle/jcajce/interfaces/MLKEMKey.html)。
+Fix: inspect the decoded key's parameter object and verify its type and name for long-term public keys, private keys, and ephemeral handshake public keys. This covers the seven key families supported by the project. Bouncy Castle key interfaces expose the actual parameters, for example through [MLKEMKey.getParameterSpec](https://downloads.bouncycastle.org/java/docs/bcprov-jdk15to18-javadoc/org/bouncycastle/jcajce/interfaces/MLKEMKey.html).
 
-回归：`KeyParameterBindingTest` 验证冒标的长期公钥、临时公钥及本地密钥被拒绝。原版本中新增的两个测试均失败，修复后通过。
+Regression coverage: `KeyParameterBindingTest` verifies rejection of mislabeled long-term public keys, ephemeral public keys, and local keys. Both new tests failed against the original implementation and passed after the fix.
 
-兼容性：此前被错误接受的冒标密钥记录现在会被拒绝，应核实原始密钥及真实参数，不能仅修改标签来提高安全等级。
+Compatibility: mislabeled key records that were previously accepted are now rejected. Verify the original key and its actual parameters; changing a label alone cannot increase its security level.
 
-### 2. [P2] 协议字符串宽松解码导致非规范编码被接受
+### 2. [P2] Permissive protocol string decoding accepted noncanonical encodings
 
-位置：`PacketCodec.readString`。
+Location: `PacketCodec.readString`.
 
-原实现使用 `new String(..., UTF_8)`，会把畸形 UTF-8 替换为 U+FFFD。AAD 和签名输入由解码后的字符串重建，因而不同的原始字节可能得到相同的认证输入。该问题是协议编码歧义；未证明它能改变普通 ASCII 玩家名或绕过 AEAD。
+The original implementation used `new String(..., UTF_8)`, which replaces malformed UTF-8 with U+FFFD. Because AAD and signature inputs are reconstructed from decoded strings, different raw byte sequences could produce the same authenticated input. This was a protocol encoding ambiguity; it was not demonstrated to alter ordinary ASCII player names or bypass AEAD.
 
-修复：使用严格 UTF-8 解码器，发现畸形编码立即拒绝。同时统一编码器和解码器的字符串、32 位长度字节字段上限，防止本端产生对端必然拒收的数据。
+Fix: use a strict UTF-8 decoder and reject malformed encodings immediately. Also align encoder and decoder limits for strings and byte fields with 32-bit lengths, preventing the local encoder from producing data that the receiver must reject.
 
-回归：`PacketCodecTest` 覆盖畸形 UTF-8，以及超长字符串和字节字段。原宽松解码版本不能通过新增的拒绝测试。
+Regression coverage: `PacketCodecTest` covers malformed UTF-8, oversized strings, and oversized byte fields. The original permissive decoder failed the new rejection test.
 
-### 3. [P2] 重复分片可不断刷新缓存超时
+### 3. [P2] Duplicate fragments could repeatedly refresh cache expiry
 
-位置：`FragmentReassembler.accept`。
+Location: `FragmentReassembler.accept`.
 
-原实现即使收到完全重复的分片也会更新 `lastTouched`。未完成消息可以通过重复投递长期占用缓存，并影响正常消息的缓存淘汰。消息总数已有上限，因此这里不是无限内存增长。
+The original implementation updated `lastTouched` even when receiving an identical duplicate fragment. Repeated delivery could keep incomplete messages in the cache indefinitely and affect eviction of legitimate messages. The message count was already bounded, so this was not unbounded memory growth.
 
-修复：只有首次接收某一索引的分片才刷新超时。此外在重组入口校验索引、总数、负载长度和构造参数，避免直接调用该入口时绕过文本解析器的边界检查。正常乱序及重复分片仍受支持。
+Fix: refresh expiry only when an index is received for the first time. Also validate the index, total count, payload length, and constructor arguments at the reassembly entry point, preventing direct callers from bypassing the text parser's boundary checks. Valid out-of-order and duplicate fragments remain supported.
 
-回归：可控时钟验证重复分片不再延长缓存寿命；负数/越界索引、零总数及超长负载在进入缓存前即被拒绝。原版本中这两个新增测试均失败，修复后通过。
+Regression coverage: a controllable clock verifies that duplicate fragments no longer extend cache lifetime. Negative or out-of-range indices, zero totals, and oversized payloads are rejected before entering the cache. Both new tests failed against the original implementation and passed after the fix.
 
-## 验证与范围
+## Validation and scope
 
-针对性回归先在旧实现运行，确认五项测试失败，再验证修复后通过。
+Targeted regressions were first run against the original implementation, confirming five test failures, then verified to pass after the fixes.
 
-- `gradlew.bat --gradle-user-home C:/Users/jinna/.gradle test build --offline` 成功：177 项测试，176 项通过、1 项跳过、无失败或错误。跳过项是环境不支持符号链接时的存储测试。
-- 随后补强 UTF-8 歧义复现并新增编码长度边界测试，单独运行最终版 `PacketCodecTest`，3 项均通过。
-- `git diff --check` 通过。构建存在既有的弃用 API / JNA 原生访问提示。
+- `gradlew.bat --gradle-user-home C:/Users/jinna/.gradle test build --offline` succeeded: 177 tests, with 176 passed, one skipped, and no failures or errors. The skipped storage test required symbolic-link support unavailable in the environment.
+- The UTF-8 ambiguity reproduction was subsequently strengthened and encoding length-boundary tests were added. All three tests passed in a separate run of the final `PacketCodecTest`.
+- `git diff --check` passed. The build emitted existing deprecated-API and JNA native-access notices.
 
-本轮未对第三方密码算法做数学安全性证明，也未进行真实 Minecraft 客户端与服务器联机测试。测试通过表示已覆盖行为符合预期，不代表对整个项目不存在其他漏洞的保证。
+This review did not mathematically prove the security of third-party cryptographic algorithms or test live connections between Minecraft clients and servers. Passing tests show that the covered behavior matches expectations; they do not guarantee that the project has no other vulnerabilities.
 
-## 第二轮审查（2026-09-12）
+## Second review round (2026-09-12)
 
-### 4. [P2] 接收端未执行会话有效期与使用量限制
+### 4. [P2] The receiver did not enforce session expiry and usage limits
 
-位置：`ChatReceiveHandler` 的 `SESSION_MESSAGE` 分支。
+Location: the `SESSION_MESSAGE` branch in `ChatReceiveHandler`.
 
-发送端及会话状态显示使用 `SessionService.isExpired` 检查 TTL、累计消息数和累计字节数，但接收端未检查。因此，持有旧会话密钥的对端仍可生成时间戳新鲜、序号正确的消息，被已将该会话视为过期的本端接受。这是本地会话策略未执行，不是无需密钥即可伪造 AEAD。
+The sender and session-status display used `SessionService.isExpired` to check TTL, cumulative message count, and cumulative byte count, but the receiver did not. A peer holding an old session key could therefore generate messages with fresh timestamps and valid sequence numbers that were accepted locally even though the session was otherwise considered expired. This was a failure to enforce local session policy, not an AEAD forgery without possession of the key.
 
-修复：接收端在解密前执行相同的会话过期检查。拒绝不会消耗重放记录或推进会话序号，也不会显示消息。
+Fix: perform the same session-expiry check on the receiver before decryption. Rejection does not consume replay records, advance session sequence numbers, or display the message.
 
-回归：`expiredSessionsRejectFreshAuthenticatedMessagesWithoutAdvancingState` 覆盖三种过期条件，检查持久化状态和消息显示不变，并以仍有效的会话作为成功对照。修复前可复现旧会话消息被显示。
+Regression coverage: `expiredSessionsRejectFreshAuthenticatedMessagesWithoutAdvancingState` covers all three expiry conditions, verifies that persisted state and displayed messages remain unchanged, and uses a valid session as a successful control. Before the fix, the test reproduced display of messages from expired sessions.
 
-### 5. [P2] 主密钥丢失后写入新文件会生成替代密钥
+### 5. [P2] Writing a new file after master-key loss generated a replacement key
 
-位置：`SensitiveFileStore.loadMasterKey`。
+Location: `SensitiveFileStore.loadMasterKey`.
 
-原先只根据当前写入目标是否已加密判断能否生成主密钥。删除原主密钥后，用新实例向账户内一个新路径写入，会生成替代主密钥，即使其他路径仍保存旧密文。由此可能形成同一账户内混用不同主密钥的文件集，恢复备份时无法用一把密钥解开所有文件。
+Previously, the decision to generate a master key depended only on whether the current write target was already encrypted. After deleting the original master key, a new store instance writing to a new path within the account generated a replacement master key, even when other paths still contained old ciphertext. This could leave one account with files encrypted under different master keys, making it impossible to decrypt all files with a single key when restoring a backup.
 
-修复：仅在创建主密钥时，在现有进程间锁内检查账户目录。发现已有加密文件即拒绝生成，提示恢复原密钥；扫描不跟随链接，并继续使用存储路径校验。正常首次初始化及并发创建仍受支持。
+Fix: when creating a master key, inspect the account directory while holding the existing interprocess lock. If encrypted files already exist, refuse generation and request restoration of the original key. The scan does not follow links and retains storage-path validation. Normal first-time initialization and concurrent creation remain supported.
 
-回归：`missingMasterKeyCannotBeReplacedByWritingANewFile` 复现原行为，检查失败后没有替代密钥或新文件，原密文不变，恢复原主密钥后可正常读取。
+Regression coverage: `missingMasterKeyCannotBeReplacedByWritingANewFile` reproduces the original behavior, verifies that failure leaves no replacement key or new file and preserves the original ciphertext, and confirms successful reads after restoring the original master key.
 
-### 6. [P2] 失败的并发握手提前销毁待完成握手
+### 6. [P2] A failed simultaneous handshake destroyed the pending handshake prematurely
 
-位置：`SessionHandshakeService.completeRequest`。
+Location: `SessionHandshakeService.completeRequest`.
 
-处理双方同时发起的握手时，原实现先移除本端待完成记录并销毁临时私钥，再验证对端临时公钥、构造/发送响应和保存会话。若对端公钥无效或响应发送失败，新会话未建成，但本端原请求的有效响应也已无法解密。输入仍需通过已有身份和签名校验，此问题影响握手恢复和可用性。
+When handling handshakes initiated simultaneously by both peers, the original implementation removed the local pending record and destroyed its ephemeral private key before validating the peer's ephemeral public key, constructing and sending the response, and saving the session. If the peer's key was invalid or response delivery failed, no new session was established, and a valid response to the original local request could no longer be decrypted. Inputs still had to pass the existing identity and signature checks; this issue affected handshake recovery and availability.
 
-修复：只有响应发送回调成功、会话保存成功后，才删除被取代的待完成握手并销毁其临时私钥；失败时保留原记录及原有到期清理行为。
+Fix: remove the superseded pending handshake and destroy its ephemeral private key only after the response-send callback and session persistence both succeed. On failure, retain the original record and its existing expiry-cleanup behavior.
 
-回归：`HandshakeFailureRecoveryTest` 分别模拟无效临时公钥和发送回调抛出异常，然后继续完成本端原请求的合法响应，验证双方会话密钥一致。修复前两个场景均因待完成记录丢失而失败。
+Regression coverage: `HandshakeFailureRecoveryTest` simulates an invalid ephemeral public key and a throwing send callback, then completes a valid response to the original local request and verifies that both peers obtain the same session key. Before the fix, both scenarios failed because the pending record had been lost.
 
-第二轮新增的四项复现用例在修复前均失败，修复后相关存储、会话和握手测试通过。以上更改不修改网络线格式。
+All four new reproduction cases in the second round failed before the fixes. The related storage, session, and handshake tests passed afterward. These changes do not modify the network wire format.
 
-第二轮完整验证：`gradlew.bat --gradle-user-home C:/Users/jinna/.gradle test build --offline` 成功，共 182 项测试，181 项通过、1 项因 Windows 缺少创建符号链接权限跳过，无失败或错误；`git diff --check` 通过。未进行真实客户端联机测试。
+Full second-round validation: `gradlew.bat --gradle-user-home C:/Users/jinna/.gradle test build --offline` succeeded with 182 tests: 181 passed, one skipped because Windows lacked permission to create symbolic links, and no failures or errors. `git diff --check` passed. Live client connectivity was not tested.
