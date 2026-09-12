@@ -46,7 +46,9 @@ public final class CommandRegistrar {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(rootCommand("Krypt04Mcg:enc", chatSendService, keyStoreService, keyTrustService,
                     sessionService, decryptionHistoryService, groupService, config));
-            dispatcher.register(rootCommand("enc", chatSendService, keyStoreService, keyTrustService,
+            dispatcher.register(rootCommand("Krypt04Mcg:k04m", chatSendService, keyStoreService, keyTrustService,
+                    sessionService, decryptionHistoryService, groupService, config));
+            dispatcher.register(rootCommand("k04m", chatSendService, keyStoreService, keyTrustService,
                     sessionService, decryptionHistoryService, groupService, config));
         });
     }
@@ -346,7 +348,7 @@ public final class CommandRegistrar {
                 .then(ClientCommands.literal("regenerate")
                         .executes(ctx -> {
                             String fingerprint = keyStoreService.regenerationFingerprint();
-                            String command = "/enc key regenerate " + fingerprint;
+                            String command = "/k04m key regenerate " + fingerprint;
                             Component confirmation = Component.literal(command).withStyle(style -> style
                                     .withColor(ChatFormatting.AQUA)
                                     .withUnderlined(true)

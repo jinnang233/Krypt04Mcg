@@ -26,7 +26,7 @@ Krypt04Mcg is a Fabric client mod that transports post-quantum encrypted chat pa
 
 ## Features
 
-- Client-side `/enc` command tree.
+- Client-side `/k04m` command tree, also available as `/Krypt04Mcg:enc` and `/Krypt04Mcg:k04m`.
 - Configurable CMCE and ML-KEM key parameter sets.
 - Configurable Falcon and ML-DSA signature parameter sets.
 - AES-256-GCM or ChaCha20-Poly1305 with a random 96-bit nonce per message.
@@ -115,7 +115,7 @@ config/krypt04mcg/accounts/<minecraft-uuid>/
 ```
 
 Private and public key material are stored separately and scoped to the active Minecraft account. Private keys, trust bindings, session secrets, and enabled conversation history are encrypted with AES-256-GCM. On Windows, the storage master key is protected with per-user DPAPI; other platforms use an explicitly owner-only master-key file. Sensitive writes are atomic and owner-only permissions are applied where the platform supports them. Public-key records include algorithm, owner, UUID, a full SHA-256 fingerprint, creation time, and Base64URL key data.
-`/enc key export` writes your shareable public key JSON inside the active account's `export` directory.
+`/k04m key export` writes your shareable public key JSON inside the active account's `export` directory.
 
 The KEM and signature selections only apply when no local key exists or when a key is explicitly regenerated. Changing the configuration never rewrites an existing key. Encryption, signing, verification, and decryption resolve algorithms from key records and packet algorithm identifiers rather than assuming the current configuration.
 
@@ -125,53 +125,53 @@ all three SQIsign parameter sets (`SQIsign-lvl1`, `SQIsign-lvl3`, and `SQIsign-l
 and all 44 SNOVA variants. SNOVA includes the base parameter sets `24-5-4`, `24-5-5`, `25-8-3`,
 `29-6-5`, `37-8-4`, `37-17-2`, `49-11-3`, `56-25-2`, `60-10-4`, `66-15-3`, and `75-33-2`,
 each with `SSK`, `ESK`, `SHAKE-SSK`, and `SHAKE-ESK` variants (for example, `SNOVA-24-5-4-SSK`).
-The long-term defaults remain `CMCE/mceliece348864`, `Falcon-512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/enc exchange` and `/enc etell` sessions defaults to `ML-KEM-768`.
+The long-term defaults remain `CMCE/mceliece348864`, `Falcon-512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/k04m exchange` and `/k04m etell` sessions defaults to `ML-KEM-768`.
 
 ## Commands
 
 ```text
-/enc tell <receiver> <message>
-/enc stell <receiver> <message>
-/enc exchange <receiver>
-/enc etell <receiver> <message>
-/enc gtell <group> <message>
-/enc group create <name> <members>
-/enc group list
-/enc group delete <name>
-/enc resend [messageId]
-/enc session list
-/enc session clear <player>
-/enc session refresh <player>
-/enc showalgs
-/enc status <player>
-/enc key list
-/enc key fingerprint <player>
-/enc key export
-/enc key import <player> <data-or-file>
-/enc key delete <player>
-/enc key remove <player>
-/enc key regenerate
-/enc key regenerate <current-kem-fingerprint>
-/enc key verify <player> <kem-fingerprint>:<signature-fingerprint>
-/enc key trust <player>
-/enc key distrust <player>
+/k04m tell <receiver> <message>
+/k04m stell <receiver> <message>
+/k04m exchange <receiver>
+/k04m etell <receiver> <message>
+/k04m gtell <group> <message>
+/k04m group create <name> <members>
+/k04m group list
+/k04m group delete <name>
+/k04m resend [messageId]
+/k04m session list
+/k04m session clear <player>
+/k04m session refresh <player>
+/k04m showalgs
+/k04m status <player>
+/k04m key list
+/k04m key fingerprint <player>
+/k04m key export
+/k04m key import <player> <data-or-file>
+/k04m key delete <player>
+/k04m key remove <player>
+/k04m key regenerate
+/k04m key regenerate <current-kem-fingerprint>
+/k04m key verify <player> <kem-fingerprint>:<signature-fingerprint>
+/k04m key trust <player>
+/k04m key distrust <player>
 ```
 
-`/enc status <player>` shows that player's long-term KEM and signature algorithms from their stored public keys, or unknown when no public key is available. The separately labeled local configuration describes your own settings. The public key export does not include the other player's ephemeral KEM or AEAD configuration; stored keys do not report subsequent remote key changes automatically.
+`/k04m status <player>` shows that player's long-term KEM and signature algorithms from their stored public keys, or unknown when no public key is available. The separately labeled local configuration describes your own settings. The public key export does not include the other player's ephemeral KEM or AEAD configuration; stored keys do not report subsequent remote key changes automatically.
 
 Import flow:
 
-1. The other player runs `/enc key export`.
+1. The other player runs `/k04m key export`.
 2. They send you the exported JSON file through a trusted side channel and tell you the printed fingerprints.
-3. You run `/enc key import <player> <file-or-json>`.
-4. First import is trusted automatically. If a key changes later, Krypt04Mcg refuses to overwrite it silently. Use `/enc key delete <player>` (alias: `/enc key remove <player>`) to remove that player's imported public keys, trust record, and saved session before importing a replacement. Player names are case-insensitive; your own keys cannot be deleted this way. A replacement starts with TOFU trust and must be verified again.
-5. To mark the identity `VERIFIED`, compare both full fingerprints out of band and pass their colon-separated pair to `/enc key verify`.
+3. You run `/k04m key import <player> <file-or-json>`.
+4. First import is trusted automatically. If a key changes later, Krypt04Mcg refuses to overwrite it silently. Use `/k04m key delete <player>` (alias: `/k04m key remove <player>`) to remove that player's imported public keys, trust record, and saved session before importing a replacement. Player names are case-insensitive; your own keys cannot be deleted this way. A replacement starts with TOFU trust and must be verified again.
+5. To mark the identity `VERIFIED`, compare both full fingerprints out of band and pass their colon-separated pair to `/k04m key verify`.
 
 Regeneration flow:
 
 1. Select the replacement KEM and signature parameter sets in the mod configuration.
-2. Run `/enc key regenerate`; the mod prints the current KEM fingerprint and the exact confirmation command.
-3. Run `/enc key regenerate <current-kem-fingerprint>` to replace both local key pairs.
+2. Run `/k04m key regenerate`; the mod prints the current KEM fingerprint and the exact confirmation command.
+3. Run `/k04m key regenerate <current-kem-fingerprint>` to replace both local key pairs.
 4. Export and redistribute the new public key. Existing peers will reject it as a TOFU key change until they deliberately replace the old key.
 
 ## Protocol Format
@@ -270,9 +270,9 @@ Client send mode `CUSTOM_PAYLOAD` only sends on this channel when Fabric reports
 
 ## Session Design
 
-`/enc exchange` is a signed two-message handshake using the dedicated `SESSION_EXCHANGE` packet type. The initiator creates an in-memory one-time KEM key pair (ML-KEM-768 by default); the responder encrypts fresh session material only to that temporary public key and binds both identities, UUIDs, both fingerprint pairs, the session ID, and the request message ID into the exchange transcript. The initiator destroys the temporary private key after accepting the response or after a short timeout. Consequently, later compromise of either long-term KEM private key does not decrypt a recorded exchange response.
+`/k04m exchange` is a signed two-message handshake using the dedicated `SESSION_EXCHANGE` packet type. The initiator creates an in-memory one-time KEM key pair (ML-KEM-768 by default); the responder encrypts fresh session material only to that temporary public key and binds both identities, UUIDs, both fingerprint pairs, the session ID, and the request message ID into the exchange transcript. The initiator destroys the temporary private key after accepting the response or after a short timeout. Consequently, later compromise of either long-term KEM private key does not decrypt a recorded exchange response.
 
-`/enc etell` uses the resulting session secret with an AEAD-only `SESSION_MESSAGE` packet (no per-message PQ signature or additional HMAC). Protocol v4 carries the session ID and monotonic sequence in the packet header and authenticates them, together with sender and receiver, through AEAD AAD. The encrypted payload contains only its version and message. Old v1–v3 session messages are rejected; both peers must upgrade. `tell` and `stell` continue to use their existing long-term recipient KEM path and do not use the ephemeral KEM setting.
+`/k04m etell` uses the resulting session secret with an AEAD-only `SESSION_MESSAGE` packet (no per-message PQ signature or additional HMAC). Protocol v4 carries the session ID and monotonic sequence in the packet header and authenticates them, together with sender and receiver, through AEAD AAD. The encrypted payload contains only its version and message. Old v1–v3 session messages are rejected; both peers must upgrade. `tell` and `stell` continue to use their existing long-term recipient KEM path and do not use the ephemeral KEM setting.
 
 ## GUI Chat
 
