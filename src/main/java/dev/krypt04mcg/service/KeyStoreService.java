@@ -159,6 +159,33 @@ public final class KeyStoreService {
         return Optional.empty();
     }
 
+    public boolean removePublicIdentity(String player) throws IOException {
+        if (local().kemPublicKey().owner().equalsIgnoreCase(player)) {
+            throw new IOException("Cannot delete your own public key");
+        }
+        Path publicDir = keysDir.resolve("public");
+        if (!Files.exists(publicDir)) {
+            return false;
+        }
+        // Match owners as lookup does, including records stored under legacy filenames.
+        List<Path> matches = new ArrayList<>();
+        try (var stream = Files.list(publicDir)) {
+            for (Path path : stream.filter(p -> p.toString().endsWith(".json")).toList()) {
+                if (path.getFileName().toString().equalsIgnoreCase("self-public.json")) {
+                    continue;
+                }
+                PublicIdentity identity = readPublicIdentity(path);
+                if (player.equalsIgnoreCase(identity.owner())) {
+                    matches.add(path);
+                }
+            }
+        }
+        for (Path path : matches) {
+            Files.delete(path);
+        }
+        return !matches.isEmpty();
+    }
+
     public List<PublicIdentity> listPublicIdentities() throws IOException {
         List<PublicIdentity> result = new ArrayList<>();
         if (!Files.exists(keysDir.resolve("public"))) {

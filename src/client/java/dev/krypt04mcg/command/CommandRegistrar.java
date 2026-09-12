@@ -70,7 +70,7 @@ public final class CommandRegistrar {
                     .then(sessionCommand(chatSendService, sessionService, config))
                     .then(showAlgorithmsCommand(config, keyStoreService))
                     .then(statusCommand(keyStoreService, keyTrustService, sessionService, decryptionHistoryService, config))
-                    .then(keyCommand(keyStoreService, keyTrustService, config));
+                    .then(keyCommand(keyStoreService, keyTrustService, sessionService, config));
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> tellCommand(ChatSendService chatSendService, boolean signed) {
@@ -268,6 +268,7 @@ public final class CommandRegistrar {
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> keyCommand(KeyStoreService keyStoreService,
                                                                                KeyTrustService keyTrustService,
+                                                                               SessionService sessionService,
                                                                                Krypt04McgConfig config) {
         return ClientCommands.literal("key")
                 .then(ClientCommands.literal("list")
@@ -373,9 +374,37 @@ public final class CommandRegistrar {
                                         return 0;
                                     }
                                 })))
+                .then(removeKeyCommand("delete", keyStoreService, keyTrustService, sessionService))
+                .then(removeKeyCommand("remove", keyStoreService, keyTrustService, sessionService))
                 .then(verifyCommand(keyStoreService, keyTrustService))
                 .then(trustCommand("trust", keyStoreService, keyTrustService, TrustState.TOFU_TRUSTED))
                 .then(trustCommand("distrust", keyStoreService, keyTrustService, TrustState.DISTRUSTED));
+    }
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource> removeKeyCommand(String name,
+                                                                                    KeyStoreService keyStoreService,
+                                                                                    KeyTrustService keyTrustService,
+                                                                                    SessionService sessionService) {
+        return ClientCommands.literal(name)
+                .then(ClientCommands.argument("player", StringArgumentType.word())
+                        .executes(ctx -> {
+                            String player = StringArgumentType.getString(ctx, "player");
+                            try {
+                                if (keyStoreService.ownPublicIdentity().owner().equalsIgnoreCase(player)) {
+                                    throw new IllegalStateException(tr("text.krypt04mcg.error.delete_own_key"));
+                                }
+                                boolean removed = keyStoreService.removePublicIdentity(player);
+                                // Also allow retrying cleanup after a previous partial I/O failure.
+                                keyTrustService.forget(player);
+                                sessionService.clear(player);
+                                feedback(ctx.getSource(), tr(removed ? "text.krypt04mcg.command.key_deleted"
+                                        : "text.krypt04mcg.error.no_public_key", player));
+                                return removed ? 1 : 0;
+                            } catch (Exception e) {
+                                error(ctx.getSource(), e);
+                                return 0;
+                            }
+                        }));
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> trustCommand(String name, KeyStoreService keyStoreService,

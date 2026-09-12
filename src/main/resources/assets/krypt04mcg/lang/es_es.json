@@ -1,4 +1,6 @@
 {
+  "text.krypt04mcg.command.key_deleted": "Claves públicas, registro de confianza y sesión guardada de %s eliminados.",
+  "text.krypt04mcg.error.delete_own_key": "No puedes eliminar tu propia clave pública.",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "Mostrar progreso de envío",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "Ocultar mensajes cifrados sin procesar",

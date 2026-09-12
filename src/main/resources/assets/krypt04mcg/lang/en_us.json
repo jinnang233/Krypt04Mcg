@@ -1,4 +1,6 @@
 {
+  "text.krypt04mcg.command.key_deleted": "Deleted public keys, trust record, and saved session for %s.",
+  "text.krypt04mcg.error.delete_own_key": "You cannot delete your own public key.",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "Show Progress",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "Hide Encrypted Raw Messages",

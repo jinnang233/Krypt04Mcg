@@ -1,4 +1,6 @@
 {
+  "text.krypt04mcg.command.key_deleted": "已刪除 %s 的公鑰、信任記錄和已儲存工作階段。",
+  "text.krypt04mcg.error.delete_own_key": "不能刪除自己的公鑰。",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "顯示傳送進度",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "隱藏原始密文訊息",

@@ -1,4 +1,6 @@
 {
+  "text.krypt04mcg.command.key_deleted": "%s의 공개 키, 신뢰 기록 및 저장된 세션을 삭제했습니다.",
+  "text.krypt04mcg.error.delete_own_key": "자신의 공개 키는 삭제할 수 없습니다.",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "전송 진행 표시",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "암호문 원문 숨기기",

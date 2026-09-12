@@ -275,6 +275,37 @@ final class KeyStoreServiceTest {
         assertThrows(java.io.IOException.class, () -> store.findPublicIdentity("alice"));
     }
 
+    @Test
+    void removesAllPeerRecordsAndAllowsReplacementWithoutChangingOwnKeys() throws Exception {
+        CryptoService crypto = new CryptoService();
+        KeyStoreService store = new KeyStoreService(tempDir, crypto);
+        store.init("alice", "alice-uuid", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        PublicIdentity own = store.ownPublicIdentity();
+        PublicIdentity bob = publicIdentity(crypto.generateLocalKeys("bob", "bob-uuid",
+                KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44));
+        store.importPublicIdentity("bob", JsonSupport.prettyGson().toJson(bob));
+        Path legacy = tempDir.resolve("keys/public/legacy-bob.json");
+        Files.copy(tempDir.resolve("keys/public/bob.json"), legacy);
+
+        assertTrue(store.removePublicIdentity("BoB"));
+        assertFalse(Files.exists(legacy));
+        assertTrue(store.findPublicIdentity("bob").isEmpty());
+        assertFalse(store.removePublicIdentity("bob"));
+        assertFalse(store.removePublicIdentity("../alice"));
+        assertFalse(store.removePublicIdentity("self-public"));
+        assertThrows(java.io.IOException.class, () -> store.removePublicIdentity("ALICE"));
+        assertEquals(own, store.findPublicIdentity("alice").orElseThrow());
+        assertEquals(1, store.listPublicIdentities().size());
+
+        PublicIdentity replacement = publicIdentity(crypto.generateLocalKeys("bob", "bob-uuid",
+                KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44));
+        assertEquals(replacement, store.importPublicIdentity("bob", JsonSupport.prettyGson().toJson(replacement)));
+        KeyStoreService reloaded = new KeyStoreService(tempDir, crypto);
+        reloaded.init("alice", "alice-uuid");
+        assertEquals(own, reloaded.ownPublicIdentity());
+        assertEquals(replacement, reloaded.findPublicIdentity("bob").orElseThrow());
+    }
+
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

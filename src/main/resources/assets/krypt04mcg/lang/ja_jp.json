@@ -1,4 +1,6 @@
 {
+  "text.krypt04mcg.command.key_deleted": "%s の公開鍵、信頼記録、保存済みセッションを削除しました。",
+  "text.krypt04mcg.error.delete_own_key": "自分の公開鍵は削除できません。",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "送信進捗を表示",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "暗号化された生メッセージを隠す",

@@ -1,4 +1,6 @@
 {
+  "text.krypt04mcg.command.key_deleted": "Öffentliche Schlüssel, Vertrauenseintrag und gespeicherte Sitzung für %s gelöscht.",
+  "text.krypt04mcg.error.delete_own_key": "Du kannst deinen eigenen öffentlichen Schlüssel nicht löschen.",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "Sende-Fortschritt anzeigen",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "Rohe verschlüsselte Nachrichten ausblenden",

@@ -48,6 +48,27 @@ final class KeyTrustServiceTest {
         }
     }
 
+    @Test
+    void forgettingPeerPersistsAndReplacementStartsWithTofuTrust() throws Exception {
+        CryptoService crypto = new CryptoService();
+        PublicIdentity bob = publicIdentity(crypto.generateLocalKeys("bob", "bob-uuid",
+                dev.krypt04mcg.config.KemAlgorithm.ML_KEM_768,
+                dev.krypt04mcg.config.SignatureAlgorithm.ML_DSA_44));
+        KeyTrustService trust = new KeyTrustService(tempDir);
+        trust.markVerified("bob", bob);
+        trust.markDistrusted("carol", null);
+        trust.forget("BoB");
+        trust = new KeyTrustService(tempDir);
+        assertEquals(TrustState.UNTRUSTED, trust.trustState("bob", null));
+        assertEquals(TrustState.DISTRUSTED, trust.trustState("carol", null));
+        trust.forget("bob");
+        PublicIdentity replacement = publicIdentity(crypto.generateLocalKeys("bob", "bob-uuid",
+                dev.krypt04mcg.config.KemAlgorithm.ML_KEM_768,
+                dev.krypt04mcg.config.SignatureAlgorithm.ML_DSA_44));
+        trust.rememberTofu("bob", replacement);
+        assertEquals(TrustState.TOFU_TRUSTED, trust.trustState("bob", replacement));
+    }
+
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

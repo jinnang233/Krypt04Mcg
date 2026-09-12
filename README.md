@@ -148,6 +148,8 @@ The long-term defaults remain `CMCE/mceliece348864`, `Falcon-512`, and `AES-256-
 /enc key fingerprint <player>
 /enc key export
 /enc key import <player> <data-or-file>
+/enc key delete <player>
+/enc key remove <player>
 /enc key regenerate
 /enc key regenerate <current-kem-fingerprint>
 /enc key verify <player> <kem-fingerprint>:<signature-fingerprint>
@@ -160,7 +162,7 @@ Import flow:
 1. The other player runs `/enc key export`.
 2. They send you the exported JSON file through a trusted side channel and tell you the printed fingerprints.
 3. You run `/enc key import <player> <file-or-json>`.
-4. First import is trusted automatically. If a key changes later, Krypt04Mcg refuses to overwrite it silently.
+4. First import is trusted automatically. If a key changes later, Krypt04Mcg refuses to overwrite it silently. Use `/enc key delete <player>` (alias: `/enc key remove <player>`) to remove that player's imported public keys, trust record, and saved session before importing a replacement. Player names are case-insensitive; your own keys cannot be deleted this way. A replacement starts with TOFU trust and must be verified again.
 5. To mark the identity `VERIFIED`, compare both full fingerprints out of band and pass their colon-separated pair to `/enc key verify`.
 
 Regeneration flow:

@@ -63,6 +63,13 @@ public final class KeyTrustService {
         setTrustState(player, TrustState.DISTRUSTED, identity);
     }
 
+    public synchronized void forget(String player) throws IOException {
+        Map<String, TrustBinding> trust = readTrust();
+        if (trust.remove(normalize(player)) != null) {
+            sensitiveFiles.writeString(trustFile, gson.toJson(trust));
+        }
+    }
+
     public boolean fingerprintMatches(PublicIdentity identity, String fingerprintPair) {
         if (identity == null || fingerprintPair == null) {
             return false;
