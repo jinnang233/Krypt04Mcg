@@ -135,18 +135,15 @@ public final class ChatReceiveHandler {
                     plaintext = exchange.plaintext();
                 }
                 case SESSION_MESSAGE -> {
-                    if (!packet.signed()) {
-                        throw new IllegalStateException("Session messages must be signed");
-                    }
                     SessionRecord session = sessionService.find(packet.sender())
                             .orElseThrow(() -> new IllegalStateException(
                                     ClientMessages.tr("text.krypt04mcg.error.no_session", packet.sender())));
                     if (!session.peerFingerprint().equalsIgnoreCase(KeyTrustService.fingerprintPair(sender))) {
                         throw new IllegalStateException("Session identity binding mismatch for " + packet.sender());
                     }
-                    String decrypted = cryptoService.decryptWithSession(packet, keyStoreService.local(), sender,
-                            Base64Url.decode(session.secret()));
-                    sessionMessage = parseSessionMessage(decrypted, session);
+                    String decrypted = cryptoService.decryptWithSession(packet, keyStoreService.local().kemPublicKey().owner(), sender.owner(),
+                            Base64Url.decode(session.secret()), session.sessionId(), session.nextReceiveSequence());
+                    sessionMessage = parseSessionMessage(decrypted);
                     plaintext = sessionMessage.message();
                 }
                 default -> throw new IllegalStateException("Unsupported packet type: " + packet.type());
@@ -166,8 +163,8 @@ public final class ChatReceiveHandler {
                 return;
             }
             if (sessionMessage != null) {
-                sessionService.recordReceivedMessage(packet.sender(), sessionMessage.sessionId(),
-                        sessionMessage.sequence(), plaintext.getBytes(StandardCharsets.UTF_8).length);
+                sessionService.recordReceivedMessage(packet.sender(), packet.sessionId(),
+                        packet.sequence(), plaintext.getBytes(StandardCharsets.UTF_8).length);
             }
             decryptionHistoryService.recordSuccess(packet.sender());
             String signatureStatus = packet.signed()
@@ -182,18 +179,16 @@ public final class ChatReceiveHandler {
         }
     }
 
-    private SessionMessagePayload parseSessionMessage(String plaintext, SessionRecord session) {
+    private SessionMessagePayload parseSessionMessage(String plaintext) {
         SessionMessagePayload payload = gson.fromJson(plaintext, SessionMessagePayload.class);
-        if (payload == null || payload.version() != SessionMessagePayload.VERSION || payload.message() == null
-                || !session.sessionId().equals(payload.sessionId())
-                || payload.sequence() != session.nextReceiveSequence()) {
-            throw new IllegalArgumentException("Session epoch or sequence is invalid");
+        if (payload == null || payload.version() != SessionMessagePayload.VERSION || payload.message() == null) {
+            throw new IllegalArgumentException("Session message payload is invalid");
         }
         return payload;
     }
 
     private void validateFreshness(EncryptedPacket packet) {
-        if (packet.protocolVersion() < EncryptedPacket.VERSION && !packet.signed()) {
+        if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION && !packet.signed()) {
             throw new IllegalArgumentException("Legacy unsigned packets have no authenticated timestamp");
         }
         long now = Instant.now().toEpochMilli();
@@ -208,7 +203,7 @@ public final class ChatReceiveHandler {
 
     private static void requireTransportIdentity(String transportSender, EncryptedPacket packet) {
         if (transportSender == null || transportSender.isBlank()) {
-            if (!packet.signed()) {
+            if (!packet.signed() && packet.type() != dev.krypt04mcg.model.PacketType.SESSION_MESSAGE) {
                 throw new IllegalArgumentException("Unsigned packet has no authenticated transport sender");
             }
             return;

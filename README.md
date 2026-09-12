@@ -204,6 +204,8 @@ i32  signatureLength
 bytes signature
 ```
 
+Protocol v4 adds `u16 sessionIdLength + bytes sessionIdUtf8` and `i64 sequence` immediately after message ID for SESSION_MESSAGE only, and omits its signature length/data entirely. SESSION_EXCHANGE retains its PQ signature. Other packet layouts remain as in v3; v1–v3 decoding is retained for non-session messages.
+
 The bracketed v3 fields are conditional: KEM identifiers are omitted from session messages, and signature identifiers are omitted from unsigned messages. Protocol v3 also removes the obsolete packet-level fragment index/total fields. The decoder retains the original v1/v2 layout and AAD rules for compatibility.
 
 Packet types:
@@ -224,7 +226,7 @@ Packet types:
 - Incoming packets select their supported algorithms from the authenticated protocol identifiers; the KEM and signature identifiers must match the corresponding stored key records.
 - Signatures cover AAD plus timestamp, nonce, KEM encapsulation, and ciphertext.
 - Decryption rejects wrong receivers before attempting plaintext display.
-- The authenticated packet sender must match the outer Minecraft sender; transports without an authenticated sender accept signed packets only.
+- The authenticated packet sender must match the outer Minecraft sender; transports without an authenticated sender accept signed packets or AEAD-authenticated messages from an established, identity-bound session.
 - `DISTRUSTED` identities are rejected before decryption or session state changes. Verified trust records bind the player name and both public-key fingerprints.
 - Accepted timestamps have a bounded freshness window, replay records are retained per sender, and session messages authenticate the session epoch and a monotonic sequence number before counters advance.
 - Decryption failures do not display garbage plaintext.
@@ -270,7 +272,7 @@ Client send mode `CUSTOM_PAYLOAD` only sends on this channel when Fabric reports
 
 `/enc exchange` is a signed two-message handshake using the dedicated `SESSION_EXCHANGE` packet type. The initiator creates an in-memory one-time KEM key pair (ML-KEM-768 by default); the responder encrypts fresh session material only to that temporary public key and binds both identities, UUIDs, both fingerprint pairs, the session ID, and the request message ID into the exchange transcript. The initiator destroys the temporary private key after accepting the response or after a short timeout. Consequently, later compromise of either long-term KEM private key does not decrypt a recorded exchange response.
 
-`/enc etell` uses the resulting session secret with a signed `SESSION_MESSAGE` packet. Its encrypted payload carries the authenticated session ID and monotonic sequence. `tell` and `stell` continue to use their existing long-term recipient KEM path and do not use the ephemeral KEM setting.
+`/enc etell` uses the resulting session secret with an AEAD-only `SESSION_MESSAGE` packet (no per-message PQ signature or additional HMAC). Protocol v4 carries the session ID and monotonic sequence in the packet header and authenticates them, together with sender and receiver, through AEAD AAD. The encrypted payload contains only its version and message. Old v1–v3 session messages are rejected; both peers must upgrade. `tell` and `stell` continue to use their existing long-term recipient KEM path and do not use the ephemeral KEM setting.
 
 ## GUI Chat
 
@@ -304,7 +306,7 @@ Back up account storage as a unit. If secrets/master.key is missing, restore the
 encrypted files cannot be recovered by generating a replacement key. Storage directories must
 support owner-only permissions and must not be symbolic links or directory junctions.
 System-message (shadow-listen) transport has no authenticated player identity; use signed
-messages (stell, exchange, etell) there. Unsigned tell messages require authenticated chat or payload transport.
+messages (stell, exchange) or established AEAD session messages (etell) there. Unsigned tell messages require authenticated chat or payload transport.
 
 Implemented test coverage:
 

@@ -64,14 +64,18 @@ final class PacketCodecFuzzTest {
 
     private static EncryptedPacket randomPacket(Random random) {
         PacketType[] types = PacketType.values();
-        byte version = random.nextBoolean() ? EncryptedPacket.LEGACY_VERSION : EncryptedPacket.VERSION;
+        byte version = (byte) (1 + random.nextInt(4));
         PacketType type = types[random.nextInt(types.length)];
         byte flags = (byte) random.nextInt(256);
         AlgorithmSuite algorithms = randomAlgorithms(random);
         short fragmentIndex = (short) random.nextInt(Short.MAX_VALUE + 1);
         short fragmentTotal = (short) (1 + random.nextInt(Short.MAX_VALUE));
         byte[] signature = randomBytes(random, random.nextInt(129));
-        if (version >= EncryptedPacket.VERSION) {
+        if (version >= EncryptedPacket.COMPACT_VERSION) {
+            if (version >= EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE) {
+                flags &= ~dev.krypt04mcg.crypto.CryptoService.FLAG_SIGNED;
+                signature = new byte[0];
+            }
             fragmentIndex = 0;
             fragmentTotal = 1;
             algorithms = new AlgorithmSuite(type == PacketType.SESSION_MESSAGE ? "NONE" : algorithms.kem(),
@@ -84,7 +88,10 @@ final class PacketCodecFuzzTest {
         return new EncryptedPacket(version, type, flags, randomName(random), randomName(random), random.nextLong(),
                 randomBytes(random, 16), fragmentIndex, fragmentTotal, algorithms,
                 randomBytes(random, random.nextInt(33)), randomBytes(random, random.nextInt(257)),
-                randomBytes(random, random.nextInt(513)), signature);
+                randomBytes(random, random.nextInt(513)), signature,
+                version >= EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE
+                        ? dev.krypt04mcg.util.Base64Url.encode(randomBytes(random, 16)) : "",
+                version >= EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE ? random.nextLong(Long.MAX_VALUE) : 0);
     }
 
     private static byte[] packetWithOversizedSender(Random random) throws IOException {
@@ -160,6 +167,8 @@ final class PacketCodecFuzzTest {
         assertEquals(expected.protocolVersion(), actual.protocolVersion());
         assertEquals(expected.type(), actual.type());
         assertEquals(expected.flags(), actual.flags());
+        assertEquals(expected.sessionId(), actual.sessionId());
+        assertEquals(expected.sequence(), actual.sequence());
         assertEquals(expected.sender(), actual.sender());
         assertEquals(expected.receiver(), actual.receiver());
         assertEquals(expected.timestampMillis(), actual.timestampMillis());

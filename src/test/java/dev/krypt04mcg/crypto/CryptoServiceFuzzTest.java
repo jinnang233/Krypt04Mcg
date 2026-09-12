@@ -55,15 +55,14 @@ final class CryptoServiceFuzzTest {
         for (int i = 0; i < CASES; i++) {
             byte[] sessionSecret = randomBytes(random, 32);
             String message = randomMessage(random);
-            boolean sign = random.nextBoolean();
             boolean compress = random.nextBoolean();
 
-            EncryptedPacket packet = crypto.encryptWithSession("bob", alice, "alice", sessionSecret, message, sign, compress);
+            EncryptedPacket packet = crypto.encryptWithSession("bob", "alice", sessionSecret, "AAAAAAAAAAAAAAAAAAAAAA", 0, message, compress, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
 
-            assertEquals(message, crypto.decryptWithSession(packet, bob, publicIdentity(alice), sessionSecret));
+            assertEquals(message, crypto.decryptWithSession(packet, "bob", "alice", sessionSecret, "AAAAAAAAAAAAAAAAAAAAAA", 0));
             assertEquals(PacketType.SESSION_MESSAGE, packet.type());
             assertEquals(0, packet.kemCiphertext().length);
-            assertEquals(sign, packet.signed());
+            assertFalse(packet.signed());
             assertEquals(compress, (packet.flags() & CryptoService.FLAG_COMPRESSED) != 0);
         }
     }

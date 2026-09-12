@@ -177,25 +177,10 @@ public final class CryptoService {
         }
     }
 
-    public EncryptedPacket encryptWithSession(String receiver, LocalKeyMaterial senderKeys, String sender,
-                                              byte[] sessionSecret, String message, boolean sign, boolean compress)
-            throws CryptoException {
-        return encryptWithSession(receiver, KemAlgorithm.CMCE_MCELIECE348864, senderKeys, sender, sessionSecret,
-                message, sign, compress, AeadAlgorithm.AES_256_GCM);
-    }
-
-    public EncryptedPacket encryptWithSession(PublicIdentity receiver, LocalKeyMaterial senderKeys, String sender,
-                                              byte[] sessionSecret, String message, boolean sign, boolean compress,
+    public EncryptedPacket encryptWithSession(String receiver, String sender, byte[] sessionSecret,
+                                              String sessionId, long sequence, String message, boolean compress,
                                               AeadAlgorithm aeadAlgorithm) throws CryptoException {
-        return encryptWithSession(receiver.owner(), kemAlgorithm(receiver.kemPublicKey()), senderKeys, sender,
-                sessionSecret, message, sign, compress, aeadAlgorithm);
-    }
-
-    private EncryptedPacket encryptWithSession(String receiver, KemAlgorithm kemAlgorithm,
-                                               LocalKeyMaterial senderKeys, String sender, byte[] sessionSecret,
-                                               String message, boolean sign, boolean compress,
-                                               AeadAlgorithm aeadAlgorithm) throws CryptoException {
-        SignatureAlgorithm signatureAlgorithm = signatureAlgorithm(senderKeys.signaturePrivateKey());
+        validateSessionMetadata(sessionId, sequence);
         AeadAlgorithm selectedAead = aeadAlgorithm == null ? AeadAlgorithm.AES_256_GCM : aeadAlgorithm;
         try {
             byte[] messageId = randomMessageId();
@@ -203,26 +188,16 @@ public final class CryptoService {
             byte[] nonce = randomNonce();
             byte[] plaintext = message.getBytes(StandardCharsets.UTF_8);
             ensurePlaintextSize(plaintext);
-            byte flags = (byte) ((sign ? FLAG_SIGNED : 0) | (compress ? FLAG_COMPRESSED : 0));
-            byte[] payload = compress ? deflate(plaintext) : plaintext;
-
-            EncryptedPacket packetTemplate = new EncryptedPacket(EncryptedPacket.VERSION, PacketType.SESSION_MESSAGE,
+            byte flags = compress ? FLAG_COMPRESSED : 0;
+            EncryptedPacket template = new EncryptedPacket(EncryptedPacket.VERSION, PacketType.SESSION_MESSAGE,
                     flags, sender, receiver, System.currentTimeMillis(), messageId, (short) 0, (short) 1,
-                    new AlgorithmSuite("NONE", sign ? signatureAlgorithm.identifier() : "NONE",
-                            selectedAead.identifier(), AlgorithmSuite.HKDF_SHA256), nonce, new byte[0],
-                    new byte[0], new byte[0]);
-
-            byte[] ciphertext = aeadEncrypt(selectedAead, derivedKey, nonce, packetCodec.aadFor(packetTemplate), payload);
-            EncryptedPacket unsigned = new EncryptedPacket(packetTemplate.protocolVersion(), packetTemplate.type(),
-                    packetTemplate.flags(), packetTemplate.sender(), packetTemplate.receiver(),
-                    packetTemplate.timestampMillis(), packetTemplate.messageId(), packetTemplate.aadFragmentIndex(),
-                    packetTemplate.aadFragmentTotal(), packetTemplate.algorithms(), nonce, new byte[0], ciphertext,
-                    new byte[0]);
-            byte[] signature = sign ? sign(senderKeys.signaturePrivateKey(), packetCodec.signatureInput(unsigned)) : new byte[0];
-            return new EncryptedPacket(unsigned.protocolVersion(), unsigned.type(), unsigned.flags(), unsigned.sender(),
-                    unsigned.receiver(), unsigned.timestampMillis(), unsigned.messageId(), unsigned.aadFragmentIndex(),
-                    unsigned.aadFragmentTotal(), unsigned.algorithms(), unsigned.nonce(), unsigned.kemCiphertext(),
-                    unsigned.ciphertext(), signature);
+                    new AlgorithmSuite("NONE", "NONE", selectedAead.identifier(), AlgorithmSuite.HKDF_SHA256),
+                    nonce, new byte[0], new byte[0], new byte[0], sessionId, sequence);
+            byte[] ciphertext = aeadEncrypt(selectedAead, derivedKey, nonce, packetCodec.aadFor(template),
+                    compress ? deflate(plaintext) : plaintext);
+            return new EncryptedPacket(template.protocolVersion(), template.type(), flags, sender, receiver,
+                    template.timestampMillis(), messageId, (short) 0, (short) 1, template.algorithms(), nonce,
+                    new byte[0], ciphertext, new byte[0], sessionId, sequence);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to encrypt session message", e);
         }
@@ -306,39 +281,25 @@ public final class CryptoService {
         }
     }
 
-    public String decryptWithSession(EncryptedPacket packet, LocalKeyMaterial receiverKeys, PublicIdentity claimedSender,
-                                     byte[] sessionSecret) throws CryptoException {
+    public String decryptWithSession(EncryptedPacket packet, String receiver, String sender,
+                                     byte[] sessionSecret, String sessionId, long sequence) throws CryptoException {
         validateProtocol(packet);
-        if (!packet.receiver().equalsIgnoreCase(receiverKeys.kemPublicKey().owner())) {
-            throw new CryptoException("Packet receiver mismatch: expected " + receiverKeys.kemPublicKey().owner() + ", got " + packet.receiver());
+        if (!packet.receiver().equalsIgnoreCase(receiver)) {
+            throw new CryptoException("Packet receiver mismatch: expected " + receiver + ", got " + packet.receiver());
         }
         if (packet.type() != PacketType.SESSION_MESSAGE) {
             throw new CryptoException("Packet is not a session message: " + packet.type());
         }
-        if (packet.signed() && (claimedSender == null
-                || !packet.sender().equalsIgnoreCase(claimedSender.owner())
-                || claimedSender.signaturePublicKey() == null
-                || !packet.sender().equalsIgnoreCase(claimedSender.signaturePublicKey().owner()))) {
-            throw new CryptoException("Signature identity does not match packet sender");
+        if (!packet.sender().equalsIgnoreCase(sender) || !packet.sessionId().equals(sessionId)
+                || packet.sequence() != sequence) {
+            throw new CryptoException("Session identity, epoch or sequence mismatch");
         }
-        SignatureAlgorithm packetSignature = packet.signed()
-                ? signatureAlgorithm(packet.algorithms().signature()) : null;
         AeadAlgorithm packetAead = aeadAlgorithm(packet.algorithms().aead());
         validateHkdf(packet.algorithms().hkdf());
         try {
             byte[] derivedKey = deriveSessionSecret(sessionSecret, packet.messageId());
             byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
                     packet.ciphertext());
-            if (packet.signed()) {
-                requireSameAlgorithm("signature", packetSignature.identifier(),
-                        signatureAlgorithm(claimedSender.signaturePublicKey()).identifier());
-                EncryptedPacket unsigned = packetCodec.withoutSignature(packet);
-                boolean valid = verify(packetSignature, claimedSender.signaturePublicKey(),
-                        packetCodec.signatureInput(unsigned), packet.signature());
-                if (!valid) {
-                    throw new CryptoException("Signature verification failed for " + packet.sender());
-                }
-            }
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
             ensurePlaintextSize(payload);
             return new String(payload, StandardCharsets.UTF_8);
@@ -561,6 +522,7 @@ public final class CryptoService {
     private static void validateProtocol(EncryptedPacket packet) throws CryptoException {
         if (packet.protocolVersion() != EncryptedPacket.LEGACY_VERSION
                 && packet.protocolVersion() != EncryptedPacket.PREVIOUS_VERSION
+                && packet.protocolVersion() != EncryptedPacket.COMPACT_VERSION
                 && packet.protocolVersion() != EncryptedPacket.VERSION) {
             throw new CryptoException("Unsupported protocol version: " + Byte.toUnsignedInt(packet.protocolVersion()));
         }
@@ -572,6 +534,16 @@ public final class CryptoService {
                 || packet.messageId() == null || packet.messageId().length != MESSAGE_ID_BYTES
                 || packet.nonce() == null || packet.nonce().length != NONCE_BYTES) {
             throw new CryptoException("Packet identity, message ID, or nonce is invalid");
+        }
+        if (packet.type() == PacketType.SESSION_MESSAGE) {
+            if (packet.protocolVersion() != EncryptedPacket.VERSION || packet.signed()
+                    || (packet.flags() & FLAG_SIGNED) != 0
+                    || !"NONE".equals(packet.algorithms().signature())
+                    || !"NONE".equals(packet.algorithms().kem())
+                    || packet.kemCiphertext() == null || packet.kemCiphertext().length != 0) {
+                throw new CryptoException("Session messages require v4 AEAD-only authentication");
+            }
+            validateSessionMetadata(packet.sessionId(), packet.sequence());
         }
         byte allowedFlags = (byte) (FLAG_SIGNED | FLAG_COMPRESSED | FLAG_SESSION_RESPONSE);
         if ((packet.flags() & ~allowedFlags) != 0) {
@@ -591,9 +563,20 @@ public final class CryptoService {
         if ((packet.flags() & FLAG_SESSION_RESPONSE) != 0 && packet.type() != PacketType.SESSION_EXCHANGE) {
             throw new CryptoException("Session response flag is set on a non-exchange packet");
         }
-        if (packet.protocolVersion() >= EncryptedPacket.VERSION
+        if (packet.protocolVersion() >= EncryptedPacket.COMPACT_VERSION
                 && (packet.aadFragmentIndex() != 0 || packet.aadFragmentTotal() != 1)) {
             throw new CryptoException("Protocol v3 does not carry fragment metadata inside encrypted packets");
+        }
+    }
+
+    private static void validateSessionMetadata(String sessionId, long sequence) throws CryptoException {
+        try {
+            if (sessionId == null || Base64Url.decode(sessionId).length != 16 || sequence < 0
+                    || sequence == Long.MAX_VALUE) {
+                throw new CryptoException("Invalid session ID or sequence");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new CryptoException("Invalid session ID", e);
         }
     }
 

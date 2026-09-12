@@ -30,9 +30,9 @@ final class CryptoServiceTest {
         EncryptedPacket packet = crypto.encryptFor(publicIdentity(bob), mallory, "alice", "forged", true);
         assertThrows(CryptoException.class, () -> crypto.decrypt(packet, bob, publicIdentity(mallory)));
         byte[] secret = new byte[32];
-        EncryptedPacket session = crypto.encryptWithSession("bob", mallory, "alice", secret, "forged", true, false);
+        EncryptedPacket session = crypto.encryptWithSession("bob", "alice", secret, "AAAAAAAAAAAAAAAAAAAAAA", 0, "forged", false, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
         assertThrows(CryptoException.class,
-                () -> crypto.decryptWithSession(session, bob, publicIdentity(mallory), secret));
+                () -> crypto.decryptWithSession(session, "bob", "mallory", secret, "AAAAAAAAAAAAAAAAAAAAAA", 0));
     }
 
     @Test
@@ -128,9 +128,9 @@ final class CryptoServiceTest {
         byte[] sessionSecret = new byte[32];
         new SecureRandom().nextBytes(sessionSecret);
 
-        EncryptedPacket packet = crypto.encryptWithSession("bob", alice, "alice", sessionSecret,
-                "hello over session", true, true);
-        String plaintext = crypto.decryptWithSession(packet, bob, publicIdentity(alice), sessionSecret);
+        EncryptedPacket packet = crypto.encryptWithSession("bob", "alice", sessionSecret, "AAAAAAAAAAAAAAAAAAAAAA", 0,
+                "hello over session", true, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
+        String plaintext = crypto.decryptWithSession(packet, "bob", "alice", sessionSecret, "AAAAAAAAAAAAAAAAAAAAAA", 0);
 
         assertEquals(PacketType.SESSION_MESSAGE, packet.type());
         assertEquals(0, packet.kemCiphertext().length);
@@ -148,11 +148,11 @@ final class CryptoServiceTest {
         new SecureRandom().nextBytes(sessionSecret);
         new SecureRandom().nextBytes(wrongSecret);
 
-        EncryptedPacket packet = crypto.encryptWithSession("bob", alice, "alice", sessionSecret,
-                "hello over session", true, false);
+        EncryptedPacket packet = crypto.encryptWithSession("bob", "alice", sessionSecret, "AAAAAAAAAAAAAAAAAAAAAA", 0,
+                "hello over session", false, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
 
         assertThrows(CryptoException.class, () ->
-                crypto.decryptWithSession(packet, bob, publicIdentity(alice), wrongSecret));
+                crypto.decryptWithSession(packet, "bob", "alice", wrongSecret, "AAAAAAAAAAAAAAAAAAAAAA", 0));
     }
 
     @Test
@@ -184,7 +184,7 @@ final class CryptoServiceTest {
         LocalKeyMaterial bob = crypto.generateLocalKeys("bob", "bob-uuid",
                 KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
         byte[] secret = new byte[32];
-        EncryptedPacket template = crypto.encryptWithSession("bob", bob, "bob", secret, "", false, false);
+        EncryptedPacket template = crypto.encryptWithSession("bob", "bob", secret, "AAAAAAAAAAAAAAAAAAAAAA", 0, "", false, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
         var codec = new dev.krypt04mcg.protocol.PacketCodec();
         javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,
@@ -195,9 +195,9 @@ final class CryptoServiceTest {
         EncryptedPacket oversized = new EncryptedPacket(template.protocolVersion(), template.type(), template.flags(),
                 template.sender(), template.receiver(), template.timestampMillis(), template.messageId(),
                 template.aadFragmentIndex(), template.aadFragmentTotal(), template.algorithms(), template.nonce(),
-                template.kemCiphertext(), ciphertext, template.signature());
+                template.kemCiphertext(), ciphertext, template.signature(), template.sessionId(), template.sequence());
         assertThrows(CryptoException.class,
-                () -> crypto.decryptWithSession(oversized, bob, publicIdentity(bob), secret));
+                () -> crypto.decryptWithSession(oversized, "bob", "bob", secret, "AAAAAAAAAAAAAAAAAAAAAA", 0));
     }
 
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {

@@ -17,6 +17,10 @@ public final class PacketCodec {
     private static final int MAX_BYTES32_FIELD_BYTES = 1024 * 1024;
 
     public byte[] encode(EncryptedPacket packet) {
+        if (isSessionV4(packet.protocolVersion(), packet.type())
+                && (isSigned(packet.flags()) || packet.signed() || !"NONE".equals(packet.algorithms().signature()))) {
+            throw new IllegalArgumentException("Session messages cannot contain signatures");
+        }
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
@@ -27,14 +31,18 @@ public final class PacketCodec {
             writeString(out, packet.receiver());
             out.writeLong(packet.timestampMillis());
             writeFixed(out, packet.messageId(), 16, "messageId");
-            if (packet.protocolVersion() < EncryptedPacket.VERSION) {
+            if (isSessionV4(packet.protocolVersion(), packet.type())) {
+                writeString(out, packet.sessionId());
+                out.writeLong(packet.sequence());
+            }
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION) {
                 out.writeShort(packet.aadFragmentIndex());
                 out.writeShort(packet.aadFragmentTotal());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION || usesKem(packet.type())) {
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION || usesKem(packet.type())) {
                 writeString(out, packet.algorithms().kem());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION || isSigned(packet.flags())) {
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION || isSigned(packet.flags())) {
                 writeString(out, packet.algorithms().signature());
             }
             writeString(out, packet.algorithms().aead());
@@ -42,7 +50,9 @@ public final class PacketCodec {
             writeBytes16(out, packet.nonce());
             writeBytes32(out, packet.kemCiphertext());
             writeBytes32(out, packet.ciphertext());
-            writeBytes32(out, packet.signature());
+            if (!isSessionV4(packet.protocolVersion(), packet.type())) {
+                writeBytes32(out, packet.signature());
+            }
             return bytes.toByteArray();
         } catch (IOException e) {
             throw new IllegalStateException("Unexpected packet encoding failure", e);
@@ -54,11 +64,14 @@ public final class PacketCodec {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             byte version = in.readByte();
             if (version != EncryptedPacket.LEGACY_VERSION && version != EncryptedPacket.PREVIOUS_VERSION
-                    && version != EncryptedPacket.VERSION) {
+                    && version != EncryptedPacket.COMPACT_VERSION && version != EncryptedPacket.VERSION) {
                 throw new IOException("Unsupported protocol version: " + Byte.toUnsignedInt(version));
             }
             PacketType type = PacketType.fromId(in.readUnsignedByte());
             byte flags = in.readByte();
+            if (isSessionV4(version, type) && isSigned(flags)) {
+                throw new IOException("Session messages cannot be signed");
+            }
             String sender = readString(in);
             String receiver = readString(in);
             long timestamp = in.readLong();
@@ -66,24 +79,26 @@ public final class PacketCodec {
             if (messageId.length != 16) {
                 throw new IOException("Truncated message id");
             }
+            String sessionId = isSessionV4(version, type) ? readString(in) : "";
+            long sequence = isSessionV4(version, type) ? in.readLong() : 0;
             short aadFragmentIndex = 0;
             short aadFragmentTotal = 1;
-            if (version < EncryptedPacket.VERSION) {
+            if (version < EncryptedPacket.COMPACT_VERSION) {
                 aadFragmentIndex = in.readShort();
                 aadFragmentTotal = in.readShort();
             }
-            String kem = version < EncryptedPacket.VERSION || usesKem(type) ? readString(in) : "NONE";
-            String signatureAlgorithm = version < EncryptedPacket.VERSION || isSigned(flags) ? readString(in) : "NONE";
+            String kem = version < EncryptedPacket.COMPACT_VERSION || usesKem(type) ? readString(in) : "NONE";
+            String signatureAlgorithm = version < EncryptedPacket.COMPACT_VERSION || isSigned(flags) ? readString(in) : "NONE";
             AlgorithmSuite algorithms = new AlgorithmSuite(kem, signatureAlgorithm, readString(in), readString(in));
             byte[] nonce = readBytes16(in);
             byte[] kemCiphertext = readBytes32(in);
             byte[] ciphertext = readBytes32(in);
-            byte[] signature = readBytes32(in);
+            byte[] signature = isSessionV4(version, type) ? new byte[0] : readBytes32(in);
             if (in.available() != 0) {
                 throw new IOException("Trailing packet bytes: " + in.available());
             }
             return new EncryptedPacket(version, type, flags, sender, receiver, timestamp, messageId,
-                    aadFragmentIndex, aadFragmentTotal, algorithms, nonce, kemCiphertext, ciphertext, signature);
+                    aadFragmentIndex, aadFragmentTotal, algorithms, nonce, kemCiphertext, ciphertext, signature, sessionId, sequence);
         } catch (IOException e) {
             throw new IllegalArgumentException("Invalid Krypt04Mcg packet", e);
         }
@@ -98,18 +113,22 @@ public final class PacketCodec {
             out.writeByte(packet.flags());
             writeString(out, packet.sender());
             writeString(out, packet.receiver());
-            if (packet.protocolVersion() >= EncryptedPacket.VERSION) {
+            if (packet.protocolVersion() >= EncryptedPacket.COMPACT_VERSION) {
                 out.writeLong(packet.timestampMillis());
             }
             writeFixed(out, packet.messageId(), 16, "messageId");
-            if (packet.protocolVersion() < EncryptedPacket.VERSION) {
+            if (isSessionV4(packet.protocolVersion(), packet.type())) {
+                writeString(out, packet.sessionId());
+                out.writeLong(packet.sequence());
+            }
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION) {
                 out.writeShort(packet.aadFragmentIndex());
                 out.writeShort(packet.aadFragmentTotal());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION || usesKem(packet.type())) {
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION || usesKem(packet.type())) {
                 writeString(out, packet.algorithms().kem());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION || isSigned(packet.flags())) {
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION || isSigned(packet.flags())) {
                 writeString(out, packet.algorithms().signature());
             }
             writeString(out, packet.algorithms().aead());
@@ -127,7 +146,7 @@ public final class PacketCodec {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
             out.write(aadFor(packet));
-            if (packet.protocolVersion() < EncryptedPacket.VERSION) {
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION) {
                 out.writeLong(packet.timestampMillis());
             }
             writeBytes16(out, packet.nonce());
@@ -143,7 +162,7 @@ public final class PacketCodec {
         return new EncryptedPacket(packet.protocolVersion(), packet.type(), packet.flags(), packet.sender(),
                 packet.receiver(), packet.timestampMillis(), packet.messageId(), packet.aadFragmentIndex(),
                 packet.aadFragmentTotal(), packet.algorithms(), packet.nonce(), packet.kemCiphertext(),
-                packet.ciphertext(), new byte[0]);
+                packet.ciphertext(), new byte[0], packet.sessionId(), packet.sequence());
     }
 
     private static void writeString(DataOutputStream out, String value) throws IOException {
@@ -213,6 +232,10 @@ public final class PacketCodec {
             throw new IOException("Truncated " + field);
         }
         return bytes;
+    }
+
+    private static boolean isSessionV4(byte version, PacketType type) {
+        return version >= EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE;
     }
 
     private static boolean usesKem(PacketType type) {

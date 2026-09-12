@@ -14,6 +14,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class PacketCodecKatTest {
     @Test
+    void sessionV4WireAndAadMatchManualEncoding() {
+        PacketCodec codec = new PacketCodec();
+        EncryptedPacket packet = new EncryptedPacket(EncryptedPacket.VERSION, PacketType.SESSION_MESSAGE,
+                (byte) 0, "alice", "bob", 123456789L, bytes(16, 1), (short) 0, (short) 1,
+                new AlgorithmSuite("NONE", "NONE", "AES-256-GCM", AlgorithmSuite.HKDF_SHA256),
+                bytes(12, 2), new byte[0], bytes(32, 3), new byte[0], "AAAAAAAAAAAAAAAAAAAAAA", 42);
+        assertArrayEquals(manualEncode(packet), codec.encode(packet));
+        assertArrayEquals(manualAad(packet), codec.aadFor(packet));
+        EncryptedPacket decoded = codec.decode(manualEncode(packet));
+        assertEquals(packet.sessionId(), decoded.sessionId());
+        assertEquals(packet.sequence(), decoded.sequence());
+        assertEquals(0, decoded.signature().length);
+    }
+
+    @Test
     void packetEncodingMatchesKnownAnswerVector() {
         PacketCodec codec = new PacketCodec();
         EncryptedPacket packet = knownPacket();
@@ -41,7 +56,7 @@ final class PacketCodecKatTest {
     void versionThreeAuthenticatesTimestampAndDropsFragmentMetadata() {
         PacketCodec codec = new PacketCodec();
         EncryptedPacket legacy = knownPacket();
-        EncryptedPacket current = new EncryptedPacket(EncryptedPacket.VERSION, legacy.type(), legacy.flags(),
+        EncryptedPacket current = new EncryptedPacket(EncryptedPacket.COMPACT_VERSION, legacy.type(), legacy.flags(),
                 legacy.sender(), legacy.receiver(), legacy.timestampMillis(), legacy.messageId(),
                 legacy.aadFragmentIndex(), legacy.aadFragmentTotal(), legacy.algorithms(), legacy.nonce(),
                 legacy.kemCiphertext(), legacy.ciphertext(), legacy.signature());
@@ -84,14 +99,18 @@ final class PacketCodecKatTest {
             writeString(out, packet.receiver());
             out.writeLong(packet.timestampMillis());
             out.write(packet.messageId());
-            if (packet.protocolVersion() < EncryptedPacket.VERSION) {
+            if (packet.protocolVersion() >= EncryptedPacket.VERSION && packet.type() == PacketType.SESSION_MESSAGE) {
+                writeString(out, packet.sessionId());
+                out.writeLong(packet.sequence());
+            }
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION) {
                 out.writeShort(packet.aadFragmentIndex());
                 out.writeShort(packet.aadFragmentTotal());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION || packet.type() != PacketType.SESSION_MESSAGE) {
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION || packet.type() != PacketType.SESSION_MESSAGE) {
                 writeString(out, packet.algorithms().kem());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION
                     || (packet.flags() & dev.krypt04mcg.crypto.CryptoService.FLAG_SIGNED) != 0) {
                 writeString(out, packet.algorithms().signature());
             }
@@ -100,7 +119,9 @@ final class PacketCodecKatTest {
             writeBytes16(out, packet.nonce());
             writeBytes32(out, packet.kemCiphertext());
             writeBytes32(out, packet.ciphertext());
-            writeBytes32(out, packet.signature());
+            if (packet.protocolVersion() < EncryptedPacket.VERSION || packet.type() != PacketType.SESSION_MESSAGE) {
+                writeBytes32(out, packet.signature());
+            }
             return bytes.toByteArray();
         } catch (Exception e) {
             throw new AssertionError(e);
@@ -116,18 +137,22 @@ final class PacketCodecKatTest {
             out.writeByte(packet.flags());
             writeString(out, packet.sender());
             writeString(out, packet.receiver());
-            if (packet.protocolVersion() >= EncryptedPacket.VERSION) {
+            if (packet.protocolVersion() >= EncryptedPacket.COMPACT_VERSION) {
                 out.writeLong(packet.timestampMillis());
             }
             out.write(packet.messageId());
-            if (packet.protocolVersion() < EncryptedPacket.VERSION) {
+            if (packet.protocolVersion() >= EncryptedPacket.VERSION && packet.type() == PacketType.SESSION_MESSAGE) {
+                writeString(out, packet.sessionId());
+                out.writeLong(packet.sequence());
+            }
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION) {
                 out.writeShort(packet.aadFragmentIndex());
                 out.writeShort(packet.aadFragmentTotal());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION || packet.type() != PacketType.SESSION_MESSAGE) {
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION || packet.type() != PacketType.SESSION_MESSAGE) {
                 writeString(out, packet.algorithms().kem());
             }
-            if (packet.protocolVersion() < EncryptedPacket.VERSION
+            if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION
                     || (packet.flags() & dev.krypt04mcg.crypto.CryptoService.FLAG_SIGNED) != 0) {
                 writeString(out, packet.algorithms().signature());
             }

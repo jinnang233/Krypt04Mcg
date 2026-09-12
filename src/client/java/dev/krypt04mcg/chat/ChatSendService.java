@@ -111,10 +111,10 @@ public final class ChatSendService {
             }
             long sequence = session.nextSendSequence();
             String payload = gson.toJson(new SessionMessagePayload(SessionMessagePayload.VERSION,
-                    session.sessionId(), sequence, message));
-            EncryptedPacket packet = cryptoService.encryptWithSession(identity, keyStoreService.local(),
-                    keyStoreService.local().kemPublicKey().owner(), Base64Url.decode(session.secret()), payload,
-                    true, config.enableCompression, config.aeadAlgorithm);
+                    message));
+            EncryptedPacket packet = cryptoService.encryptWithSession(identity.owner(),
+                    keyStoreService.local().kemPublicKey().owner(), Base64Url.decode(session.secret()),
+                    session.sessionId(), sequence, payload, config.enableCompression, config.aeadAlgorithm);
             sendPacket(packet, receiver);
             sessionService.recordSentMessage(receiver, sequence,
                     message.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
