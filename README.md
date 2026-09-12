@@ -42,9 +42,9 @@ Krypt04Mcg is a Fabric client mod that transports post-quantum encrypted chat pa
 This implementation targets:
 
 - Minecraft Java `26.2`
-- Fabric Loader `0.19.2`
-- Fabric API `0.152.2+26.2`
-- Loom `1.16-SNAPSHOT`
+- Fabric Loader `0.19.5`
+- Fabric API `0.160.0+26.2`
+- Loom `1.17.20`
 - Java `25`
 
 Compatibility Notes: Minecraft/Fabric 26.1+ uses Mojang's unobfuscated names and the non-remapping Fabric Loom plugin. Krypt04Mcg keeps its protocol and crypto layers independent from Minecraft APIs so future 26.x ports should mostly be limited to the client entrypoint, command, and chat-event adapters.
