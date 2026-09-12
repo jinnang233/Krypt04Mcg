@@ -52,7 +52,12 @@ public final class CommandRegistrar {
                     sessionService, decryptionHistoryService, groupService, config));
         });
     }
-
+    private static Component copyableFingerprint(String fingerprint) {
+        return Component.literal(fingerprint).withStyle(style -> style
+                .withColor(ChatFormatting.AQUA)
+                .withUnderlined(true)
+                .withClickEvent(new ClickEvent.CopyToClipboard(fingerprint)));
+    }
     private static LiteralArgumentBuilder<FabricClientCommandSource> rootCommand(String name,
                                                                                  ChatSendService chatSendService,
                                                                                  KeyStoreService keyStoreService,
@@ -299,9 +304,20 @@ public final class CommandRegistrar {
                                         PublicIdentity identity = keyStoreService.findPublicIdentity(player)
                                                 .orElseThrow(() -> new IllegalStateException(
                                                         tr("text.krypt04mcg.error.no_public_key", player)));
-                                        feedback(ctx.getSource(), tr("text.krypt04mcg.command.key_fingerprint",
-                                                player, identity.kemPublicKey().fingerprint(),
-                                                identity.signaturePublicKey().fingerprint()));
+                                        String kemFingerprint = identity.kemPublicKey().fingerprint();
+                                        String signatureFingerprint = identity.signaturePublicKey().fingerprint();
+
+                                        Component kemCopy = copyableFingerprint(kemFingerprint);
+                                        Component signatureCopy = copyableFingerprint(signatureFingerprint);
+                                        ctx.getSource().sendFeedback(
+                                                Component.literal(ClientMessages.messagePrefixWithSpace())
+                                                        .append(Component.translatable(
+                                                                "text.krypt04mcg.command.key_fingerprint",
+                                                                player,
+                                                                kemCopy,
+                                                                signatureCopy
+                                                        ))
+                                        );
                                         return 1;
                                     } catch (Exception e) {
                                         error(ctx.getSource(), e);
