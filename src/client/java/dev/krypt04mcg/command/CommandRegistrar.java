@@ -444,7 +444,7 @@ public final class CommandRegistrar {
                                                                                   KeyTrustService keyTrustService) {
         return ClientCommands.literal("verify")
                 .then(ClientCommands.argument("player", StringArgumentType.word())
-                        .then(ClientCommands.argument("fingerprint", StringArgumentType.word())
+                        .then(ClientCommands.argument("fingerprint", StringArgumentType.greedyString())
                                 .executes(ctx -> {
                                     String player = StringArgumentType.getString(ctx, "player");
                                     String fingerprint = StringArgumentType.getString(ctx, "fingerprint");
