@@ -120,7 +120,8 @@ Private and public key material are stored separately and scoped to the active M
 The KEM and signature selections only apply when no local key exists or when a key is explicitly regenerated. Changing the configuration never rewrites an existing key. Encryption, signing, verification, and decryption resolve algorithms from key records and packet algorithm identifiers rather than assuming the current configuration.
 
 Supported key selections are all ten Bouncy Castle CMCE parameter sets, ML-KEM-512/768/1024, Falcon-512/1024,
-ML-DSA-44/65/87, and all 24 SLH-DSA variants (the 12 SHA2/SHAKE parameter sets in both pure and pre-hash forms).
+ML-DSA-44/65/87, all 24 SLH-DSA variants (the 12 SHA2/SHAKE parameter sets in both pure and pre-hash forms),
+and all three SQIsign parameter sets: `SQIsign-lvl1`, `SQIsign-lvl3`, and `SQIsign-lvl5`.
 The long-term defaults remain `CMCE/mceliece348864`, `Falcon-512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/enc exchange` and `/enc etell` sessions defaults to `ML-KEM-768`.
 
 ## Commands

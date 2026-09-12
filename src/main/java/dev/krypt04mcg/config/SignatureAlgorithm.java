@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName;
 import org.bouncycastle.jcajce.spec.MLDSAParameterSpec;
 import org.bouncycastle.jcajce.spec.SLHDSAParameterSpec;
 import org.bouncycastle.pqc.jcajce.spec.FalconParameterSpec;
+import org.bouncycastle.pqc.jcajce.spec.SQIsignParameterSpec;
 
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.Arrays;
@@ -78,7 +79,13 @@ public enum SignatureAlgorithm {
             SLHDSAParameterSpec.slh_dsa_shake_256f_with_shake256),
     @SerializedName("SLH-DSA-SHAKE-256S-WITH-SHAKE256")
     SLH_DSA_SHAKE_256S_WITH_SHAKE256("SLH-DSA-SHAKE-256S-WITH-SHAKE256", "HASH-SLH-DSA", "BC",
-            SLHDSAParameterSpec.slh_dsa_shake_256s_with_shake256);
+            SLHDSAParameterSpec.slh_dsa_shake_256s_with_shake256),
+    @SerializedName("SQIsign-lvl1")
+    SQISIGN_LVL1("SQIsign-lvl1", "sqisign_lvl1", "BCPQC", SQIsignParameterSpec.sqisign_lvl1),
+    @SerializedName("SQIsign-lvl3")
+    SQISIGN_LVL3("SQIsign-lvl3", "sqisign_lvl3", "BCPQC", SQIsignParameterSpec.sqisign_lvl3),
+    @SerializedName("SQIsign-lvl5")
+    SQISIGN_LVL5("SQIsign-lvl5", "sqisign_lvl5", "BCPQC", SQIsignParameterSpec.sqisign_lvl5);
 
     private final String identifier;
     private final String jcaName;
