@@ -183,7 +183,7 @@
   "text.krypt04mcg.command.key_fingerprint": "%s kem=%s sig=%s",
   "text.krypt04mcg.command.key_exported": "Clé publique exportée vers %s. Empreinte : kem=%s sig=%s",
   "text.krypt04mcg.command.key_imported_tofu": "Clé publique de %s importée avec confiance TOFU.",
-  "text.krypt04mcg.command.key_regenerate_confirm": "La régénération des clés est irréversible. Empreinte KEM actuelle : %s. Remplacement configuré : KEM=%s, SIG=%s. Confirmez avec /enc key regenerate %s",
+  "text.krypt04mcg.command.key_regenerate_confirm": "La régénération des clés est irréversible. Empreinte KEM actuelle : %s. Remplacement configuré : KEM=%s, SIG=%s. Confirmez avec %s",
   "text.krypt04mcg.command.key_regenerated": "Clés locales régénérées. Nouvelles empreintes : kem=%s sig=%s ; algorithmes : kem=%s sig=%s. Exportez la nouvelle clé publique à vos contacts.",
   "text.krypt04mcg.command.key_confirmed": "Empreinte de %s confirmée.",
   "text.krypt04mcg.command.key_trusted": "%s marqué comme approuvé par TOFU.",

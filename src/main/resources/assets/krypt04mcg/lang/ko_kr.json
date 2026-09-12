@@ -183,7 +183,7 @@
   "text.krypt04mcg.command.key_fingerprint": "%s kem=%s sig=%s",
   "text.krypt04mcg.command.key_exported": "공개키를 %s(으)로 내보냈습니다. 지문: kem=%s sig=%s",
   "text.krypt04mcg.command.key_imported_tofu": "%s의 공개키를 가져오고 TOFU 신뢰로 설정했습니다.",
-  "text.krypt04mcg.command.key_regenerate_confirm": "키 재생성은 되돌릴 수 없습니다. 현재 KEM 지문: %s. 설정된 새 매개변수: KEM=%s, SIG=%s. /enc key regenerate %s 명령으로 확인하세요.",
+  "text.krypt04mcg.command.key_regenerate_confirm": "키 재생성은 되돌릴 수 없습니다. 현재 KEM 지문: %s. 설정된 새 매개변수: KEM=%s, SIG=%s. %s 명령으로 확인하세요.",
   "text.krypt04mcg.command.key_regenerated": "로컬 키를 재생성했습니다. 새 지문: kem=%s sig=%s; 알고리즘: kem=%s sig=%s. 새 공개키를 상대방에게 내보내세요.",
   "text.krypt04mcg.command.key_confirmed": "%s의 지문을 확인했습니다.",
   "text.krypt04mcg.command.key_trusted": "%s를 TOFU 신뢰로 표시했습니다.",

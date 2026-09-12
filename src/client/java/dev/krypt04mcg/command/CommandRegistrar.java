@@ -22,6 +22,8 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 
 import java.time.ZoneId;
@@ -336,9 +338,16 @@ public final class CommandRegistrar {
                                         }))))
                 .then(ClientCommands.literal("regenerate")
                         .executes(ctx -> {
-                            feedback(ctx.getSource(), tr("text.krypt04mcg.command.key_regenerate_confirm",
-                                    keyStoreService.regenerationFingerprint(), config.kemAlgorithm.identifier(),
-                                    config.signatureAlgorithm.identifier(), keyStoreService.regenerationFingerprint()));
+                            String fingerprint = keyStoreService.regenerationFingerprint();
+                            String command = "/enc key regenerate " + fingerprint;
+                            Component confirmation = Component.literal(command).withStyle(style -> style
+                                    .withColor(ChatFormatting.AQUA)
+                                    .withUnderlined(true)
+                                    .withClickEvent(new ClickEvent.SuggestCommand(command)));
+                            ctx.getSource().sendFeedback(Component.literal(ClientMessages.messagePrefixWithSpace())
+                                    .append(Component.translatable("text.krypt04mcg.command.key_regenerate_confirm",
+                                            fingerprint, config.kemAlgorithm.identifier(),
+                                            config.signatureAlgorithm.identifier(), confirmation)));
                             return 1;
                         })
                         .then(ClientCommands.argument("fingerprint", StringArgumentType.word())

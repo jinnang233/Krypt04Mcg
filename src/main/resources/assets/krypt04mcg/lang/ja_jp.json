@@ -183,7 +183,7 @@
   "text.krypt04mcg.command.key_fingerprint": "%s kem=%s sig=%s",
   "text.krypt04mcg.command.key_exported": "公開鍵を %s にエクスポートしました。フィンガープリント: kem=%s sig=%s",
   "text.krypt04mcg.command.key_imported_tofu": "%s の公開鍵をインポートし、TOFU 信頼に設定しました。",
-  "text.krypt04mcg.command.key_regenerate_confirm": "鍵の再生成は元に戻せません。現在の KEM フィンガープリント: %s。設定済みの置換先: KEM=%s、SIG=%s。/enc key regenerate %s で確認してください。",
+  "text.krypt04mcg.command.key_regenerate_confirm": "鍵の再生成は元に戻せません。現在の KEM フィンガープリント: %s。設定済みの置換先: KEM=%s、SIG=%s。%s で確認してください。",
   "text.krypt04mcg.command.key_regenerated": "ローカル鍵を再生成しました。新しいフィンガープリント: kem=%s sig=%s、アルゴリズム: kem=%s sig=%s。新しい公開鍵を相手にエクスポートしてください。",
   "text.krypt04mcg.command.key_confirmed": "%s の指紋を確認しました。",
   "text.krypt04mcg.command.key_trusted": "%s を TOFU 信頼に設定しました。",

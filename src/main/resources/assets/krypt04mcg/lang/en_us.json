@@ -179,7 +179,7 @@
   "text.krypt04mcg.command.key_fingerprint": "%s kem=%s sig=%s",
   "text.krypt04mcg.command.key_exported": "Exported public key to %s. Fingerprint: kem=%s sig=%s",
   "text.krypt04mcg.command.key_imported_tofu": "Imported public key for %s with TOFU trust.",
-  "text.krypt04mcg.command.key_regenerate_confirm": "Key regeneration is destructive. Current KEM fingerprint: %s. Configured replacement: KEM=%s, SIG=%s. Confirm with /enc key regenerate %s",
+  "text.krypt04mcg.command.key_regenerate_confirm": "Key regeneration is destructive. Current KEM fingerprint: %s. Configured replacement: KEM=%s, SIG=%s. Confirm with %s",
   "text.krypt04mcg.command.key_regenerated": "Regenerated local keys. New fingerprints: kem=%s sig=%s; algorithms: kem=%s sig=%s. Export the new public key to your peers.",
   "text.krypt04mcg.command.key_confirmed": "Confirmed fingerprint for %s.",
   "text.krypt04mcg.command.key_trusted": "Marked %s as TOFU trusted.",

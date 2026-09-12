@@ -183,7 +183,7 @@
   "text.krypt04mcg.command.key_fingerprint": "%s kem=%s sig=%s",
   "text.krypt04mcg.command.key_exported": "Öffentlichen Schlüssel nach %s exportiert. Fingerabdruck: kem=%s sig=%s",
   "text.krypt04mcg.command.key_imported_tofu": "Öffentlichen Schlüssel für %s mit TOFU-Vertrauen importiert.",
-  "text.krypt04mcg.command.key_regenerate_confirm": "Die Schlüsselerneuerung ist unumkehrbar. Aktueller KEM-Fingerabdruck: %s. Konfigurierter Ersatz: KEM=%s, SIG=%s. Bestätigen mit /enc key regenerate %s",
+  "text.krypt04mcg.command.key_regenerate_confirm": "Die Schlüsselerneuerung ist unumkehrbar. Aktueller KEM-Fingerabdruck: %s. Konfigurierter Ersatz: KEM=%s, SIG=%s. Bestätigen mit %s",
   "text.krypt04mcg.command.key_regenerated": "Lokale Schlüssel neu erzeugt. Neue Fingerabdrücke: kem=%s sig=%s; Algorithmen: kem=%s sig=%s. Exportiere den neuen öffentlichen Schlüssel für deine Kontakte.",
   "text.krypt04mcg.command.key_confirmed": "Fingerabdruck für %s bestätigt.",
   "text.krypt04mcg.command.key_trusted": "%s als TOFU-vertraut markiert.",

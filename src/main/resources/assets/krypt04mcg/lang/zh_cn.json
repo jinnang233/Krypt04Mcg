@@ -183,7 +183,7 @@
   "text.krypt04mcg.command.key_fingerprint": "%s kem=%s sig=%s",
   "text.krypt04mcg.command.key_exported": "已将公钥导出到 %s。指纹：kem=%s sig=%s",
   "text.krypt04mcg.command.key_imported_tofu": "已导入 %s 的公钥并设置为 TOFU 信任。",
-  "text.krypt04mcg.command.key_regenerate_confirm": "重新生成密钥将不可撤销。当前 KEM 指纹：%s。配置的新参数：KEM=%s，SIG=%s。请输入 /enc key regenerate %s 确认。",
+  "text.krypt04mcg.command.key_regenerate_confirm": "重新生成密钥将不可撤销。当前 KEM 指纹：%s。配置的新参数：KEM=%s，SIG=%s。请输入 %s 确认。",
   "text.krypt04mcg.command.key_regenerated": "已重新生成本地密钥。新指纹：kem=%s sig=%s；算法：kem=%s sig=%s。请将新公钥导出并发送给通信方。",
   "text.krypt04mcg.command.key_confirmed": "已确认 %s 的指纹。",
   "text.krypt04mcg.command.key_trusted": "已将 %s 标记为 TOFU 信任。",

@@ -183,7 +183,7 @@
   "text.krypt04mcg.command.key_fingerprint": "%s kem=%s sig=%s",
   "text.krypt04mcg.command.key_exported": "Clave pública exportada a %s. Huella: kem=%s sig=%s",
   "text.krypt04mcg.command.key_imported_tofu": "Clave pública de %s importada con confianza TOFU.",
-  "text.krypt04mcg.command.key_regenerate_confirm": "La regeneración de claves es irreversible. Huella KEM actual: %s. Sustitución configurada: KEM=%s, SIG=%s. Confirma con /enc key regenerate %s",
+  "text.krypt04mcg.command.key_regenerate_confirm": "La regeneración de claves es irreversible. Huella KEM actual: %s. Sustitución configurada: KEM=%s, SIG=%s. Confirma con %s",
   "text.krypt04mcg.command.key_regenerated": "Claves locales regeneradas. Nuevas huellas: kem=%s sig=%s; algoritmos: kem=%s sig=%s. Exporta la nueva clave pública a tus contactos.",
   "text.krypt04mcg.command.key_confirmed": "Huella de %s confirmada.",
   "text.krypt04mcg.command.key_trusted": "%s marcado con confianza TOFU.",
