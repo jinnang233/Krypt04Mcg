@@ -170,6 +170,7 @@
   "text.krypt04mcg.error.no_sender_public_key": "보낸 사람 %s의 공개키가 없습니다.",
   "text.krypt04mcg.signature.valid": "유효함",
   "text.krypt04mcg.signature.unsigned": "서명 없음",
+  "text.krypt04mcg.signature.session": "세션",
   "text.krypt04mcg.command.error.no_group": "%s 그룹이 없습니다.",
   "text.krypt04mcg.command.group_created": "%s 그룹을 만들었습니다. 멤버 %s명.",
   "text.krypt04mcg.command.no_groups": "그룹이 없습니다.",

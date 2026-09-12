@@ -170,6 +170,7 @@
   "text.krypt04mcg.error.no_sender_public_key": "没有发送者 %s 的公钥。",
   "text.krypt04mcg.signature.valid": "有效",
   "text.krypt04mcg.signature.unsigned": "未签名",
+  "text.krypt04mcg.signature.session": "会话",
   "text.krypt04mcg.command.error.no_group": "没有名为 %s 的群组。",
   "text.krypt04mcg.command.group_created": "已创建群组 %s，共 %s 名成员。",
   "text.krypt04mcg.command.no_groups": "没有群组。",

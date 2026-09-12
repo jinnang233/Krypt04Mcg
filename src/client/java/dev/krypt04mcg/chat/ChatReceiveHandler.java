@@ -175,7 +175,9 @@ public final class ChatReceiveHandler {
             String signatureStatus = packet.signed()
                     ? ClientMessages.tr("text.krypt04mcg.signature.valid") + " / "
                     + ClientMessages.tr("text.krypt04mcg.trust." + trustState.name())
-                    : ClientMessages.tr("text.krypt04mcg.signature.unsigned");
+                    : ClientMessages.tr(packet.type() == PacketType.SESSION_MESSAGE
+                            ? "text.krypt04mcg.signature.session"
+                            : "text.krypt04mcg.signature.unsigned");
             decryptedMessageSink.accept(packet.sender(), plaintext);
             system.accept(ClientMessages.tr("text.krypt04mcg.decrypt_display", packet.sender(),
                     signatureStatus, plaintext));

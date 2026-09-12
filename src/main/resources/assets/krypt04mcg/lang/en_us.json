@@ -166,6 +166,7 @@
   "text.krypt04mcg.error.no_sender_public_key": "No public key for sender %s.",
   "text.krypt04mcg.signature.valid": "VALID",
   "text.krypt04mcg.signature.unsigned": "UNSIGNED",
+  "text.krypt04mcg.signature.session": "SESSION",
   "text.krypt04mcg.command.error.no_group": "No group named %s.",
   "text.krypt04mcg.command.group_created": "Created group %s with %s members.",
   "text.krypt04mcg.command.no_groups": "No groups.",

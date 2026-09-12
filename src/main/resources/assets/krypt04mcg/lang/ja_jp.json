@@ -170,6 +170,7 @@
   "text.krypt04mcg.error.no_sender_public_key": "送信者 %s の公開鍵がありません。",
   "text.krypt04mcg.signature.valid": "有効",
   "text.krypt04mcg.signature.unsigned": "未署名",
+  "text.krypt04mcg.signature.session": "セッション",
   "text.krypt04mcg.command.error.no_group": "%s というグループはありません。",
   "text.krypt04mcg.command.group_created": "グループ %s を作成しました (%s 人)。",
   "text.krypt04mcg.command.no_groups": "グループはありません。",

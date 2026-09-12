@@ -170,6 +170,7 @@
   "text.krypt04mcg.error.no_sender_public_key": "Aucune clé publique pour l’expéditeur %s.",
   "text.krypt04mcg.signature.valid": "VALIDE",
   "text.krypt04mcg.signature.unsigned": "NON SIGNÉ",
+  "text.krypt04mcg.signature.session": "SESSION",
   "text.krypt04mcg.command.error.no_group": "Aucun groupe nommé %s.",
   "text.krypt04mcg.command.group_created": "Groupe %s créé avec %s membres.",
   "text.krypt04mcg.command.no_groups": "Aucun groupe.",
