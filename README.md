@@ -157,6 +157,8 @@ The long-term defaults remain `CMCE/mceliece348864`, `Falcon-512`, and `AES-256-
 /enc key distrust <player>
 ```
 
+`/enc status <player>` shows that player's long-term KEM and signature algorithms from their stored public keys, or unknown when no public key is available. The separately labeled local configuration describes your own settings. The public key export does not include the other player's ephemeral KEM or AEAD configuration; stored keys do not report subsequent remote key changes automatically.
+
 Import flow:
 
 1. The other player runs `/enc key export`.

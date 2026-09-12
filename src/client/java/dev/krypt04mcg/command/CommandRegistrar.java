@@ -492,6 +492,10 @@ public final class CommandRegistrar {
 
             feedback(source, tr("text.krypt04mcg.status.player", player));
             feedback(source, tr("text.krypt04mcg.status.public_key", keyStatus));
+            String unknownAlgorithm = tr("text.krypt04mcg.status.unknown_algorithm");
+            feedback(source, tr("text.krypt04mcg.status.player_key_algorithms",
+                    identity.map(PublicIdentity::kemPublicKey).map(key -> key.algorithm()).orElse(unknownAlgorithm),
+                    identity.map(PublicIdentity::signaturePublicKey).map(key -> key.algorithm()).orElse(unknownAlgorithm)));
             identity.ifPresent(value -> feedback(source, tr("text.krypt04mcg.status.fingerprint",
                     value.kemPublicKey().fingerprint(), value.signaturePublicKey().fingerprint())));
             feedback(source, tr("text.krypt04mcg.status.signature", signatureStatus));
