@@ -176,6 +176,10 @@ final class HandshakeStateMachineTest {
     }
 
     private Fixture fixture() throws Exception {
+        return fixture(new Krypt04McgConfig());
+    }
+
+    private Fixture fixture(Krypt04McgConfig config) throws Exception {
         CryptoService crypto = new CryptoService();
         KeyStoreService bobKeys = new KeyStoreService(tempDir.resolve("bob"), crypto);
         bobKeys.init("bob", "bob-uuid");
@@ -191,7 +195,7 @@ final class HandshakeStateMachineTest {
         KeyTrustService trust = new KeyTrustService(tempDir.resolve("bob"));
         SessionHandshakeService handshake = new SessionHandshakeService(crypto, sessionService);
         List<EncryptedPacket> responses = new ArrayList<>();
-        ChatReceiveHandler handler = new ChatReceiveHandler(new Krypt04McgConfig(), bobKeys, trust, crypto,
+        ChatReceiveHandler handler = new ChatReceiveHandler(config, bobKeys, trust, crypto,
                 codec, fragments, new FragmentReassembler(), history, sessionService, handshake,
                 (packet, receiver) -> responses.add(packet),
                 systemMessages::add, (player, message) -> decryptedMessages.add(message));
@@ -202,6 +206,43 @@ final class HandshakeStateMachineTest {
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());
+    }
+
+    @Test
+    void expiredSessionsRejectFreshAuthenticatedMessagesWithoutAdvancingState() throws Exception {
+        Krypt04McgConfig config = new Krypt04McgConfig();
+        Fixture f = fixture(config);
+        var original = f.sessionService.createLocalSession("alice",
+                KeyTrustService.fingerprintPair(publicIdentity(f.aliceMaterial)));
+        for (int limit = 0; limit < 3; limit++) {
+            var expired = new dev.krypt04mcg.model.SessionRecord(original.peer(), original.peerFingerprint(),
+                    original.sessionId(), limit == 0 ? java.time.Instant.now().minusSeconds(7200) : original.createdAt(),
+                    original.lastUsedAt(), original.secret(), limit == 1 ? config.maxMessagesPerSession : 0,
+                    limit == 2 ? config.rotateAfterBytes : 0, 0, 0);
+            f.sessionService.save(expired);
+            EncryptedPacket packet = f.crypto.encryptWithSession("bob", "alice", Base64Url.decode(original.secret()),
+                    original.sessionId(), 0, JsonSupport.prettyGson().toJson(
+                            new dev.krypt04mcg.model.SessionMessagePayload(
+                                    dev.krypt04mcg.model.SessionMessagePayload.VERSION, "expired session")),
+                    false, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
+            for (String fragment : f.fragments.fragment(f.codec.encode(packet), packet.messageId(), 96)) {
+                f.handler.handle("alice", fragment);
+            }
+            assertTrue(f.decryptedMessages.isEmpty(), "expired limit " + limit);
+            assertEquals(expired, f.sessionService.find("alice").orElseThrow());
+            assertTrue(f.history.lastSuccess("alice").isEmpty());
+            assertTrue(f.history.recordAcceptedPacket("alice", packet.messageId(), packet.nonce()),
+                    "rejected packet must not consume replay state");
+        }
+        f.sessionService.save(original);
+        EncryptedPacket valid = f.crypto.encryptWithSession("bob", "alice", Base64Url.decode(original.secret()),
+                original.sessionId(), 0, JsonSupport.prettyGson().toJson(new dev.krypt04mcg.model.SessionMessagePayload(
+                        dev.krypt04mcg.model.SessionMessagePayload.VERSION, "active session")),
+                false, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
+        for (String fragment : f.fragments.fragment(f.codec.encode(valid), valid.messageId(), 96)) {
+            f.handler.handle("alice", fragment);
+        }
+        assertEquals(List.of("active session"), f.decryptedMessages);
     }
 
     private static byte[] randomBytes(int length) {

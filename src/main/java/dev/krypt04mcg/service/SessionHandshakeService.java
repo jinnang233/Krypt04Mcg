@@ -128,8 +128,6 @@ public final class SessionHandshakeService implements AutoCloseable {
             if (receiverKeys.kemPublicKey().owner().compareToIgnoreCase(sender.owner()) < 0) {
                 return false;
             }
-            pending.remove(normalize(sender.owner()));
-            simultaneous.ephemeral().close();
         }
         KemAlgorithm.fromIdentifier(payload.ephemeralKem());
         KeyRecord ephemeralPublic = cryptoService.validateEphemeralKemPublicKey(payload.ephemeralKem(),
@@ -145,6 +143,11 @@ public final class SessionHandshakeService implements AutoCloseable {
                 receiverKeys, receiverKeys.kemPublicKey().owner(), gson.toJson(response), true, compress, aeadAlgorithm);
         packetSender.send(responsePacket, sender.owner());
         sessionService.save(session);
+        // Keep the previous response key until the competing exchange has succeeded.
+        // Invalid key material or a failed send/save must not destroy the pending exchange.
+        if (simultaneous != null && pending.remove(normalize(sender.owner()), simultaneous)) {
+            simultaneous.ephemeral().close();
+        }
         return true;
     }
 

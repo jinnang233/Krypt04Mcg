@@ -128,6 +128,9 @@ public final class SensitiveFileStore {
             if (!create) {
                 throw new IOException("Local master key is missing; restore it from backup");
             }
+            // A new destination says nothing about the other files in this account.
+            // Check under the master-key lock before initializing a new storage epoch.
+            requireUnencryptedStorage();
             byte[] generated = new byte[KEY_BYTES];
             random.nextBytes(generated);
             try {
@@ -161,6 +164,27 @@ public final class SensitiveFileStore {
         } finally {
             Arrays.fill(stored, (byte) 0);
         }
+    }
+
+    private void requireUnencryptedStorage() throws IOException {
+        Files.walkFileTree(root, new java.nio.file.SimpleFileVisitor<Path>() {
+            @Override
+            public java.nio.file.FileVisitResult preVisitDirectory(Path directory,
+                    java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+                SecureFiles.rejectLinks(directory);
+                return java.nio.file.FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public java.nio.file.FileVisitResult visitFile(Path file,
+                    java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+                SecureFiles.rejectLinks(file);
+                if (attributes.isRegularFile() && isEncrypted(file)) {
+                    throw new IOException("Local master key is missing but encrypted files remain; restore it from backup");
+                }
+                return java.nio.file.FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private void writeMasterKey(byte[] key) throws IOException {

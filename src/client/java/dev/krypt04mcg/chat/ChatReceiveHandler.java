@@ -138,6 +138,11 @@ public final class ChatReceiveHandler {
                     SessionRecord session = sessionService.find(packet.sender())
                             .orElseThrow(() -> new IllegalStateException(
                                     ClientMessages.tr("text.krypt04mcg.error.no_session", packet.sender())));
+                    if (sessionService.isExpired(session, config.sessionTtlMinutes,
+                            config.maxMessagesPerSession, config.rotateAfterBytes)) {
+                        throw new IllegalStateException(ClientMessages.tr(
+                                "text.krypt04mcg.error.session_expired", packet.sender()));
+                    }
                     if (!session.peerFingerprint().equalsIgnoreCase(KeyTrustService.fingerprintPair(sender))) {
                         throw new IllegalStateException("Session identity binding mismatch for " + packet.sender());
                     }

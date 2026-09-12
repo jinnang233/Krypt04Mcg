@@ -61,6 +61,23 @@ final class SensitiveFileStoreTest {
     }
 
     @Test
+    void missingMasterKeyCannotBeReplacedByWritingANewFile() throws Exception {
+        Path existing = temp.resolve("sessions/old.json");
+        new SensitiveFileStore(temp).writeString(existing, "old secret");
+        Path key = temp.resolve("secrets/master.key");
+        byte[] originalKey = Files.readAllBytes(key);
+        byte[] originalFile = Files.readAllBytes(existing);
+        Files.delete(key);
+        Path next = temp.resolve("cache/new.json");
+        assertThrows(IOException.class, () -> new SensitiveFileStore(temp).writeString(next, "new secret"));
+        assertFalse(Files.exists(key));
+        assertFalse(Files.exists(next));
+        assertArrayEquals(originalFile, Files.readAllBytes(existing));
+        Files.write(key, originalKey);
+        assertEquals("old secret", new SensitiveFileStore(temp).readString(existing));
+    }
+
+    @Test
     void concurrentStoresUseOnePersistentMasterKey() throws Exception {
         CountDownLatch start = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(8)) {
