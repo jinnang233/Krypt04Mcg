@@ -5,6 +5,7 @@ import org.bouncycastle.jcajce.spec.MLDSAParameterSpec;
 import org.bouncycastle.jcajce.spec.SLHDSAParameterSpec;
 import org.bouncycastle.pqc.jcajce.spec.FalconParameterSpec;
 import org.bouncycastle.pqc.jcajce.spec.SQIsignParameterSpec;
+import org.bouncycastle.pqc.jcajce.spec.SnovaParameterSpec;
 
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.Arrays;
@@ -85,7 +86,139 @@ public enum SignatureAlgorithm {
     @SerializedName("SQIsign-lvl3")
     SQISIGN_LVL3("SQIsign-lvl3", "sqisign_lvl3", "BCPQC", SQIsignParameterSpec.sqisign_lvl3),
     @SerializedName("SQIsign-lvl5")
-    SQISIGN_LVL5("SQIsign-lvl5", "sqisign_lvl5", "BCPQC", SQIsignParameterSpec.sqisign_lvl5);
+    SQISIGN_LVL5("SQIsign-lvl5", "sqisign_lvl5", "BCPQC", SQIsignParameterSpec.sqisign_lvl5),
+    @SerializedName("SNOVA-24-5-4-SSK")
+    SNOVA_24_5_4_SSK("SNOVA-24-5-4-SSK", "SNOVA_24_5_4_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_4_SSK),
+    @SerializedName("SNOVA-24-5-4-ESK")
+    SNOVA_24_5_4_ESK("SNOVA-24-5-4-ESK", "SNOVA_24_5_4_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_4_ESK),
+    @SerializedName("SNOVA-24-5-4-SHAKE-SSK")
+    SNOVA_24_5_4_SHAKE_SSK("SNOVA-24-5-4-SHAKE-SSK", "SNOVA_24_5_4_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_4_SHAKE_SSK),
+    @SerializedName("SNOVA-24-5-4-SHAKE-ESK")
+    SNOVA_24_5_4_SHAKE_ESK("SNOVA-24-5-4-SHAKE-ESK", "SNOVA_24_5_4_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_4_SHAKE_ESK),
+    @SerializedName("SNOVA-24-5-5-SSK")
+    SNOVA_24_5_5_SSK("SNOVA-24-5-5-SSK", "SNOVA_24_5_5_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_5_SSK),
+    @SerializedName("SNOVA-24-5-5-ESK")
+    SNOVA_24_5_5_ESK("SNOVA-24-5-5-ESK", "SNOVA_24_5_5_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_5_ESK),
+    @SerializedName("SNOVA-24-5-5-SHAKE-SSK")
+    SNOVA_24_5_5_SHAKE_SSK("SNOVA-24-5-5-SHAKE-SSK", "SNOVA_24_5_5_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_5_SHAKE_SSK),
+    @SerializedName("SNOVA-24-5-5-SHAKE-ESK")
+    SNOVA_24_5_5_SHAKE_ESK("SNOVA-24-5-5-SHAKE-ESK", "SNOVA_24_5_5_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_24_5_5_SHAKE_ESK),
+    @SerializedName("SNOVA-25-8-3-SSK")
+    SNOVA_25_8_3_SSK("SNOVA-25-8-3-SSK", "SNOVA_25_8_3_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_25_8_3_SSK),
+    @SerializedName("SNOVA-25-8-3-ESK")
+    SNOVA_25_8_3_ESK("SNOVA-25-8-3-ESK", "SNOVA_25_8_3_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_25_8_3_ESK),
+    @SerializedName("SNOVA-25-8-3-SHAKE-SSK")
+    SNOVA_25_8_3_SHAKE_SSK("SNOVA-25-8-3-SHAKE-SSK", "SNOVA_25_8_3_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_25_8_3_SHAKE_SSK),
+    @SerializedName("SNOVA-25-8-3-SHAKE-ESK")
+    SNOVA_25_8_3_SHAKE_ESK("SNOVA-25-8-3-SHAKE-ESK", "SNOVA_25_8_3_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_25_8_3_SHAKE_ESK),
+    @SerializedName("SNOVA-29-6-5-SSK")
+    SNOVA_29_6_5_SSK("SNOVA-29-6-5-SSK", "SNOVA_29_6_5_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_29_6_5_SSK),
+    @SerializedName("SNOVA-29-6-5-ESK")
+    SNOVA_29_6_5_ESK("SNOVA-29-6-5-ESK", "SNOVA_29_6_5_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_29_6_5_ESK),
+    @SerializedName("SNOVA-29-6-5-SHAKE-SSK")
+    SNOVA_29_6_5_SHAKE_SSK("SNOVA-29-6-5-SHAKE-SSK", "SNOVA_29_6_5_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_29_6_5_SHAKE_SSK),
+    @SerializedName("SNOVA-29-6-5-SHAKE-ESK")
+    SNOVA_29_6_5_SHAKE_ESK("SNOVA-29-6-5-SHAKE-ESK", "SNOVA_29_6_5_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_29_6_5_SHAKE_ESK),
+    @SerializedName("SNOVA-37-8-4-SSK")
+    SNOVA_37_8_4_SSK("SNOVA-37-8-4-SSK", "SNOVA_37_8_4_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_8_4_SSK),
+    @SerializedName("SNOVA-37-8-4-ESK")
+    SNOVA_37_8_4_ESK("SNOVA-37-8-4-ESK", "SNOVA_37_8_4_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_8_4_ESK),
+    @SerializedName("SNOVA-37-8-4-SHAKE-SSK")
+    SNOVA_37_8_4_SHAKE_SSK("SNOVA-37-8-4-SHAKE-SSK", "SNOVA_37_8_4_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_8_4_SHAKE_SSK),
+    @SerializedName("SNOVA-37-8-4-SHAKE-ESK")
+    SNOVA_37_8_4_SHAKE_ESK("SNOVA-37-8-4-SHAKE-ESK", "SNOVA_37_8_4_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_8_4_SHAKE_ESK),
+    @SerializedName("SNOVA-37-17-2-SSK")
+    SNOVA_37_17_2_SSK("SNOVA-37-17-2-SSK", "SNOVA_37_17_2_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_17_2_SSK),
+    @SerializedName("SNOVA-37-17-2-ESK")
+    SNOVA_37_17_2_ESK("SNOVA-37-17-2-ESK", "SNOVA_37_17_2_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_17_2_ESK),
+    @SerializedName("SNOVA-37-17-2-SHAKE-SSK")
+    SNOVA_37_17_2_SHAKE_SSK("SNOVA-37-17-2-SHAKE-SSK", "SNOVA_37_17_2_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_17_2_SHAKE_SSK),
+    @SerializedName("SNOVA-37-17-2-SHAKE-ESK")
+    SNOVA_37_17_2_SHAKE_ESK("SNOVA-37-17-2-SHAKE-ESK", "SNOVA_37_17_2_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_37_17_2_SHAKE_ESK),
+    @SerializedName("SNOVA-49-11-3-SSK")
+    SNOVA_49_11_3_SSK("SNOVA-49-11-3-SSK", "SNOVA_49_11_3_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_49_11_3_SSK),
+    @SerializedName("SNOVA-49-11-3-ESK")
+    SNOVA_49_11_3_ESK("SNOVA-49-11-3-ESK", "SNOVA_49_11_3_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_49_11_3_ESK),
+    @SerializedName("SNOVA-49-11-3-SHAKE-SSK")
+    SNOVA_49_11_3_SHAKE_SSK("SNOVA-49-11-3-SHAKE-SSK", "SNOVA_49_11_3_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_49_11_3_SHAKE_SSK),
+    @SerializedName("SNOVA-49-11-3-SHAKE-ESK")
+    SNOVA_49_11_3_SHAKE_ESK("SNOVA-49-11-3-SHAKE-ESK", "SNOVA_49_11_3_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_49_11_3_SHAKE_ESK),
+    @SerializedName("SNOVA-56-25-2-SSK")
+    SNOVA_56_25_2_SSK("SNOVA-56-25-2-SSK", "SNOVA_56_25_2_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_56_25_2_SSK),
+    @SerializedName("SNOVA-56-25-2-ESK")
+    SNOVA_56_25_2_ESK("SNOVA-56-25-2-ESK", "SNOVA_56_25_2_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_56_25_2_ESK),
+    @SerializedName("SNOVA-56-25-2-SHAKE-SSK")
+    SNOVA_56_25_2_SHAKE_SSK("SNOVA-56-25-2-SHAKE-SSK", "SNOVA_56_25_2_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_56_25_2_SHAKE_SSK),
+    @SerializedName("SNOVA-56-25-2-SHAKE-ESK")
+    SNOVA_56_25_2_SHAKE_ESK("SNOVA-56-25-2-SHAKE-ESK", "SNOVA_56_25_2_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_56_25_2_SHAKE_ESK),
+    @SerializedName("SNOVA-60-10-4-SSK")
+    SNOVA_60_10_4_SSK("SNOVA-60-10-4-SSK", "SNOVA_60_10_4_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_60_10_4_SSK),
+    @SerializedName("SNOVA-60-10-4-ESK")
+    SNOVA_60_10_4_ESK("SNOVA-60-10-4-ESK", "SNOVA_60_10_4_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_60_10_4_ESK),
+    @SerializedName("SNOVA-60-10-4-SHAKE-SSK")
+    SNOVA_60_10_4_SHAKE_SSK("SNOVA-60-10-4-SHAKE-SSK", "SNOVA_60_10_4_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_60_10_4_SHAKE_SSK),
+    @SerializedName("SNOVA-60-10-4-SHAKE-ESK")
+    SNOVA_60_10_4_SHAKE_ESK("SNOVA-60-10-4-SHAKE-ESK", "SNOVA_60_10_4_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_60_10_4_SHAKE_ESK),
+    @SerializedName("SNOVA-66-15-3-SSK")
+    SNOVA_66_15_3_SSK("SNOVA-66-15-3-SSK", "SNOVA_66_15_3_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_66_15_3_SSK),
+    @SerializedName("SNOVA-66-15-3-ESK")
+    SNOVA_66_15_3_ESK("SNOVA-66-15-3-ESK", "SNOVA_66_15_3_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_66_15_3_ESK),
+    @SerializedName("SNOVA-66-15-3-SHAKE-SSK")
+    SNOVA_66_15_3_SHAKE_SSK("SNOVA-66-15-3-SHAKE-SSK", "SNOVA_66_15_3_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_66_15_3_SHAKE_SSK),
+    @SerializedName("SNOVA-66-15-3-SHAKE-ESK")
+    SNOVA_66_15_3_SHAKE_ESK("SNOVA-66-15-3-SHAKE-ESK", "SNOVA_66_15_3_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_66_15_3_SHAKE_ESK),
+    @SerializedName("SNOVA-75-33-2-SSK")
+    SNOVA_75_33_2_SSK("SNOVA-75-33-2-SSK", "SNOVA_75_33_2_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_75_33_2_SSK),
+    @SerializedName("SNOVA-75-33-2-ESK")
+    SNOVA_75_33_2_ESK("SNOVA-75-33-2-ESK", "SNOVA_75_33_2_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_75_33_2_ESK),
+    @SerializedName("SNOVA-75-33-2-SHAKE-SSK")
+    SNOVA_75_33_2_SHAKE_SSK("SNOVA-75-33-2-SHAKE-SSK", "SNOVA_75_33_2_SHAKE_SSK", "BCPQC",
+            SnovaParameterSpec.SNOVA_75_33_2_SHAKE_SSK),
+    @SerializedName("SNOVA-75-33-2-SHAKE-ESK")
+    SNOVA_75_33_2_SHAKE_ESK("SNOVA-75-33-2-SHAKE-ESK", "SNOVA_75_33_2_SHAKE_ESK", "BCPQC",
+            SnovaParameterSpec.SNOVA_75_33_2_SHAKE_ESK);
 
     private final String identifier;
     private final String jcaName;

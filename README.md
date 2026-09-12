@@ -121,7 +121,10 @@ The KEM and signature selections only apply when no local key exists or when a k
 
 Supported key selections are all ten Bouncy Castle CMCE parameter sets, ML-KEM-512/768/1024, Falcon-512/1024,
 ML-DSA-44/65/87, all 24 SLH-DSA variants (the 12 SHA2/SHAKE parameter sets in both pure and pre-hash forms),
-and all three SQIsign parameter sets: `SQIsign-lvl1`, `SQIsign-lvl3`, and `SQIsign-lvl5`.
+all three SQIsign parameter sets (`SQIsign-lvl1`, `SQIsign-lvl3`, and `SQIsign-lvl5`),
+and all 44 SNOVA variants. SNOVA includes the base parameter sets `24-5-4`, `24-5-5`, `25-8-3`,
+`29-6-5`, `37-8-4`, `37-17-2`, `49-11-3`, `56-25-2`, `60-10-4`, `66-15-3`, and `75-33-2`,
+each with `SSK`, `ESK`, `SHAKE-SSK`, and `SHAKE-ESK` variants (for example, `SNOVA-24-5-4-SSK`).
 The long-term defaults remain `CMCE/mceliece348864`, `Falcon-512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/enc exchange` and `/enc etell` sessions defaults to `ML-KEM-768`.
 
 ## Commands
