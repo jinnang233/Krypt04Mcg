@@ -25,6 +25,10 @@ public final class FragmentReassembler {
     }
 
     public FragmentReassembler(Clock clock, Duration timeout, int maxMessages, int maxFragmentsPerMessage) {
+        if (clock == null || timeout == null || timeout.isNegative() || timeout.isZero()
+                || maxMessages <= 0 || maxFragmentsPerMessage <= 0) {
+            throw new IllegalArgumentException("Invalid reassembly limits");
+        }
         this.clock = clock;
         this.timeout = timeout;
         this.maxMessages = maxMessages;
@@ -32,6 +36,12 @@ public final class FragmentReassembler {
     }
 
     public synchronized Optional<byte[]> accept(Fragment fragment) {
+        if (fragment == null || fragment.messageId() == null || fragment.messageId().isBlank()
+                || fragment.total() <= 0 || fragment.index() < 0 || fragment.index() >= fragment.total()
+                || fragment.payload() == null
+                || fragment.payload().length() > FragmentService.MAX_CHAT_MESSAGE_LENGTH) {
+            throw new IllegalArgumentException("Invalid fragment");
+        }
         cleanupTimedOut();
         if (fragment.total() > maxFragmentsPerMessage) {
             throw new IllegalArgumentException("Too many fragments: " + fragment.total());
@@ -44,8 +54,9 @@ public final class FragmentReassembler {
         if (partial.total != fragment.total()) {
             throw new IllegalArgumentException("Fragment total changed for " + fragment.messageId());
         }
-        partial.fragments.putIfAbsent(fragment.index(), fragment.payload());
-        partial.lastTouched = clock.millis();
+        if (partial.fragments.putIfAbsent(fragment.index(), fragment.payload()) == null) {
+            partial.lastTouched = clock.millis();
+        }
         if (!partial.complete()) {
             return Optional.empty();
         }

@@ -18,6 +18,29 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 final class FragmentServiceTest {
     @Test
+    void duplicateFragmentsDoNotExtendCacheLifetime() {
+        MutableClock clock = new MutableClock();
+        FragmentReassembler reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 10, 10);
+        Fragment fragment = new Fragment("abc", 0, 2, "AAA");
+        reassembler.accept(fragment);
+        clock.advance(Duration.ofSeconds(9));
+        reassembler.accept(fragment);
+        clock.advance(Duration.ofSeconds(2));
+        assertEquals(1, reassembler.cleanup());
+    }
+
+    @Test
+    void rejectsInvalidIndicesAndOversizedPayloadsBeforeCaching() {
+        FragmentReassembler reassembler = new FragmentReassembler();
+        for (Fragment fragment : List.of(new Fragment("abc", -1, 2, "AA"),
+                new Fragment("abc", 2, 2, "AA"), new Fragment("abc", 0, 0, "AA"),
+                new Fragment("abc", 0, 2, "A".repeat(257)))) {
+            assertThrows(IllegalArgumentException.class, () -> reassembler.accept(fragment));
+        }
+        assertEquals(0, reassembler.pendingMessages());
+    }
+
+    @Test
     void reassemblesOutOfOrderAndIgnoresDuplicate() {
         FragmentService service = new FragmentService();
         FragmentReassembler reassembler = new FragmentReassembler();

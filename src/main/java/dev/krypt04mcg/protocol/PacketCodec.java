@@ -10,6 +10,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.util.Arrays;
 
 public final class PacketCodec {
@@ -167,7 +169,7 @@ public final class PacketCodec {
 
     private static void writeString(DataOutputStream out, String value) throws IOException {
         byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
-        if (encoded.length > 65535) {
+        if (encoded.length > MAX_STRING_BYTES) {
             throw new IOException("String too long");
         }
         out.writeShort(encoded.length);
@@ -179,7 +181,11 @@ public final class PacketCodec {
         if (length > MAX_STRING_BYTES) {
             throw new IOException("String field too long: " + length);
         }
-        return new String(readExact(in, length, "string"), StandardCharsets.UTF_8);
+        // Reject invalid encodings: AAD and signatures are reconstructed from these strings.
+        return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(readExact(in, length, "string"))).toString();
     }
 
     private static void writeBytes16(DataOutputStream out, byte[] bytes) throws IOException {
@@ -203,6 +209,9 @@ public final class PacketCodec {
         if (bytes == null) {
             out.writeInt(0);
             return;
+        }
+        if (bytes.length > MAX_BYTES32_FIELD_BYTES) {
+            throw new IOException("Field too long: " + bytes.length);
         }
         out.writeInt(bytes.length);
         out.write(bytes);

@@ -414,10 +414,12 @@ public final class CryptoService {
                 KemAlgorithm algorithm = KemAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
                 decoded = decodePublicKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
+                requireKeyParameters(decoded, algorithm.parameterSpec());
             } else {
                 SignatureAlgorithm algorithm = SignatureAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
                 decoded = decodePublicKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
+                requireKeyParameters(decoded, algorithm.parameterSpec());
             }
             return keyRecord(identifier + "/public", owner, uuid, record.createdAt(), decoded.getEncoded());
         } catch (GeneralSecurityException | IllegalArgumentException e) {
@@ -436,15 +438,50 @@ public final class CryptoService {
                 KemAlgorithm algorithm = KemAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
                 decoded = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
+                requireKeyParameters(decoded, algorithm.parameterSpec());
             } else {
                 SignatureAlgorithm algorithm = SignatureAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
                 decoded = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
+                requireKeyParameters(decoded, algorithm.parameterSpec());
             }
             return keyRecord(identifier + "/private", owner, uuid, record.createdAt(), decoded.getEncoded());
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Invalid " + (kem ? "KEM" : "signature") + " private key", e);
         }
+    }
+
+    // Generic JCA key factories accept multiple parameter sets. The record label must match
+    // the parameters in the decoded key, including for an ephemeral handshake key.
+    private static void requireKeyParameters(java.security.Key key,
+                                             java.security.spec.AlgorithmParameterSpec expected) throws CryptoException {
+        java.security.spec.AlgorithmParameterSpec actual = switch (key) {
+            case org.bouncycastle.jcajce.interfaces.MLKEMKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.CMCEKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.FalconKey k -> k.getParameterSpec();
+            case org.bouncycastle.jcajce.interfaces.MLDSAKey k -> k.getParameterSpec();
+            case org.bouncycastle.jcajce.interfaces.SLHDSAKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.SQIsignKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.SnovaKey k -> k.getParameterSpec();
+            default -> throw new CryptoException("Unsupported decoded key type");
+        };
+        if (actual == null || actual.getClass() != expected.getClass()
+                || !parameterName(actual).equalsIgnoreCase(parameterName(expected))) {
+            throw new CryptoException("Encoded key parameters do not match the declared algorithm");
+        }
+    }
+
+    private static String parameterName(java.security.spec.AlgorithmParameterSpec spec) throws CryptoException {
+        return switch (spec) {
+            case org.bouncycastle.jcajce.spec.MLKEMParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.CMCEParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.FalconParameterSpec p -> p.getName();
+            case org.bouncycastle.jcajce.spec.MLDSAParameterSpec p -> p.getName();
+            case org.bouncycastle.jcajce.spec.SLHDSAParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.SQIsignParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.SnovaParameterSpec p -> p.getName();
+            default -> throw new CryptoException("Unsupported key parameter type");
+        };
     }
 
     private void verifyLocalKeyPairs(KeyRecord kemPublic, KeyRecord kemPrivate, KeyRecord signaturePublic,
