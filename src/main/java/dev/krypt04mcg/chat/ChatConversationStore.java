@@ -96,9 +96,7 @@ public final class ChatConversationStore {
     }
 
     private void record(String target, String message, boolean outgoing, boolean group) {
-        if (!enabled.getAsBoolean()) {
-            return;
-        }
+        // Live conversations remain available even when persistent history is disabled.
         load();
         if (target == null || target.isBlank() || message == null || message.isBlank()) {
             return;
@@ -127,16 +125,17 @@ public final class ChatConversationStore {
             loaded = true;
             List<Entry> loaded = gson.fromJson(sensitiveFiles.readString(historyFile), ENTRIES_TYPE);
             if (loaded != null) {
-                loaded.stream()
+                List<Entry> history = loaded.stream()
                         .filter(Entry::isValid)
-                        .forEach(entries::add);
+                        .toList();
+                entries.addAll(0, history);
                 trim();
             }
             if (legacyPlaintext) {
                 save();
             }
         } catch (Exception ignored) {
-            entries.clear();
+            // A failed history read must not discard messages from this running session.
         }
     }
 

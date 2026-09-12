@@ -284,7 +284,7 @@ Recent plaintext conversation history is cached locally under:
 config/krypt04mcg/accounts/<minecraft-uuid>/cache/conversations.json
 ```
 
-The encrypted cache is bounded to the most recent 300 entries and is disabled by default. It can be enabled with the `enableConversationHistory` config option.
+The encrypted cache is bounded to the most recent 300 entries and is disabled by default. It can be enabled with the `enableConversationHistory` config option. With this option disabled, the GUI still displays up to 300 live conversation entries in memory, without loading or saving conversation history on disk.
 
 ## Known Limitations
 
