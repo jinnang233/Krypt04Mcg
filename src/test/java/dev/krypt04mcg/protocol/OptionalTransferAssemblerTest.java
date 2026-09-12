@@ -5,6 +5,21 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptionalTransferAssemblerTest {
+    @Test void completedTransferCannotBeReplayedUnderDifferentSenderCase() {
+        var assembler = new OptionalTransferAssembler();
+        String fragment = OptionalTransferAssembler.split("public-key").getFirst();
+        assertEquals("public-key", assembler.accept("Alice", fragment, 0).orElseThrow());
+        assertTrue(assembler.accept("ALICE", fragment, 1).isEmpty());
+    }
+
+    @Test void idleExpiryReleasesIncompleteFileSlotAndRejectsItsLateChunks() {
+        var assembler = new OptionalTransferAssembler(2048, 1);
+        var parts = OptionalTransferAssembler.split("x".repeat(24000));
+        assertTrue(assembler.accept("Alice", parts.getFirst(), 0).isEmpty());
+        assembler.expire(60001);
+        assertTrue(assembler.accept("Alice", parts.getLast(), 60002).isEmpty());
+        assertEquals("new", assembler.accept("Bob", OptionalTransferAssembler.split("new").getFirst(), 60003).orElseThrow());
+    }
     @Test void assemblesLargeKeysOutOfOrderAndIsolatesSenders() {
         String data = "x".repeat(400000);
         List<String> parts = new ArrayList<>(OptionalTransferAssembler.split(data));

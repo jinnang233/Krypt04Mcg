@@ -81,3 +81,63 @@ Regression coverage: `HandshakeFailureRecoveryTest` simulates an invalid ephemer
 All four new reproduction cases in the second round failed before the fixes. The related storage, session, and handshake tests passed afterward. These changes do not modify the network wire format.
 
 Full second-round validation: `gradlew.bat --gradle-user-home C:/Users/jinna/.gradle test build --offline` succeeded with 182 tests: 181 passed, one skipped because Windows lacked permission to create symbolic links, and no failures or errors. `git diff --check` passed. Live client connectivity was not tested.
+
+## Optional sharing review (2026-09-12)
+
+This round focused on the optional public-key and file channels, their client lifecycle, and the companion relay. Findings below concern resource handling and availability; none demonstrates a break of the encryption or signature algorithms.
+
+### 7. [P2] Completed optional transfers could be assembled repeatedly
+
+Location: `OptionalTransferAssembler.accept`.
+
+Completion removed all knowledge of the transfer identifier. Replaying the same chunks therefore produced another completed payload, potentially repeating public-key validation and confirmation prompts. File-message replay checks existed later in the pipeline, but did not prevent repeated assembly.
+
+Fix: retain bounded, case-normalized sender/transfer tombstones for completed and expired assemblies for 60 seconds. Admission includes both active and retired entries in a 1024-entry limit. File message identifiers are also checked before background decryption, including when an attacker changes the outer transfer identifier.
+
+Regression: `completedTransferCannotBeReplayedUnderDifferentSenderCase` failed against the original implementation and passes with the fix.
+
+### 8. [P2] Idle connections retained expired payloads and pending plaintext
+
+Locations: `OptionalTransferAssembler` and `OptionalSharing`.
+
+Expiry previously ran only on another receive or confirmation action. An idle client could retain an incomplete large envelope or a decrypted pending file after the advertised timeout. Changing away from CUSTOM_PAYLOAD mode also left pending requests intact.
+
+Fix: run expiry from client ticks and clear pending requests and assemblies when leaving CUSTOM_PAYLOAD mode. Expired assembly identifiers are retired so late chunks cannot immediately recreate the old transfer. This releases references; it does not guarantee erasure of immutable Java strings from memory.
+
+Regression: `idleExpiryReleasesIncompleteFileSlotAndRejectsItsLateChunks` verifies timeout cleanup, rejection of late chunks, and admission of a new transfer.
+
+### 9. [P2] Permanent-disable write failure could be reported as success
+
+Location: `OptionalSharing.applySettings` and the `disable-files` command.
+
+The runtime lock was set before writing the marker. A failed write was logged, but the command still displayed success and subsequent attempts skipped persistence because the runtime lock was already set.
+
+Fix: `FileSharingLock` distinguishes runtime lock state from successful persistence. A failure leaves sharing disabled for the current process, propagates a translated error instead of success, and allows explicit command retries. Existing markers are not overwritten. Inaccessible paths and dangling marker links fail closed.
+
+Regression: `FileSharingLockTest` forces a write failure by obstructing the account directory, verifies the runtime lock without a persistence claim, removes the obstruction, retries, and verifies the lock after constructing a new instance.
+
+### 10. [P2] Optional relay traffic had no application-level budget
+
+Location: the companion plugin's `CustomPayloadRelay`.
+
+Every accepted public-key broadcast was copied to every subscribed player without packet or byte budgets. Malformed packets also generated warning-level logs. This allowed broadcast amplification and log flooding within the server's transport limits.
+
+Fix: charge incoming packets before decoding, and charge every outgoing recipient. Per source, ingress is limited to 256 packets/second with a 512-packet burst and 2 MiB/second with a 4 MiB burst. Egress is limited to 8 MiB/second per source with a 32 MiB burst, and 32 MiB/second globally with a 64 MiB burst. Source tracking is bounded to 1024 entries with idle eviction on admission. Excess traffic is dropped, without retries or delivery acknowledgements. Malformed-packet diagnostics use fine-level logging. UTF-8 decoding now rejects malformed input, and VarInt decoding rejects overflow rather than silently truncating high bits.
+
+Regression: `RelayTrafficLimiterTest` covers floods, independent source budgets, refill, broadcast recipient charging, malformed UTF-8, overflowing VarInts, and all 2048 chunks of a file transfer paced at four chunks per 50 ms.
+
+### 11. [P2] Large file cryptography ran on the game thread
+
+Location: `OptionalSharing`.
+
+File reads, encryption, signature verification, and decryption were performed synchronously on the client thread. Large files could cause visible stalls; remote traffic could repeatedly trigger expensive validation.
+
+Fix: use one daemon worker with no queued operations. It remains occupied until its result has been delivered to the client thread, bounding retained work. File reading, file encryption/decryption, and incoming public-key validation use this worker. Completion checks the connection, a configuration generation, and current file permissions before applying results. Trust is rechecked before queuing a sent file and before saving an accepted file. Busy receivers drop incoming chunks, so transfers may need to be retried. File persistence after acceptance still runs on the client thread.
+
+Regression: `SharingWorkerTest` verifies that a second operation is refused while a result awaits UI delivery and that an operation failure releases the worker after delivery. Connection and GUI behavior still require live-client testing.
+
+Validation for this round: the full offline client test/build completed successfully with 193 tests (192 passed,
+one skipped, zero failures or errors). The companion plugin's offline Maven package build completed with all
+68 tests passing. The client suite includes the existing complete 10 MiB encrypted-and-signed round-trip test.
+The replay reproduction was confirmed to fail before its fix. Documentation remains in English, and
+`git diff --check` passed. No live Minecraft client/server integration test or cryptographic proof was performed.

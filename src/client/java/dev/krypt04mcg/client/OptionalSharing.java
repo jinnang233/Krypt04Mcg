@@ -34,26 +34,36 @@ public final class OptionalSharing {
     private final Deque<FileSharePayload> outgoing = new ArrayDeque<>();
     private final Map<String, Pending> pending = new HashMap<>();
     private final Set<String> seenFiles = new HashSet<>();
-    private boolean locked;
+    private final FileSharingLock fileLock;
+    private final SharingWorker worker = new SharingWorker();
+    private long generation;
+    private boolean wasSending, wasReceiving;
+    private ChatSendMode previousMode;
 
     public OptionalSharing(Krypt04McgConfig config, KeyStoreService keys, KeyTrustService trust,
                            CryptoService crypto, Path root) {
         this.config = config; this.keys = keys; this.trust = trust; this.crypto = crypto; this.root = root;
-        locked = Files.exists(root.resolve("file-sharing.disabled"));
+        fileLock = new FileSharingLock(root);
         applySettings();
     }
 
     public void applySettings() {
-        if (config.permanentlyDisableFileSharing && !locked) {
-            locked = true;
-            try { SecureFiles.atomicWrite(root.resolve("file-sharing.disabled"), new byte[]{1}); }
+        if (wasSending != config.enableFileSending || wasReceiving != config.enableFileReceiving
+                || previousMode != config.chatSendMode) generation++;
+        wasSending = config.enableFileSending; wasReceiving = config.enableFileReceiving;
+        previousMode = config.chatSendMode;
+        if (config.permanentlyDisableFileSharing && !fileLock.locked()) {
+            try { fileLock.disable(); }
             catch (Exception e) { dev.krypt04mcg.Krypt04McgMod.LOGGER.warn("Unable to persist file-sharing lock", e); message(tr("text.krypt04mcg.share.lock_failed")); }
         }
-        if (locked || !config.enableFileReceiving) {
+        if (fileLock.locked() || !config.enableFileReceiving) {
             fileParts.clear();
             pending.values().removeIf(p -> p.file != null);
         }
-        if (locked || !config.enableFileSending || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) outgoing.clear();
+        if (fileLock.locked() || !config.enableFileSending || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) outgoing.clear();
+        if (config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) {
+            pending.clear(); keyParts.clear(); fileParts.clear();
+        }
     }
 
     public void register() {
@@ -66,10 +76,14 @@ public final class OptionalSharing {
         ClientPlayNetworking.registerGlobalReceiver(FileSharePayload.TYPE,
                 (p, c) -> c.client().execute(() -> receive(p.peer(), p.fragment(), p.version(), true)));
         ClientPlayConnectionEvents.DISCONNECT.register((h, c) -> {
+            generation++;
             keyParts.clear(); fileParts.clear(); pending.clear(); seenFiles.clear(); outgoing.clear();
         });
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             applySettings();
+            expire();
+            long now = System.currentTimeMillis();
+            keyParts.expire(now); fileParts.expire(now);
             if (client.getConnection() == null) { outgoing.clear(); return; }
             if (!ClientPlayNetworking.canSend(FileSharePayload.TYPE)) outgoing.clear();
             // Pace large transfers instead of sending thousands of packets in one tick.
@@ -92,7 +106,13 @@ public final class OptionalSharing {
                 .then(ClientCommands.literal("reject").then(ClientCommands.argument("token", StringArgumentType.word())
                     .executes(c -> run(() -> decide(StringArgumentType.getString(c, "token"), false)))))
                 .then(ClientCommands.literal("disable-files").executes(c -> run(() -> {
-                    config.permanentlyDisableFileSharing = true; applySettings(); message(tr("text.krypt04mcg.share.disabled"));
+                    config.permanentlyDisableFileSharing = true;
+                    try { fileLock.disable(); }
+                    catch (java.io.IOException e) {
+                        dev.krypt04mcg.Krypt04McgMod.LOGGER.warn("Unable to persist file-sharing lock", e);
+                        throw problem("lock_failed");
+                    } finally { applySettings(); }
+                    message(tr("text.krypt04mcg.share.disabled"));
                 })))));
     }
 
@@ -116,25 +136,35 @@ public final class OptionalSharing {
 
     private void sendFile(String player, String path) throws Exception {
         requireMode(); applySettings();
-        if (locked || !config.enableFileSending) throw problem("sending_off");
+        if (fileLock.locked() || !config.enableFileSending) throw problem("sending_off");
         if (!ClientPlayNetworking.canSend(FileSharePayload.TYPE)) throw problem("file_channel");
         PublicIdentity receiver = trusted(player);
         if (path.startsWith("\"") && path.endsWith("\"")) path = path.substring(1, path.length() - 1);
         Path input = Path.of(path);
-        byte[] bytes;
         if (!outgoing.isEmpty()) throw problem("busy");
-        try (var stream = Files.newInputStream(input)) { bytes = stream.readNBytes(FileTransferCodec.MAX_FILE_BYTES + 1); }
-        if (bytes.length > FileTransferCodec.MAX_FILE_BYTES) throw problem("too_large", 10);
-        String envelope = files.encrypt(input.getFileName().toString(), bytes, receiver, keys.local(), config.aeadAlgorithm);
-        for (String part : OptionalTransferAssembler.split(envelope, FileTransferCodec.MAX_CHUNKS))
-            outgoing.addLast(new FileSharePayload(player, part, 1));
-        message(tr("text.krypt04mcg.share.file_queued", player));
+        var local = keys.local();
+        var algorithm = config.aeadAlgorithm;
+        submit(true, true, () -> {
+            // Reject devices and pipes before opening a potentially blocking stream.
+            if (!Files.isRegularFile(input)) throw new java.io.IOException("Not a regular file");
+            byte[] bytes;
+            try (var stream = Files.newInputStream(input)) { bytes = stream.readNBytes(FileTransferCodec.MAX_FILE_BYTES + 1); }
+            if (bytes.length > FileTransferCodec.MAX_FILE_BYTES) throw new FileTooLarge();
+            String envelope = files.encrypt(input.getFileName().toString(), bytes, receiver, local, algorithm);
+            return OptionalTransferAssembler.split(envelope, FileTransferCodec.MAX_CHUNKS);
+        }, parts -> {
+            if (!KeyTrustService.fingerprintPair(receiver).equals(KeyTrustService.fingerprintPair(trusted(player))))
+                throw problem("distrusted");
+            for (String part : parts) outgoing.addLast(new FileSharePayload(player, part, 1));
+            message(tr("text.krypt04mcg.share.file_queued", player));
+        });
     }
 
     private void receive(String sender, String fragment, int version, boolean file) {
         if (config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD || version != 1 || !sender.matches("[A-Za-z0-9_]{1,16}")) return;
         applySettings();
-        if (file && (locked || !config.enableFileReceiving)) return;
+        if (file && (fileLock.locked() || !config.enableFileReceiving)) return;
+        if (worker.busy()) return;
         run(() -> {
             expire();
             if (file && pending.values().stream().anyMatch(p -> p.file != null)) return;
@@ -144,21 +174,30 @@ public final class OptionalSharing {
             if (pending.size() >= 4) return;
             String json = assembled.get();
             if (!file) {
-                PublicIdentity identity = crypto.validatePublicIdentity(gson.fromJson(json, PublicIdentity.class));
-                if (!sender.equalsIgnoreCase(identity.owner())) throw problem("owner_mismatch");
                 if (pending.values().stream().anyMatch(p -> p.file == null && p.sender.equalsIgnoreCase(sender))) return;
-                offer(new Pending(sender, gson.toJson(identity), null, System.currentTimeMillis()),
-                    tr("text.krypt04mcg.share.key_offer", sender, KeyTrustService.fingerprintPair(identity)));
+                submit(false, false, () -> crypto.validatePublicIdentity(gson.fromJson(json, PublicIdentity.class)), identity -> {
+                    if (!sender.equalsIgnoreCase(identity.owner())) throw problem("owner_mismatch");
+                    offer(new Pending(sender, gson.toJson(identity), null, System.currentTimeMillis()),
+                        tr("text.krypt04mcg.share.key_offer", sender, KeyTrustService.fingerprintPair(identity)));
+                });
             } else {
-                long now = System.currentTimeMillis();
-                var packet = files.packet(json, sender, now);
-                String id = sender + ":" + Base64Url.encode(packet.messageId());
-                if (seenFiles.contains(id) || seenFiles.size() >= 1024) return;
-                FileData data = files.decrypt(packet, keys.local(), trusted(sender));
-                byte[] bytes = Base64Url.decode(data.data());
-                seenFiles.add(id);
-                offer(new Pending(sender, json, data, now), tr("text.krypt04mcg.share.file_offer", sender,
-                    data.name().replaceAll("[\\p{Cntrl}§]", "_"), bytes.length));
+                if (seenFiles.size() >= 1024) return;
+                var identity = trusted(sender);
+                var local = keys.local();
+                Set<String> replay = Set.copyOf(seenFiles);
+                submit(true, false, () -> {
+                    var packet = files.packet(json, sender, System.currentTimeMillis());
+                    String id = sender.toLowerCase(Locale.ROOT) + ":" + Base64Url.encode(packet.messageId());
+                    if (replay.contains(id)) return null;
+                    FileData data = files.decrypt(packet, local, identity);
+                    return new VerifiedFile(id, data);
+                }, verified -> {
+                    if (verified == null) return;
+                    if (!seenFiles.add(verified.id)) return;
+                    FileData data = verified.data;
+                    offer(new Pending(sender, json, data, System.currentTimeMillis()), tr("text.krypt04mcg.share.file_offer", sender,
+                        data.name().replaceAll("[\\p{Cntrl}§]", "_"), Base64Url.decode(data.data()).length));
+                });
             }
         });
     }
@@ -177,6 +216,7 @@ public final class OptionalSharing {
     }
 
     private void decide(String token, boolean accept) throws Exception {
+        if (accept && worker.busy()) throw problem("busy");
         expire(); Pending request = pending.remove(token);
         if (request == null) throw problem("expired");
         if (!accept) { message(tr("text.krypt04mcg.share.rejected")); return; }
@@ -186,14 +226,20 @@ public final class OptionalSharing {
             trust.rememberTofu(request.sender, identity);
             message(tr("text.krypt04mcg.share.key_accepted", request.sender));
         } else {
-            if (locked || !config.enableFileReceiving) throw problem("receiving_off");
+            if (fileLock.locked() || !config.enableFileReceiving) throw problem("receiving_off");
             // Recheck trust and signature at consent time, since the user may have changed trust.
-            files.decrypt(files.packet(request.json, request.sender, System.currentTimeMillis()), keys.local(), trusted(request.sender));
-            String name = request.file.name().replaceAll("[^A-Za-z0-9._-]", "_");
-            if (name.length() > 180) name = name.substring(name.length() - 180);
-            Path output = root.resolve("received-files").resolve(UUID.randomUUID() + "-" + name);
-            SecureFiles.atomicWrite(output, Base64Url.decode(request.file.data()));
-            message(tr("text.krypt04mcg.share.saved", output.toAbsolutePath()));
+            var identity = trusted(request.sender);
+            var local = keys.local();
+            submit(true, false, () -> files.decrypt(files.packet(request.json, request.sender, System.currentTimeMillis()), local, identity), data -> {
+                // Recheck trust after background work before committing the accepted file.
+                if (!KeyTrustService.fingerprintPair(identity).equals(KeyTrustService.fingerprintPair(trusted(request.sender))))
+                    throw problem("distrusted");
+                String name = data.name().replaceAll("[^A-Za-z0-9._-]", "_");
+                if (name.length() > 180) name = name.substring(name.length() - 180);
+                Path output = root.resolve("received-files").resolve(UUID.randomUUID() + "-" + name);
+                SecureFiles.atomicWrite(output, Base64Url.decode(data.data()));
+                message(tr("text.krypt04mcg.share.saved", output.toAbsolutePath()));
+            });
         }
     }
 
@@ -210,6 +256,23 @@ public final class OptionalSharing {
         client.execute(() -> client.gui.hud.getChat().addClientSystemMessage(Component.literal(ClientMessages.messagePrefixWithSpace() + text)));
     }
     private interface Action { void run() throws Exception; }
+    private interface Completion<T> { void accept(T value) throws Exception; }
+    private <T> void submit(boolean file, boolean sending, java.util.concurrent.Callable<T> work, Completion<T> completed) {
+        Minecraft client = Minecraft.getInstance();
+        var connection = client.getConnection();
+        long epoch = generation;
+        if (!worker.submit(work, client::execute, (value, error) -> {
+            if (connection != client.getConnection() || epoch != generation || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) return;
+            if (file && (fileLock.locked() || !(sending ? config.enableFileSending : config.enableFileReceiving))) return;
+            run(() -> {
+                if (error instanceof FileTooLarge) throw problem("too_large", 10);
+                if (error != null) throw error;
+                completed.accept(value);
+            });
+        })) throw problem("busy");
+    }
+    private static final class FileTooLarge extends Exception {}
+    private record VerifiedFile(String id, FileData data) {}
     private static SharingProblem problem(String key, Object... args) {
         return new SharingProblem(tr("text.krypt04mcg.share." + key, args));
     }

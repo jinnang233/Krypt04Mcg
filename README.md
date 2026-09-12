@@ -353,3 +353,8 @@ more files. The relay obtains the authenticated sender name from the server conn
 
 Sharing messages, confirmation buttons, and settings support Simplified Chinese, Traditional Chinese, English,
 German, Spanish, French, Japanese, and Korean. They follow the client language and use the configured message prefix.
+
+Optional-sharing validation and file cryptography run on a single background worker with no queued operations.
+Incoming chunks received while that worker is busy are dropped; retry a transfer if the recipient does not receive a prompt.
+Disconnecting, disabling sharing, or changing transport mode invalidates pending background results.
+Expired assemblies and confirmation requests are cleaned up on client ticks, including on idle connections.
