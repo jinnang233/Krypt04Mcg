@@ -8,20 +8,29 @@ import dev.krypt04mcg.model.*;
 import dev.krypt04mcg.protocol.*;
 import dev.krypt04mcg.service.*;
 import dev.krypt04mcg.util.*;
-import net.fabricmc.fabric.api.client.command.v2.*;
-import net.fabricmc.fabric.api.client.networking.v1.*;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.minecraft.commands.Commands;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.NetworkRegistry;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.*;
 import java.nio.file.*;
 import java.util.*;
 import dev.krypt04mcg.protocol.FileTransferCodec.FileData;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+
 import static dev.krypt04mcg.client.ClientMessages.tr;
 
 /** Optional, user-initiated transfers. All callbacks run on the client thread. */
 public final class OptionalSharing {
+    private static OptionalSharing active;
     private final Krypt04McgConfig config;
     private final KeyStoreService keys;
     private final KeyTrustService trust;
@@ -43,6 +52,7 @@ public final class OptionalSharing {
 
     public OptionalSharing(Krypt04McgConfig config, KeyStoreService keys, KeyTrustService trust,
                            CryptoService crypto, Path root) {
+        active = this;
         this.config = config; this.keys = keys; this.trust = trust; this.crypto = crypto; this.root = root;
         fileLock = new FileSharingLock(root);
         applySettings();
@@ -68,52 +78,45 @@ public final class OptionalSharing {
     }
 
     public void register() {
-        PayloadTypeRegistry.serverboundPlay().register(PublicKeyPayload.TYPE, PublicKeyPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(PublicKeyPayload.TYPE, PublicKeyPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(FileSharePayload.TYPE, FileSharePayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(FileSharePayload.TYPE, FileSharePayload.CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(PublicKeyPayload.TYPE,
-                (p, c) -> c.client().execute(() -> receive(p.peer(), p.fragment(), p.version(), false)));
-        ClientPlayNetworking.registerGlobalReceiver(FileSharePayload.TYPE,
-                (p, c) -> c.client().execute(() -> receive(p.peer(), p.fragment(), p.version(), true)));
-        ClientPlayConnectionEvents.DISCONNECT.register((h, c) -> {
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
             generation++;
             keyParts.clear(); fileParts.clear(); pending.clear(); seenFiles.clear(); outgoing.clear(); outgoingKeys.clear();
         });
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            Minecraft client = Minecraft.getInstance();
             applySettings();
             expire();
             long now = System.currentTimeMillis();
             keyParts.expire(now); fileParts.expire(now);
             if (client.getConnection() == null) { outgoing.clear(); outgoingKeys.clear(); return; }
-            if (!ClientPlayNetworking.canSend(PublicKeyPayload.TYPE)) outgoingKeys.clear();
+            if (!canSend(PublicKeyPayload.TYPE)) outgoingKeys.clear();
             for (int i = 0; i < 4 && !outgoingKeys.isEmpty(); i++) {
                 PublicKeyPayload payload = outgoingKeys.removeFirst();
-                ClientPlayNetworking.send(payload);
+                ClientPacketDistributor.sendToServer(payload);
                 if (outgoingKeys.isEmpty()) message(tr("text.krypt04mcg.share.key_sent",
                         payload.peer().equals("*") ? tr("text.krypt04mcg.share.everyone") : payload.peer()));
             }
-            if (!ClientPlayNetworking.canSend(FileSharePayload.TYPE)) outgoing.clear();
+            if (!canSend(FileSharePayload.TYPE)) outgoing.clear();
             // Pace large transfers instead of sending thousands of packets in one tick.
             for (int i = 0; i < 4 && !outgoing.isEmpty(); i++) {
                 FileSharePayload payload = outgoing.removeFirst();
-                ClientPlayNetworking.send(payload);
+                ClientPacketDistributor.sendToServer(payload);
                 if (outgoing.isEmpty()) message(tr("text.krypt04mcg.share.file_sent", payload.peer()));
             }
         });
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registry) -> dispatcher.register(
-            ClientCommands.literal("k04m-share")
-                .then(ClientCommands.literal("key").executes(c -> run(() -> sendKey("*")))
-                    .then(ClientCommands.argument("player", StringArgumentType.word())
+        NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent event) -> event.getDispatcher().register(
+            Commands.literal("k04m-share")
+                .then(Commands.literal("key").executes(c -> run(() -> sendKey("*")))
+                    .then(Commands.argument("player", StringArgumentType.word())
                     .executes(c -> run(() -> sendKey(StringArgumentType.getString(c, "player"))))))
-                .then(ClientCommands.literal("file").then(ClientCommands.argument("player", StringArgumentType.word())
-                    .then(ClientCommands.argument("path", StringArgumentType.greedyString())
+                .then(Commands.literal("file").then(Commands.argument("player", StringArgumentType.word())
+                    .then(Commands.argument("path", StringArgumentType.greedyString())
                         .executes(c -> run(() -> sendFile(StringArgumentType.getString(c, "player"), StringArgumentType.getString(c, "path")))))))
-                .then(ClientCommands.literal("accept").then(ClientCommands.argument("token", StringArgumentType.word())
+                .then(Commands.literal("accept").then(Commands.argument("token", StringArgumentType.word())
                     .executes(c -> run(() -> decide(StringArgumentType.getString(c, "token"), true)))))
-                .then(ClientCommands.literal("reject").then(ClientCommands.argument("token", StringArgumentType.word())
+                .then(Commands.literal("reject").then(Commands.argument("token", StringArgumentType.word())
                     .executes(c -> run(() -> decide(StringArgumentType.getString(c, "token"), false)))))
-                .then(ClientCommands.literal("disable-files").executes(c -> run(() -> {
+                .then(Commands.literal("disable-files").executes(c -> run(() -> {
                     config.permanentlyDisableFileSharing = true;
                     try { fileLock.disable(); }
                     catch (java.io.IOException e) {
@@ -124,13 +127,31 @@ public final class OptionalSharing {
                 })))));
     }
 
+    public static void registerPayloads(PayloadRegistrar registrar) {
+        registrar.playBidirectional(PublicKeyPayload.TYPE, PublicKeyPayload.CODEC, (payload, context) -> {});
+        registrar.playBidirectional(FileSharePayload.TYPE, FileSharePayload.CODEC, (payload, context) -> {});
+    }
+
+    public static void registerClientPayloads(RegisterClientPayloadHandlersEvent event) {
+        event.register(PublicKeyPayload.TYPE, (payload, context) -> {
+            if (active != null) active.receive(payload.peer(), payload.fragment(), payload.version(), false);
+        });
+        event.register(FileSharePayload.TYPE, (payload, context) -> {
+            if (active != null) active.receive(payload.peer(), payload.fragment(), payload.version(), true);
+        });
+    }
+
+    private static boolean canSend(net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type) {
+        var connection = Minecraft.getInstance().getConnection();
+        return connection != null && NetworkRegistry.hasChannel(connection, type.id());
+    }
     private void requireMode() {
         if (config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) throw problem("mode");
     }
 
     private void sendKey(String player) throws Exception {
         requireMode();
-        if (!ClientPlayNetworking.canSend(PublicKeyPayload.TYPE)) throw problem("key_channel");
+        if (!canSend(PublicKeyPayload.TYPE)) throw problem("key_channel");
         if (!outgoingKeys.isEmpty()) throw problem("busy");
         for (String part : OptionalTransferAssembler.split(gson.toJson(keys.ownPublicIdentity()), OptionalTransferAssembler.MAX_KEY_CHUNKS))
             outgoingKeys.addLast(new PublicKeyPayload(player, part, 1));
@@ -145,7 +166,7 @@ public final class OptionalSharing {
     private void sendFile(String player, String path) throws Exception {
         requireMode(); applySettings();
         if (fileLock.locked() || !config.enableFileSending) throw problem("sending_off");
-        if (!ClientPlayNetworking.canSend(FileSharePayload.TYPE)) throw problem("file_channel");
+        if (!canSend(FileSharePayload.TYPE)) throw problem("file_channel");
         PublicIdentity receiver = trusted(player);
         if (path.startsWith("\"") && path.endsWith("\"")) path = path.substring(1, path.length() - 1);
         Path input = Path.of(path);
@@ -289,4 +310,6 @@ public final class OptionalSharing {
     }
     private record Pending(String sender, String json, FileData file, long created) {}
 }
+
+
 

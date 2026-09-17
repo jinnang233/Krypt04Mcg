@@ -42,4 +42,14 @@ class OptionalTransferAssemblerTest {
         assembler.clear();
         assertTrue(assembler.accept("Alice", id + ":0:2:x", 60002).isEmpty());
     }
+
+    @Test void assemblesLargestCmceSizedPublicIdentity() {
+        String data = "x".repeat(1_850_000);
+        List<String> parts = OptionalTransferAssembler.split(data, OptionalTransferAssembler.MAX_KEY_CHUNKS);
+        assertTrue(parts.size() > OptionalTransferAssembler.MAX_CHUNKS);
+        var assembler = new OptionalTransferAssembler(OptionalTransferAssembler.MAX_KEY_CHUNKS, 4);
+        Optional<String> result = Optional.empty();
+        for (String part : parts) result = assembler.accept("Alice", part, 1000);
+        assertEquals(data, result.orElseThrow());
+    }
 }

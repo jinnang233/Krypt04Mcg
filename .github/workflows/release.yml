@@ -38,11 +38,18 @@ jobs:
       - name: Build
         run: gradle build --no-daemon
 
+      - name: Build NeoForge client
+        run: gradle -p neoforge build --no-daemon
+
       - name: Collect release artifacts
         shell: bash
         run: |
           mkdir -p release-artifacts
           find build/libs -maxdepth 1 -type f -name "*.jar" \
+            ! -name "*-dev.jar" \
+            -exec cp {} release-artifacts/ \;
+          find neoforge/build/libs -maxdepth 1 -type f -name "*.jar" \
+            ! -name "*-sources.jar" \
             ! -name "*-dev.jar" \
             -exec cp {} release-artifacts/ \;
           ls -la release-artifacts

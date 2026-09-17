@@ -22,7 +22,7 @@ Krypt04Mcg is an **EXPERIMENTAL** mod project. Its build environment, release ar
 
 **Never use this project in production environments, and never use it to protect sensitive, important, private, regulated, or high-value data. This project is not expected to receive active long-term maintenance, security response, or compatibility updates.**
 
-Krypt04Mcg is a Fabric client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
+Krypt04Mcg is a Fabric or NeoForge client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
 
 ## Features
 
@@ -45,14 +45,16 @@ This implementation targets:
 - Fabric Loader `0.19.5`
 - Fabric API `0.160.0+26.2`
 - Loom `1.17.20`
+- NeoForge `26.2.0.88` (separate client build)
 - Java `25`
 
-Compatibility Notes: Minecraft/Fabric 26.1+ uses Mojang's unobfuscated names and the non-remapping Fabric Loom plugin. Krypt04Mcg keeps its protocol and crypto layers independent from Minecraft APIs so future 26.x ports should mostly be limited to the client entrypoint, command, and chat-event adapters.
+The NeoForge build shares the protocol, cryptography, and storage code with Fabric. It requires no server installation for chat transport. Custom payload and public-key sharing still require a server relay that advertises the corresponding channels.
 
 ## Build
 
 ```bash
 gradle build
+gradle -p neoforge build
 ```
 
 If you prefer a wrapper, generate one with a local Gradle install:
@@ -60,6 +62,7 @@ If you prefer a wrapper, generate one with a local Gradle install:
 ```bash
 gradle wrapper
 ./gradlew build
+./gradlew -p neoforge build
 ```
 
 ## Releases

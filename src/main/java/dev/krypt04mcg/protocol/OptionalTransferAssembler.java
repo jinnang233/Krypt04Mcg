@@ -6,6 +6,7 @@ import java.util.*;
 public final class OptionalTransferAssembler {
     public static final int CHUNK = 12000;
     public static final int MAX_CHUNKS = 128;
+    public static final int MAX_KEY_CHUNKS = 256;
     private final Map<String, Entry> entries = new HashMap<>();
     private final Map<String, Long> retired = new HashMap<>();
     private final int maxChunks;

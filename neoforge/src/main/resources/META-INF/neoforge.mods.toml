@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="0BSD"
+
+[[mods]]
+modId="krypt04mcg"
+version="${mod_version}"
+displayName="Krypt04Mcg"
+description="Post-quantum encrypted chat over Minecraft chat fragments."
+displayTest="IGNORE_ALL_VERSION"
+
+[[dependencies.krypt04mcg]]
+modId="neoforge"
+type="required"
+versionRange="[26.2,)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.krypt04mcg]]
+modId="minecraft"
+type="required"
+versionRange="[26.2,26.3)"
+ordering="NONE"
+side="CLIENT"

@@ -1,0 +1,44 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.147'
+}
+
+version = mod_version
+group = 'dev.krypt04mcg'
+base.archivesName = 'krypt04mcg-neoforge'
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+neoForge {
+    version = neo_version
+    runs { client { client() } }
+    mods { krypt04mcg { sourceSet(sourceSets.main) } }
+}
+
+sourceSets.main.java.srcDir('../src/main/java')
+sourceSets.main.resources {
+    srcDir('../src/main/resources')
+    exclude('fabric.mod.json')
+}
+
+repositories {
+    maven { url = 'https://maven.shedaniel.me/' }
+    maven { url = 'https://maven.architectury.dev/' }
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly "me.shedaniel.cloth:cloth-config-neoforge:${cloth_config_version}"
+    implementation(jarJar("org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"))
+    testImplementation platform("org.junit:junit-bom:${junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach { options.release = 25 }
+processResources {
+    inputs.property('mod_version', mod_version)
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand(mod_version: mod_version)
+    }
+}
+test { useJUnitPlatform() }

@@ -21,3 +21,6 @@ jobs:
       - name: Run tests
         shell: bash
         run: bash ./gradlew test --no-daemon
+      - name: Build NeoForge client
+        shell: bash
+        run: bash ./gradlew -p neoforge build --no-daemon
