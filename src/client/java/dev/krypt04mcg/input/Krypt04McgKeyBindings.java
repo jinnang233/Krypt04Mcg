@@ -6,7 +6,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 public final class Krypt04McgKeyBindings {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
@@ -20,8 +19,8 @@ public final class Krypt04McgKeyBindings {
     public static void register(Krypt04McgMod mod) {
         openChatGui = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.krypt04mcg.open_chat_gui",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_K,
                 CATEGORY
         ));
 

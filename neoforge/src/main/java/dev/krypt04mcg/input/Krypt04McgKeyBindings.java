@@ -9,7 +9,6 @@ import net.neoforged.bus.api.IEventBus;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 public final class Krypt04McgKeyBindings {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
@@ -23,8 +22,8 @@ public final class Krypt04McgKeyBindings {
     public static void register(Krypt04McgMod mod, IEventBus modBus) {
         openChatGui = new KeyMapping(
                 "key.krypt04mcg.open_chat_gui",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_K,
                 CATEGORY
         );
         modBus.addListener((RegisterKeyMappingsEvent event) -> {

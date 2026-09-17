@@ -41,14 +41,16 @@ Krypt04Mcg is a Fabric or NeoForge client mod that transports post-quantum encry
 
 This implementation targets:
 
-- Minecraft Java `26.2`
+- Minecraft Java `26.3`
 - Fabric Loader `0.19.5`
-- Fabric API `0.160.0+26.2`
+- Fabric API `0.160.6+26.3`
 - Loom `1.17.20`
-- NeoForge `26.2.0.88` (separate client build)
+- NeoForge `26.3.0.0-beta` (separate client build)
 - Java `25`
 
 The NeoForge build shares the protocol, cryptography, and storage code with Fabric. It requires no server installation for chat transport. Custom payload and public-key sharing still require a server relay that advertises the corresponding channels.
+
+NeoForge's optional Cloth Config screen is compiled against the available `26.2.155` API; a NeoForge 26.3 Cloth Config release is not yet available. The mod starts with default settings when Cloth Config is absent.
 
 ## Build
 
