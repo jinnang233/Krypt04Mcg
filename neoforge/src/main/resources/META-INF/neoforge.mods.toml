@@ -6,6 +6,7 @@ license="0BSD"
 modId="krypt04mcg"
 version="${mod_version}"
 displayName="Krypt04Mcg"
+logoFile="assets/krypt04mcg/icon.png"
 description="Post-quantum encrypted chat over Minecraft chat fragments."
 displayTest="IGNORE_ALL_VERSION"
 
