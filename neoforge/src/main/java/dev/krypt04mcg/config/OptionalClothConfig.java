@@ -6,7 +6,8 @@ import net.neoforged.fml.ModList;
 import java.util.function.Consumer;
 
 public final class OptionalClothConfig {
-    private static final String CLOTH_CONFIG_MOD_ID = "cloth-config";
+    // NeoForge uses an underscore; "cloth-config" is the Fabric mod ID.
+    static final String CLOTH_CONFIG_MOD_ID = "cloth_config";
 
     private OptionalClothConfig() {
     }

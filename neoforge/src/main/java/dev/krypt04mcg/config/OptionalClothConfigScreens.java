@@ -6,13 +6,11 @@ import dev.krypt04mcg.Krypt04McgMod;
 import net.neoforged.fml.ModList;
 
 public final class OptionalClothConfigScreens {
-    private static final String CLOTH_CONFIG_MOD_ID = "cloth-config";
-
     private OptionalClothConfigScreens() {
     }
 
     public static UnaryOperator<Screen> configScreenFactory() {
-        if (!ModList.get().isLoaded(CLOTH_CONFIG_MOD_ID)) {
+        if (!ModList.get().isLoaded(OptionalClothConfig.CLOTH_CONFIG_MOD_ID)) {
             return parent -> null;
         }
         try {
