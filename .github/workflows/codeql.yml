@@ -21,7 +21,7 @@ on:
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: Analyze (${{ matrix.language }}, ${{ matrix.platform }})
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
@@ -45,8 +45,18 @@ jobs:
         include:
         - language: actions
           build-mode: none
+          platform: actions
+          category: /language:actions
+        # Platform implementations share fully-qualified class names. Keep them
+        # in separate databases and trace only the selected platform's build.
         - language: java-kotlin
-          build-mode: none # This mode only analyzes Java. Set this to 'autobuild' or 'manual' to analyze Kotlin too.
+          build-mode: manual
+          platform: fabric
+          category: /language:java-kotlin/platform:fabric
+        - language: java-kotlin
+          build-mode: manual
+          platform: neoforge
+          category: /language:java-kotlin/platform:neoforge
         # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
         # Use `c-cpp` to analyze code written in C, C++ or both
         # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
@@ -59,11 +69,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v7
 
-    # Add any setup steps before running the `github/codeql-action/init` action.
-    # This includes steps like installing compilers or runtimes (`actions/setup-node`
-    # or others). This is typically only required for manual builds.
-    # - name: Setup runtime (example)
-    #   uses: actions/setup-example@v1
+    - name: Set up Java
+      if: matrix.language == 'java-kotlin'
+      uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+      with:
+        distribution: temurin
+        java-version: '25'
+
+    - name: Set up Gradle
+      if: matrix.language == 'java-kotlin'
+      uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      with:
+        cache-disabled: true
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -78,24 +95,21 @@ jobs:
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
 
-    # If the analyze step fails for one of the languages you are analyzing with
-    # "We were unable to automatically build your code", modify the matrix above
-    # to set the build mode to "manual" for that language. Then modify this step
-    # to build your code.
-    # ℹ️ Command-line programs to run using the OS shell.
-    # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
-    - name: Run manual build steps
-      if: matrix.build-mode == 'manual'
+    # Force compilation under the CodeQL tracer, including test sources without
+    # running tests. Fabric's split client source set must be compiled explicitly.
+    - name: Compile Fabric for CodeQL
+      if: matrix.platform == 'fabric'
       shell: bash
       run: |
-        echo 'If you are using a "manual" build mode for one or more of the' \
-          'languages you are analyzing, replace this with the commands to build' \
-          'your code, for example:'
-        echo '  make bootstrap'
-        echo '  make release'
-        exit 1
+        bash ./gradlew classes clientClasses testClasses --no-daemon --no-build-cache --rerun-tasks
+
+    - name: Compile NeoForge for CodeQL
+      if: matrix.platform == 'neoforge'
+      shell: bash
+      run: |
+        bash ./gradlew -p neoforge classes testClasses --no-daemon --no-build-cache --rerun-tasks
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
       with:
-        category: "/language:${{matrix.language}}"
+        category: ${{ matrix.category }}
