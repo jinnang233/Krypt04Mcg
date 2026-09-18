@@ -12,8 +12,8 @@ public final class EphemeralKemKeyPair implements AutoCloseable {
 
     EphemeralKemKeyPair(KemAlgorithm algorithm, byte[] publicKey, byte[] privateKey) {
         this.algorithm = algorithm;
-        this.publicKey = publicKey;
-        this.privateKey = privateKey;
+        this.publicKey = publicKey.clone();
+        this.privateKey = privateKey.clone();
     }
 
     public KemAlgorithm algorithm() {
@@ -27,7 +27,7 @@ public final class EphemeralKemKeyPair implements AutoCloseable {
 
     synchronized byte[] privateKey() {
         ensureAvailable();
-        return privateKey;
+        return privateKey.clone();
     }
 
     public synchronized boolean destroyed() {

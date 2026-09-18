@@ -173,7 +173,7 @@ final class CryptoServiceTest {
         byte[] compressed = deflate("A".repeat(CryptoService.MAX_PLAINTEXT_BYTES + 1).getBytes());
 
         InvocationTargetException exception = assertThrows(InvocationTargetException.class, () ->
-                inflate.invoke(null, (Object) compressed));
+                inflate.invoke(new CryptoService(), (Object) compressed));
 
         assertTrue(exception.getCause() instanceof CryptoException);
     }

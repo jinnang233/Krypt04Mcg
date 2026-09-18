@@ -155,6 +155,8 @@ public final class CryptoService {
             byte[] messageId = randomMessageId();
             PublicKey kemPublic = decodePublicKey(kemAlgorithm.jcaName(), kemAlgorithm.provider(),
                     receiverKem.keyData());
+            requireRole(receiverKem.algorithm(), "/public");
+            requireKeyParameters(kemPublic, kemAlgorithm.parameterSpec());
             KeyGenerator keyGenerator = KeyGenerator.getInstance(kemAlgorithm.jcaName(), kemAlgorithm.provider());
             keyGenerator.init(new KEMGenerateSpec.Builder(kemPublic, "AES", AEAD_KEY_BYTES * 8)
                     .withNoKdf().build(), secureRandom);
@@ -228,6 +230,8 @@ public final class CryptoService {
         try {
             PrivateKey privateKey = decodePrivateKey(packetKem.jcaName(), packetKem.provider(),
                     receiverKeys.kemPrivateKey().keyData());
+            requireRole(receiverKeys.kemPrivateKey().algorithm(), "/private");
+            requireKeyParameters(privateKey, packetKem.parameterSpec());
             return decryptKemPacket(packet, receiverKeys.kemPublicKey().owner(), packetKem, privateKey, claimedSender);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt message", e);
@@ -245,10 +249,17 @@ public final class CryptoService {
         KemAlgorithm packetKem = kemAlgorithm(packet.algorithms().kem());
         requireSameAlgorithm("ephemeral KEM", packetKem.identifier(), ephemeralKeyPair.algorithm().identifier());
         try {
-            PrivateKey privateKey = KeyFactory.getInstance(packetKem.jcaName(), packetKem.provider())
-                    .generatePrivate(new PKCS8EncodedKeySpec(ephemeralKeyPair.privateKey()));
+            PrivateKey privateKey;
+            byte[] encoded = ephemeralKeyPair.privateKey();
+            try {
+                privateKey = KeyFactory.getInstance(packetKem.jcaName(), packetKem.provider())
+                        .generatePrivate(new PKCS8EncodedKeySpec(encoded));
+            } finally {
+                Arrays.fill(encoded, (byte) 0);
+            }
+            requireKeyParameters(privateKey, packetKem.parameterSpec());
             return decryptKemPacket(packet, receiver, packetKem, privateKey, claimedSender);
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to decrypt session exchange response", e);
         }
     }
@@ -269,14 +280,6 @@ public final class CryptoService {
         AeadAlgorithm packetAead = aeadAlgorithm(packet.algorithms().aead());
         validateHkdf(packet.algorithms().hkdf());
         try {
-            KeyGenerator keyGenerator = KeyGenerator.getInstance(packetKem.jcaName(), packetKem.provider());
-            keyGenerator.init(new KEMExtractSpec.Builder(privateKey, packet.kemCiphertext(), "AES",
-                    AEAD_KEY_BYTES * 8).withNoKdf().build());
-            SecretKeyWithEncapsulation kemSecret = (SecretKeyWithEncapsulation) keyGenerator.generateKey();
-            byte[] derivedKey = hkdf(kemSecret.getEncoded(), packet.messageId(),
-                    "krypt04mcg message aead".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
-            byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
-                    packet.ciphertext());
             if (packet.signed()) {
                 requireSameAlgorithm("signature", packetSignature.identifier(),
                         signatureAlgorithm(claimedSender.signaturePublicKey()).identifier());
@@ -287,6 +290,14 @@ public final class CryptoService {
                     throw new CryptoException("Signature verification failed for " + packet.sender());
                 }
             }
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(packetKem.jcaName(), packetKem.provider());
+            keyGenerator.init(new KEMExtractSpec.Builder(privateKey, packet.kemCiphertext(), "AES",
+                    AEAD_KEY_BYTES * 8).withNoKdf().build());
+            SecretKeyWithEncapsulation kemSecret = (SecretKeyWithEncapsulation) keyGenerator.generateKey();
+            byte[] derivedKey = hkdf(kemSecret.getEncoded(), packet.messageId(),
+                    "krypt04mcg message aead".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
+            byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
+                    packet.ciphertext());
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
             ensurePlaintextSize(payload);
             return new String(payload, StandardCharsets.UTF_8);
@@ -330,8 +341,10 @@ public final class CryptoService {
             throws CryptoException {
         try {
             Signature signature = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
-            signature.initSign(decodePrivateKey(algorithm.jcaName(), algorithm.provider(),
-                    privateKeyRecord.keyData()), secureRandom);
+            requireRole(privateKeyRecord.algorithm(), "/private");
+            PrivateKey key = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), privateKeyRecord.keyData());
+            requireKeyParameters(key, algorithm.parameterSpec());
+            signature.initSign(key, secureRandom);
             signature.update(input);
             return signature.sign();
         } catch (GeneralSecurityException | IllegalArgumentException e) {
@@ -347,8 +360,10 @@ public final class CryptoService {
                            byte[] signatureBytes) throws CryptoException {
         try {
             Signature signature = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
-            signature.initVerify(decodePublicKey(algorithm.jcaName(), algorithm.provider(),
-                    publicKeyRecord.keyData()));
+            requireRole(publicKeyRecord.algorithm(), "/public");
+            PublicKey key = decodePublicKey(algorithm.jcaName(), algorithm.provider(), publicKeyRecord.keyData());
+            requireKeyParameters(key, algorithm.parameterSpec());
+            signature.initVerify(key);
             signature.update(input);
             return signature.verify(signatureBytes);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
@@ -357,6 +372,12 @@ public final class CryptoService {
     }
 
     public byte[] deriveSessionSecret(byte[] secret, byte[] messageId) throws CryptoException {
+        if (secret == null || secret.length != AEAD_KEY_BYTES) {
+            throw new CryptoException("Session secret must contain 32 bytes");
+        }
+        if (messageId == null || messageId.length != MESSAGE_ID_BYTES) {
+            throw new CryptoException("Session message ID must contain 16 bytes");
+        }
         return hkdf(secret, messageId, "krypt04mcg session".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
     }
 
@@ -375,7 +396,12 @@ public final class CryptoService {
             KeyPairGenerator generator = KeyPairGenerator.getInstance(algorithm.jcaName(), algorithm.provider());
             generator.initialize(algorithm.parameterSpec(), secureRandom);
             KeyPair pair = generator.generateKeyPair();
-            return new EphemeralKemKeyPair(algorithm, pair.getPublic().getEncoded(), pair.getPrivate().getEncoded());
+            byte[] privateBytes = pair.getPrivate().getEncoded();
+            try {
+                return new EphemeralKemKeyPair(algorithm, pair.getPublic().getEncoded(), privateBytes);
+            } finally {
+                Arrays.fill(privateBytes, (byte) 0);
+            }
         } catch (GeneralSecurityException e) {
             throw new CryptoException("Unable to generate ephemeral KEM key", e);
         }
@@ -571,6 +597,11 @@ public final class CryptoService {
     }
 
     private static void validateProtocol(EncryptedPacket packet) throws CryptoException {
+        if (packet == null || packet.type() == null || packet.ciphertext() == null
+                || packet.ciphertext().length < GCM_TAG_BITS / 8
+                || packet.kemCiphertext() == null) {
+            throw new CryptoException("Packet type or ciphertext is missing or invalid");
+        }
         if (packet.protocolVersion() != EncryptedPacket.LEGACY_VERSION
                 && packet.protocolVersion() != EncryptedPacket.PREVIOUS_VERSION
                 && packet.protocolVersion() != EncryptedPacket.COMPACT_VERSION
@@ -768,7 +799,7 @@ public final class CryptoService {
         return out.toByteArray();
     }
 
-    private static byte[] inflate(byte[] compressed) throws CryptoException {
+    private byte[] inflate(byte[] compressed) throws CryptoException {
         Inflater inflater = new Inflater(true);
         inflater.setInput(compressed);
         byte[] buffer = new byte[512];
@@ -777,13 +808,16 @@ public final class CryptoService {
             while (!inflater.finished()) {
                 int count = inflater.inflate(buffer);
                 if (count > 0) {
-                    if (out.size() + count > MAX_PLAINTEXT_BYTES) {
+                    if (out.size() + count > maxPlaintextBytes) {
                         throw new CryptoException("Compressed message expands beyond limit");
                     }
                     out.write(buffer, 0, count);
                 } else if (!inflater.finished()) {
                     throw new CryptoException("Compressed message is truncated or invalid");
                 }
+            }
+            if (inflater.getRemaining() != 0) {
+                throw new CryptoException("Compressed message contains trailing bytes");
             }
             return out.toByteArray();
         } catch (DataFormatException e) {
