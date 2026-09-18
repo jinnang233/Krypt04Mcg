@@ -24,6 +24,10 @@ import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -148,8 +152,10 @@ public final class CryptoService {
                                           String sender, String message, boolean sign, boolean compress,
                                           AeadAlgorithm aeadAlgorithm, PacketType packetType, byte extraFlags)
             throws CryptoException {
+        byte[] plaintext = encodePlaintext(message);
         KemAlgorithm kemAlgorithm = kemAlgorithm(receiverKem);
-        SignatureAlgorithm signatureAlgorithm = signatureAlgorithm(senderKeys.signaturePrivateKey());
+        SignatureAlgorithm signatureAlgorithm = sign
+                ? signatureAlgorithm(senderKeys == null ? null : senderKeys.signaturePrivateKey()) : null;
         AeadAlgorithm selectedAead = aeadAlgorithm == null ? AeadAlgorithm.AES_256_GCM : aeadAlgorithm;
         try {
             byte[] messageId = randomMessageId();
@@ -165,8 +171,6 @@ public final class CryptoService {
             byte[] derivedKey = hkdf(kemSecret.getEncoded(), messageId,
                     "krypt04mcg message aead".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
             byte[] nonce = randomNonce();
-            byte[] plaintext = message.getBytes(StandardCharsets.UTF_8);
-            ensurePlaintextSize(plaintext);
             byte flags = (byte) ((sign ? FLAG_SIGNED : 0) | (compress ? FLAG_COMPRESSED : 0) | extraFlags);
             byte[] payload = compress ? deflate(plaintext) : plaintext;
 
@@ -196,14 +200,13 @@ public final class CryptoService {
     public EncryptedPacket encryptWithSession(String receiver, String sender, byte[] sessionSecret,
                                               String sessionId, long sequence, String message, boolean compress,
                                               AeadAlgorithm aeadAlgorithm) throws CryptoException {
+        byte[] plaintext = encodePlaintext(message);
         validateSessionMetadata(sessionId, sequence);
         AeadAlgorithm selectedAead = aeadAlgorithm == null ? AeadAlgorithm.AES_256_GCM : aeadAlgorithm;
         try {
             byte[] messageId = randomMessageId();
             byte[] derivedKey = deriveSessionSecret(sessionSecret, messageId);
             byte[] nonce = randomNonce();
-            byte[] plaintext = message.getBytes(StandardCharsets.UTF_8);
-            ensurePlaintextSize(plaintext);
             byte flags = compress ? FLAG_COMPRESSED : 0;
             EncryptedPacket template = new EncryptedPacket(EncryptedPacket.VERSION, PacketType.SESSION_MESSAGE,
                     flags, sender, receiver, System.currentTimeMillis(), messageId, (short) 0, (short) 1,
@@ -299,8 +302,7 @@ public final class CryptoService {
             byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
                     packet.ciphertext());
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
-            ensurePlaintextSize(payload);
-            return new String(payload, StandardCharsets.UTF_8);
+            return decodePlaintext(payload);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt message", e);
         }
@@ -326,8 +328,7 @@ public final class CryptoService {
             byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
                     packet.ciphertext());
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
-            ensurePlaintextSize(payload);
-            return new String(payload, StandardCharsets.UTF_8);
+            return decodePlaintext(payload);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt session message", e);
         }
@@ -602,11 +603,55 @@ public final class CryptoService {
         }
     }
 
-    private static void validateProtocol(EncryptedPacket packet) throws CryptoException {
+    private byte[] encodePlaintext(String message) throws CryptoException {
+        if (message == null) {
+            throw new CryptoException("Plaintext message is missing");
+        }
+        // UTF-8 needs at least as many bytes as valid UTF-16 needs code units.
+        // Reject huge strings before allocating their encoded form or performing KEM work.
+        if (message.length() > maxPlaintextBytes) {
+            throw new CryptoException("Plaintext message is too large");
+        }
+        try {
+            ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(message));
+            if (encoded.remaining() > maxPlaintextBytes) {
+                throw new CryptoException("Plaintext message is too large");
+            }
+            byte[] plaintext = new byte[encoded.remaining()];
+            encoded.get(plaintext);
+            return plaintext;
+        } catch (CharacterCodingException e) {
+            throw new CryptoException("Plaintext message contains invalid Unicode", e);
+        }
+    }
+
+    private String decodePlaintext(byte[] plaintext) throws CryptoException {
+        ensurePlaintextSize(plaintext);
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(plaintext)).toString();
+        } catch (CharacterCodingException e) {
+            throw new CryptoException("Plaintext message is not valid UTF-8", e);
+        }
+    }
+
+    private void validateProtocol(EncryptedPacket packet) throws CryptoException {
         if (packet == null || packet.type() == null || packet.ciphertext() == null
                 || packet.ciphertext().length < GCM_TAG_BITS / 8
                 || packet.kemCiphertext() == null) {
             throw new CryptoException("Packet type or ciphertext is missing or invalid");
+        }
+        // Include a conservative DEFLATE expansion allowance and the AEAD tag.
+        // Bound work before signature verification, KEM extraction or AEAD allocation.
+        int maxPayloadBytes = (packet.flags() & FLAG_COMPRESSED) == 0 ? maxPlaintextBytes
+                : maxPlaintextBytes + (maxPlaintextBytes + 7) / 8 + (maxPlaintextBytes + 63) / 64 + 64;
+        if (packet.ciphertext().length > maxPayloadBytes + GCM_TAG_BITS / 8) {
+            throw new CryptoException("Ciphertext exceeds the configured message limit");
         }
         if (packet.protocolVersion() != EncryptedPacket.LEGACY_VERSION
                 && packet.protocolVersion() != EncryptedPacket.PREVIOUS_VERSION
@@ -793,16 +838,19 @@ public final class CryptoService {
 
     private static byte[] deflate(byte[] plaintext) {
         Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
-        deflater.setInput(plaintext);
-        deflater.finish();
-        byte[] buffer = new byte[512];
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-        while (!deflater.finished()) {
-            int count = deflater.deflate(buffer);
-            out.write(buffer, 0, count);
+        try {
+            deflater.setInput(plaintext);
+            deflater.finish();
+            byte[] buffer = new byte[512];
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            while (!deflater.finished()) {
+                int count = deflater.deflate(buffer);
+                out.write(buffer, 0, count);
+            }
+            return out.toByteArray();
+        } finally {
+            deflater.end();
         }
-        deflater.end();
-        return out.toByteArray();
     }
 
     private byte[] inflate(byte[] compressed) throws CryptoException {
