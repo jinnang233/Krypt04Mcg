@@ -233,8 +233,14 @@ public final class ChatReceiveHandler {
         if (fragment == null || !fragmentService.isFragment(fragment, prefix)) {
             return Optional.empty();
         }
-        if (config.receiveRegexMode && !Pattern.compile(config.receiveRegex).matcher(fragment).matches()) {
-            return Optional.empty();
+        if (config.receiveRegexMode) {
+            try {
+                if (config.receiveRegex == null || !Pattern.compile(config.receiveRegex).matcher(fragment).matches()) {
+                    return Optional.empty();
+                }
+            } catch (java.util.regex.PatternSyntaxException e) {
+                return Optional.empty();
+            }
         }
         return Optional.of(fragment);
     }

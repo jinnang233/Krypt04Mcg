@@ -39,12 +39,14 @@ public final class ChatSendService {
     private final Gson gson = JsonSupport.prettyGson();
     private Consumer<ChatSendFragment> chatSender;
     private final Consumer<String> system;
+    private final FragmentSendQueue sendQueue;
 
     public ChatSendService(Krypt04McgConfig config, KeyStoreService keyStoreService, KeyTrustService keyTrustService,
                            SessionService sessionService, SessionHandshakeService sessionHandshakeService,
                            SentMessageCacheService sentMessageCacheService,
                            CryptoService cryptoService, PacketCodec packetCodec, FragmentService fragmentService,
-                           Consumer<ChatSendFragment> chatSender, Consumer<String> system) {
+                           Consumer<ChatSendFragment> chatSender, Consumer<String> system,
+                           java.util.function.Supplier<?> connection) {
         this.config = config;
         this.keyStoreService = keyStoreService;
         this.keyTrustService = keyTrustService;
@@ -56,10 +58,26 @@ public final class ChatSendService {
         this.fragmentService = fragmentService;
         this.chatSender = Objects.requireNonNull(chatSender, "chatSender");
         this.system = system;
+        this.sendQueue = new FragmentSendQueue(connection, System::nanoTime);
     }
 
     public void setChatSender(Consumer<ChatSendFragment> chatSender) {
+        clearPending();
         this.chatSender = Objects.requireNonNull(chatSender, "chatSender");
+    }
+
+    public void clearPending() {
+        sendQueue.clear();
+    }
+
+    public void tick() {
+        try {
+            if (sendQueue.tick(config.sendDelayMs) && config.showProgress) {
+                system.accept(ClientMessages.tr("text.krypt04mcg.fragment_sent"));
+            }
+        } catch (Exception e) {
+            error(e);
+        }
     }
 
     public boolean sendKemMessage(String receiver, String message, boolean sign) {
@@ -157,7 +175,11 @@ public final class ChatSendService {
         }
     }
 
-    private void resend(CachedSentMessage cached) {
+    private void resend(CachedSentMessage cached) throws Exception {
+        PublicIdentity identity = keyStoreService.findPublicIdentity(cached.receiver())
+                .orElseThrow(() -> new IllegalStateException(
+                        ClientMessages.tr("text.krypt04mcg.error.no_public_key", cached.receiver())));
+        ensureSendAllowed(cached.receiver(), identity);
         sendFragments(cached.receiver(), cached.fragments());
         system.accept(ClientMessages.tr("text.krypt04mcg.resending", cached.receiver(), cached.messageId()));
     }
@@ -170,17 +192,7 @@ public final class ChatSendService {
     }
 
     private void sendFragments(String receiver, List<String> fragments) {
-        Thread sender = new Thread(() -> {
-            for (String fragment : fragments) {
-                chatSender.accept(new ChatSendFragment(receiver, fragment, EncryptedPacket.VERSION));
-                if (config.showProgress) {
-                    system.accept(ClientMessages.tr("text.krypt04mcg.fragment_sent"));
-                }
-                sleep(config.sendDelayMs);
-            }
-        }, "Krypt04Mcg Sender");
-        sender.setDaemon(true);
-        sender.start();
+        sendQueue.enqueue(receiver, fragments, chatSender);
     }
 
     private void ensureSendAllowed(String receiver, PublicIdentity identity) throws Exception {
@@ -197,14 +209,4 @@ public final class ChatSendService {
         system.accept(ClientMessages.tr("text.krypt04mcg.error.generic", e.getMessage()));
     }
 
-    private static void sleep(int millis) {
-        if (millis <= 0) {
-            return;
-        }
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
 }

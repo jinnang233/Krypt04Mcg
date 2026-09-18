@@ -134,8 +134,10 @@ public final class Krypt04McgMod {
 
         chatSendService = new ChatSendService(config, keyStoreService, keyTrustService, sessionService,
                 sessionHandshakeService, sentMessageCacheService, cryptoService, packetCodec,
-                fragmentService, this::sendChatLine, this::system);
+                fragmentService, this::sendChatLine, this::system, client::getConnection);
         applyChatSender();
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> chatSendService.tick());
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> chatSendService.clearPending());
         OptionalClothConfig.registerSaveListener(updated -> {
             ClientMessages.setMessagePrefix(updated.messagePrefix);
             applyChatSender();
@@ -238,6 +240,7 @@ public final class Krypt04McgMod {
 
     private void registerClientPayloads(RegisterClientPayloadHandlersEvent event) {
         event.register(NeoChatPayload.TYPE, (payload, context) -> {
+            if (chatReceiveHandler == null) return;
             if (payload.peer().isBlank()) {
                 LOGGER.warn("Ignoring Krypt04Mcg payload fragment without a server-authenticated sender");
                 return;
