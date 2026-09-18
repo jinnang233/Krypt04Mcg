@@ -194,10 +194,16 @@ public final class OptionalSharing {
         applySettings();
         if (file && (fileLock.locked() || !config.enableFileReceiving)) return;
         if (worker.busy()) return;
-        run(() -> {
+        try {
             expire();
+            if (pending.size() >= 4 || (file && seenFiles.size() >= 1024)) return;
             if (file && pending.values().stream().anyMatch(p -> p.file != null)) return;
-            Optional<String> assembled = (file ? fileParts : keyParts).accept(sender, fragment, System.currentTimeMillis());
+            if (!file && pending.values().stream().anyMatch(p -> p.file == null && p.sender.equalsIgnoreCase(sender))) return;
+            Optional<String> assembled = (file ? fileParts : keyParts).accept(sender, fragment, System.currentTimeMillis(), () -> {
+                if (!file) return true;
+                try { trusted(sender); return true; }
+                catch (Exception ignored) { return false; }
+            });
             if (assembled.isEmpty()) return;
             expire();
             if (pending.size() >= 4) return;
@@ -208,7 +214,7 @@ public final class OptionalSharing {
                     if (!sender.equalsIgnoreCase(identity.owner())) throw problem("owner_mismatch");
                     offer(new Pending(sender, gson.toJson(identity), null, System.currentTimeMillis()),
                         tr("text.krypt04mcg.share.key_offer", sender, KeyTrustService.fingerprintPair(identity)));
-                });
+                }, false);
             } else {
                 if (seenFiles.size() >= 1024) return;
                 var identity = trusted(sender);
@@ -226,9 +232,11 @@ public final class OptionalSharing {
                     FileData data = verified.data;
                     offer(new Pending(sender, json, data, System.currentTimeMillis()), tr("text.krypt04mcg.share.file_offer", sender,
                         data.name().replaceAll("[\\p{Cntrl}§]", "_"), Base64Url.decode(data.data()).length));
-                });
+                }, false);
             }
-        });
+        } catch (Exception ignored) {
+            // Unsolicited network input must not amplify into chat messages or stack traces.
+        }
     }
 
     private void expire() { pending.values().removeIf(p -> System.currentTimeMillis() - p.created > 60000); }
@@ -287,12 +295,23 @@ public final class OptionalSharing {
     private interface Action { void run() throws Exception; }
     private interface Completion<T> { void accept(T value) throws Exception; }
     private <T> void submit(boolean file, boolean sending, java.util.concurrent.Callable<T> work, Completion<T> completed) {
+        submit(file, sending, work, completed, true);
+    }
+
+    private <T> void submit(boolean file, boolean sending, java.util.concurrent.Callable<T> work, Completion<T> completed,
+                            boolean reportErrors) {
         Minecraft client = Minecraft.getInstance();
         var connection = client.getConnection();
         long epoch = generation;
         if (!worker.submit(work, client::execute, (value, error) -> {
             if (connection != client.getConnection() || epoch != generation || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) return;
             if (file && (fileLock.locked() || !(sending ? config.enableFileSending : config.enableFileReceiving))) return;
+            if (!reportErrors) {
+                if (error == null) {
+                    try { completed.accept(value); } catch (Exception ignored) {}
+                }
+                return;
+            }
             run(() -> {
                 if (error instanceof FileTooLarge) throw problem("too_large", 10);
                 if (error != null) throw error;

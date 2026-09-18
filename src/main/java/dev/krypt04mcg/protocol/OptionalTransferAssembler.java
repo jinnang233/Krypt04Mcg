@@ -1,6 +1,7 @@
 package dev.krypt04mcg.protocol;
 
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 /** Bounded, expiring assembly shared by the two optional channels. */
 public final class OptionalTransferAssembler {
@@ -36,10 +37,20 @@ public final class OptionalTransferAssembler {
     }
 
     public Optional<String> accept(String sender, String fragment, long now) {
+        return accept(sender, fragment, now, () -> true);
+    }
+
+    /** Admission is checked before reserving storage, only for a new transfer. */
+    public Optional<String> accept(String sender, String fragment, long now, BooleanSupplier admission) {
         expire(now);
+        if (sender == null || !sender.matches("[A-Za-z0-9_]{1,16}") || fragment == null
+                || fragment.length() > CHUNK + 47) throw new IllegalArgumentException("Invalid chunk");
         String[] parts = fragment.split(":", 4);
-        if (parts.length != 4 || parts[3].length() > CHUNK) throw new IllegalArgumentException("Invalid chunk");
+        if (parts.length != 4 || parts[3].isEmpty() || parts[3].length() > CHUNK
+                || parts[0].length() != 36 || !parts[1].matches("[0-9]{1,4}")
+                || !parts[2].matches("[0-9]{1,4}")) throw new IllegalArgumentException("Invalid chunk");
         String id = UUID.fromString(parts[0]).toString();
+        if (!id.equalsIgnoreCase(parts[0])) throw new IllegalArgumentException("Invalid transfer id");
         int index = Integer.parseInt(parts[1]), total = Integer.parseInt(parts[2]);
         if (total < 1 || total > maxChunks || index < 0 || index >= total) throw new IllegalArgumentException("Invalid chunk index");
         String key = sender.toLowerCase(Locale.ROOT) + ":" + id;
@@ -47,14 +58,22 @@ public final class OptionalTransferAssembler {
         Entry entry = entries.get(key);
         if (entry == null) {
             if (retired.size() + entries.size() >= 1024) return Optional.empty();
-            if (entries.size() >= maxTransfers) throw new IllegalArgumentException("Too many transfers");
+            if (entries.size() >= maxTransfers) return Optional.empty();
+            // One sender must not reserve every public-key assembly slot.
+            String prefix = sender.toLowerCase(Locale.ROOT) + ":";
+            if (entries.keySet().stream().anyMatch(k -> k.startsWith(prefix)) || !admission.getAsBoolean())
+                return Optional.empty();
             entry = new Entry(now, new String[total]);
             entries.put(key, entry);
         }
-        if (entry.parts.length != total) throw new IllegalArgumentException("Chunk count changed");
-        if (entry.parts[index] != null && !entry.parts[index].equals(parts[3])) throw new IllegalArgumentException("Conflicting chunk");
+        if (entry.parts.length != total || (entry.parts[index] != null && !entry.parts[index].equals(parts[3]))) {
+            entries.remove(key);
+            retired.put(key, now);
+            throw new IllegalArgumentException("Conflicting chunk");
+        }
+        if (entry.parts[index] != null) return Optional.empty();
         entry.parts[index] = parts[3];
-        if (Arrays.stream(entry.parts).anyMatch(Objects::isNull)) return Optional.empty();
+        if (++entry.received != total) return Optional.empty();
         entries.remove(key);
         retired.put(key, now);
         return Optional.of(String.join("", entry.parts));
@@ -74,5 +93,11 @@ public final class OptionalTransferAssembler {
     }
 
     public void clear() { entries.clear(); retired.clear(); }
-    private record Entry(long created, String[] parts) {}
+    private static final class Entry {
+        final long created;
+        final String[] parts;
+        int received;
+
+        Entry(long created, String[] parts) { this.created = created; this.parts = parts; }
+    }
 }

@@ -5,6 +5,49 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptionalTransferAssemblerTest {
+    @Test void deniedAdmissionDoesNotReserveTheOnlyFileSlot() {
+        var assembler = new OptionalTransferAssembler(2048, 1);
+        String fragment = UUID.randomUUID() + ":0:2048:x";
+        assertTrue(assembler.accept("Mallory", fragment, 0, () -> false).isEmpty());
+        assertEquals("ok", assembler.accept("Alice", OptionalTransferAssembler.split("ok").getFirst(), 1).orElseThrow());
+        assertTrue(assembler.accept("Mallory", fragment, 2, () -> true).isEmpty());
+    }
+
+    @Test void oneSenderCannotReserveEverySlotAndDuplicatesDoNotCompleteTransfer() {
+        var assembler = new OptionalTransferAssembler(128, 2);
+        String id = UUID.randomUUID().toString();
+        assertTrue(assembler.accept("Alice", id + ":0:2:x", 0).isEmpty());
+        for (int i = 0; i < 100; i++) {
+            assertTrue(assembler.accept("ALICE", id + ":0:2:x", i).isEmpty());
+            assertTrue(assembler.accept("ALICE", UUID.randomUUID() + ":0:2:x", i).isEmpty());
+        }
+        assertEquals("ok", assembler.accept("Bob", OptionalTransferAssembler.split("ok").getFirst(), 100).orElseThrow());
+        assertEquals("xy", assembler.accept("Alice", id + ":1:2:y", 101,
+                () -> { fail("Admission must run only once"); return false; }).orElseThrow());
+    }
+
+    @Test void conflictsRetireTransferAndImmediatelyReleaseStorage() {
+        var assembler = new OptionalTransferAssembler(128, 1);
+        for (String conflicting : List.of(":0:2:y", ":1:3:y")) {
+            String id = UUID.randomUUID().toString();
+            assembler.accept("Alice", id + ":0:2:x", 0);
+            assertThrows(IllegalArgumentException.class, () -> assembler.accept("Alice", id + conflicting, 1));
+            assertTrue(assembler.accept("Alice", id + ":1:2:y", 2).isEmpty());
+            assertEquals("ok", assembler.accept("Bob", OptionalTransferAssembler.split("ok").getFirst(), 3).orElseThrow());
+        }
+    }
+
+    @Test void rejectsMalformedHeadersAndEmptyChunksBeforeAdmission() {
+        var assembler = new OptionalTransferAssembler();
+        String id = UUID.randomUUID().toString();
+        for (String fragment : List.of("1-1-1-1-1:0:1:x", id + ":+0:1:x", id + ":0:1:",
+                id + ":0:1:" + "x".repeat(OptionalTransferAssembler.CHUNK + 1), "x".repeat(20000))) {
+            assertThrows(IllegalArgumentException.class, () -> assembler.accept("Alice", fragment, 0,
+                    () -> { fail("Invalid chunks must not reach admission"); return true; }));
+        }
+        assertThrows(IllegalArgumentException.class, () -> assembler.accept("x".repeat(1000), id + ":0:1:x", 0));
+    }
+
     @Test void completedTransferCannotBeReplayedUnderDifferentSenderCase() {
         var assembler = new OptionalTransferAssembler();
         String fragment = OptionalTransferAssembler.split("public-key").getFirst();
