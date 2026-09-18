@@ -3,6 +3,9 @@ package dev.krypt04mcg.config;
 import com.google.gson.annotations.SerializedName;
 import org.bouncycastle.jcajce.spec.MLKEMParameterSpec;
 import org.bouncycastle.pqc.jcajce.spec.CMCEParameterSpec;
+import org.bouncycastle.pqc.jcajce.spec.HQCParameterSpec;
+import org.bouncycastle.pqc.jcajce.spec.NTRULPRimeParameterSpec;
+import org.bouncycastle.pqc.jcajce.spec.SNTRUPrimeParameterSpec;
 
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.Arrays;
@@ -28,6 +31,36 @@ public enum KemAlgorithm {
     CMCE_MCELIECE8192128("CMCE/mceliece8192128", "CMCE", "BCPQC", CMCEParameterSpec.mceliece8192128),
     @SerializedName("CMCE/mceliece8192128f")
     CMCE_MCELIECE8192128F("CMCE/mceliece8192128f", "CMCE", "BCPQC", CMCEParameterSpec.mceliece8192128f),
+    @SerializedName("HQC/hqc128")
+    HQC_HQC128("HQC/hqc128", "HQC", "BCPQC", HQCParameterSpec.hqc128),
+    @SerializedName("HQC/hqc192")
+    HQC_HQC192("HQC/hqc192", "HQC", "BCPQC", HQCParameterSpec.hqc192),
+    @SerializedName("HQC/hqc256")
+    HQC_HQC256("HQC/hqc256", "HQC", "BCPQC", HQCParameterSpec.hqc256),
+    @SerializedName("NTRULPRIME/ntrulpr653")
+    NTRULPRIME_NTRULPR653("NTRULPRIME/ntrulpr653", "NTRULPRIME", "BCPQC", NTRULPRimeParameterSpec.ntrulpr653),
+    @SerializedName("NTRULPRIME/ntrulpr761")
+    NTRULPRIME_NTRULPR761("NTRULPRIME/ntrulpr761", "NTRULPRIME", "BCPQC", NTRULPRimeParameterSpec.ntrulpr761),
+    @SerializedName("NTRULPRIME/ntrulpr857")
+    NTRULPRIME_NTRULPR857("NTRULPRIME/ntrulpr857", "NTRULPRIME", "BCPQC", NTRULPRimeParameterSpec.ntrulpr857),
+    @SerializedName("NTRULPRIME/ntrulpr953")
+    NTRULPRIME_NTRULPR953("NTRULPRIME/ntrulpr953", "NTRULPRIME", "BCPQC", NTRULPRimeParameterSpec.ntrulpr953),
+    @SerializedName("NTRULPRIME/ntrulpr1013")
+    NTRULPRIME_NTRULPR1013("NTRULPRIME/ntrulpr1013", "NTRULPRIME", "BCPQC", NTRULPRimeParameterSpec.ntrulpr1013),
+    @SerializedName("NTRULPRIME/ntrulpr1277")
+    NTRULPRIME_NTRULPR1277("NTRULPRIME/ntrulpr1277", "NTRULPRIME", "BCPQC", NTRULPRimeParameterSpec.ntrulpr1277),
+    @SerializedName("SNTRUPRIME/sntrup653")
+    SNTRUPRIME_SNTRUP653("SNTRUPRIME/sntrup653", "SNTRUPRIME", "BCPQC", SNTRUPrimeParameterSpec.sntrup653),
+    @SerializedName("SNTRUPRIME/sntrup761")
+    SNTRUPRIME_SNTRUP761("SNTRUPRIME/sntrup761", "SNTRUPRIME", "BCPQC", SNTRUPrimeParameterSpec.sntrup761),
+    @SerializedName("SNTRUPRIME/sntrup857")
+    SNTRUPRIME_SNTRUP857("SNTRUPRIME/sntrup857", "SNTRUPRIME", "BCPQC", SNTRUPrimeParameterSpec.sntrup857),
+    @SerializedName("SNTRUPRIME/sntrup953")
+    SNTRUPRIME_SNTRUP953("SNTRUPRIME/sntrup953", "SNTRUPRIME", "BCPQC", SNTRUPrimeParameterSpec.sntrup953),
+    @SerializedName("SNTRUPRIME/sntrup1013")
+    SNTRUPRIME_SNTRUP1013("SNTRUPRIME/sntrup1013", "SNTRUPRIME", "BCPQC", SNTRUPrimeParameterSpec.sntrup1013),
+    @SerializedName("SNTRUPRIME/sntrup1277")
+    SNTRUPRIME_SNTRUP1277("SNTRUPRIME/sntrup1277", "SNTRUPRIME", "BCPQC", SNTRUPrimeParameterSpec.sntrup1277),
     @SerializedName("ML-KEM-512")
     ML_KEM_512("ML-KEM-512", "ML-KEM", "BC", MLKEMParameterSpec.ml_kem_512),
     @SerializedName("ML-KEM-768")

@@ -498,6 +498,9 @@ public final class CryptoService {
         java.security.spec.AlgorithmParameterSpec actual = switch (key) {
             case org.bouncycastle.jcajce.interfaces.MLKEMKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.CMCEKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.HQCKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.NTRULPRimeKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.SNTRUPrimeKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.FalconKey k -> k.getParameterSpec();
             case org.bouncycastle.jcajce.interfaces.MLDSAKey k -> k.getParameterSpec();
             case org.bouncycastle.jcajce.interfaces.SLHDSAKey k -> k.getParameterSpec();
@@ -515,6 +518,9 @@ public final class CryptoService {
         return switch (spec) {
             case org.bouncycastle.jcajce.spec.MLKEMParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.CMCEParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.HQCParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.NTRULPRimeParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.SNTRUPrimeParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.FalconParameterSpec p -> p.getName();
             case org.bouncycastle.jcajce.spec.MLDSAParameterSpec p -> p.getName();
             case org.bouncycastle.jcajce.spec.SLHDSAParameterSpec p -> p.getName();
