@@ -44,7 +44,7 @@ This implementation targets:
 - Minecraft Java `26.3`
 - Fabric Loader `0.19.5`
 - Fabric API `0.161.0+26.3`
-- Loom `1.18.2`
+- Loom `1.17.20`
 - NeoForge `26.3.0.16-beta` (separate client build)
 - Java `25`
 
