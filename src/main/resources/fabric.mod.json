@@ -9,7 +9,7 @@
   "contact": {
     "sources": "https://github.com/jinnang233/Krypt04Mcg"
   },
-  "license": "0BSD",
+  "license": "SySL-1.0",
   "environment": "client",
   "entrypoints": {
     "client": [

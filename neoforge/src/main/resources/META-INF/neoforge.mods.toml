@@ -1,6 +1,6 @@
 modLoader="javafml"
 loaderVersion="[1,)"
-license="0BSD"
+license="SySL-1.0"
 
 [[mods]]
 modId="krypt04mcg"
