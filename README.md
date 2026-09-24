@@ -94,7 +94,7 @@ openssl dgst -verify public_key.pem -signature krypt04mcg-0.8.7.jar.sign krypt04
 
 ## License
 
-Krypt04Mcg is licensed under the SYNTHETIC SOURCE LICENSE (`SySL-1.0`).
+Krypt04Mcg is licensed under the The Unlicense (`Unlicense`).
 
 ## Run Client
 
