@@ -66,6 +66,7 @@ jobs:
           FABRIC_LOOM_VERSION="$(sed -n 's/^loom_version=//p' gradle.properties)"
           CLOTH_CONFIG_VERSION="$(sed -n 's/^cloth_config_version=//p' gradle.properties)"
           MODMENU_VERSION="$(sed -n 's/^modmenu_version=//p' gradle.properties)"
+          NEOFORGE_VERSION="$(sed -n 's/^neo_version=//p' neoforge/gradle.properties)"
 
           if [ -z "$BOUNCY_CASTLE_VERSION" ]; then
             echo "Could not determine Bouncy Castle version from gradle.properties"
@@ -91,7 +92,10 @@ jobs:
             echo "Could not determine Mod Menu version from gradle.properties"
             exit 1
           fi
-
+          if [ -z "$NEOFORGE_VERSION" ]; then
+            echo "Could not determine NeoForge version from gradle.properties"
+            exit 1
+          fi
           mkdir -p legal/META-INF
           cat >> release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE_TXT
           # Third-party notices
@@ -108,7 +112,8 @@ jobs:
           cat THIRD_PARTY/BOUNCYCASTLE_LICENSE >> release-artifacts/THIRD_PARTY_NOTICES.md
 
           cat >> release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE_TXT
-
+          
+          
           ## Fabric API
 
           Dependency: \`net.fabricmc.fabric-api:fabric-api:${FABRIC_API_VERSION}\`
@@ -120,7 +125,8 @@ jobs:
           cat THIRD_PARTY/FABRIC_API_LICENSE >> release-artifacts/THIRD_PARTY_NOTICES.md
 
           cat >> release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE_TXT
-
+        
+          
           ## Fabric Loader
           Dependency: \`net.fabricmc:fabric-loader:${FABRIC_LOADER_VERSION}\`
           Project: https://fabricmc.net/
@@ -132,6 +138,7 @@ jobs:
 
           cat >> release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE_TXT
 
+          
           ## Fabric Loom
           Project: https://fabricmc.net/
           License: MIT License
@@ -142,7 +149,9 @@ jobs:
 
           cat >> release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE_TXT
 
+          
           ## NeoForge
+          Version: ${NEOFORGE_VERSION}
           Project: https://neoforged.net/
           License: LGPL-2.1 license
 
@@ -152,6 +161,7 @@ jobs:
 
           cat >> release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE_TXT
 
+          
           ## Cloth Config
           Dependency: \`me.shedaniel.cloth:cloth-config-fabric:${CLOTH_CONFIG_VERSION}\`
           Project: https://github.com/shedaniel/cloth-config
@@ -163,6 +173,7 @@ jobs:
 
           cat >> release-artifacts/THIRD_PARTY_NOTICES.md <<NOTICE_TXT
 
+          
           ## Mod Menu
           Dependency: \`com.terraformersmc:modmenu:${MODMENU_VERSION}\`
           Project: https://github.com/TerraformersMC/ModMenu

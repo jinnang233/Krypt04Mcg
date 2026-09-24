@@ -43,9 +43,9 @@ This implementation targets:
 
 - Minecraft Java `26.3`
 - Fabric Loader `0.19.5`
-- Fabric API `0.160.6+26.3`
-- Loom `1.17.20`
-- NeoForge `26.3.0.0-beta` (separate client build)
+- Fabric API `0.161.0+26.3`
+- Loom `1.18.2`
+- NeoForge `26.3.0.16-beta` (separate client build)
 - Java `25`
 
 The NeoForge build shares the protocol, cryptography, and storage code with Fabric. It requires no server installation for chat transport. Custom payload and public-key sharing still require a server relay that advertises the corresponding channels.
