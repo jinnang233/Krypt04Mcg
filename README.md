@@ -92,7 +92,7 @@ openssl dgst -verify public_key.pem -signature krypt04mcg-0.8.7.jar.sign krypt04
 
 ## License
 
-Krypt04Mcg is licensed under the BSD Zero Clause License (`0BSD`), a very permissive license with no attribution requirement.
+Krypt04Mcg is licensed under the BSD Zero Clause License (`SySL-1.0`), a very permissive license with no attribution requirement.
 
 ## Run Client
 
