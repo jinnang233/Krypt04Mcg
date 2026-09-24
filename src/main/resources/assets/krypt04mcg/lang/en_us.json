@@ -1,4 +1,6 @@
 {
+  "text.autoconfig.krypt04mcg.option.enableDataApi": "Enable binary data API (default: off)",
+  "text.autoconfig.krypt04mcg.option.apiReceiver": "Default API receiver player",
   "text.krypt04mcg.share.lock_failed": "Could not save the permanent file-sharing lock. Check the log.",
   "text.krypt04mcg.share.disabled": "File sharing is permanently disabled for this account.",
   "text.krypt04mcg.share.mode": "CUSTOM_PAYLOAD mode is required.",

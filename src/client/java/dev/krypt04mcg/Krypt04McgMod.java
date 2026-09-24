@@ -123,6 +123,20 @@ public final class Krypt04McgMod implements ClientModInitializer {
         var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
                 keyTrustService, cryptoService, root);
         optionalSharing.register();
+        var dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService,
+                () -> client.getConnection() != null && ClientPlayNetworking.canSend(dev.krypt04mcg.protocol.DataPayload.TYPE),
+                ClientPlayNetworking::send);
+        dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
+            if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
+            dataApi.send(player, channel, data);
+        });
+        PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
+        ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.DataPayload.TYPE,
+                (payload, context) -> context.client().execute(() -> dataApi.receive(payload)));
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> dataApi.tick());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> dataApi.clear());
+        OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());
         OptionalClothConfig.registerSaveListener(updated -> optionalSharing.applySettings());
 
         CommandRegistrar.register(chatSendService, keyStoreService, keyTrustService, sessionService, decryptionHistoryService,

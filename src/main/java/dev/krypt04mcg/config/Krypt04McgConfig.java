@@ -1,6 +1,8 @@
 package dev.krypt04mcg.config;
 
 public class Krypt04McgConfig {
+    public boolean enableDataApi = false;
+    public String apiReceiver = "";
     public boolean enableFileSending = false;
     public boolean enableFileReceiving = false;
     public boolean permanentlyDisableFileSharing = false;

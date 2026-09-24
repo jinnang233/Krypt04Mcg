@@ -73,8 +73,8 @@ gradle wrapper
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag v0.16.3
-git push origin v0.16.3
+git tag v0.17.0
+git push origin v0.17.0
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -88,7 +88,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.16.3.jar.sign krypt04mcg-0.16.3.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.17.0.jar.sign krypt04mcg-0.17.0.jar
 ```
 
 ## License
@@ -364,3 +364,54 @@ Optional-sharing validation and file cryptography run on a single background wor
 Incoming chunks received while that worker is busy are dropped; retry a transfer if the recipient does not receive a prompt.
 Disconnecting, disabling sharing, or changing transport mode invalidates pending background results.
 Expired assemblies and confirmation requests are cleaned up on client ticks, including on idle connections.
+
+## Binary data API for other client mods (0.17.0)
+
+Enable `enableDataApi` in Cloth Config on both clients (default: `false`). Set
+`apiReceiver` to the default recipient's Minecraft player name. Without Cloth Config,
+this optional API remains disabled. Each player must import the other's public key;
+the existing Krypt04Mcg trust checks apply. This API always uses payload transport,
+independently of `chatSendMode` and the file-sharing settings.
+
+```java
+import dev.krypt04mcg.api.Krypt04McgApi;
+
+// Registration can happen during your mod's initialization.
+Krypt04McgApi.registerReceiver("example:sync", bytes -> {
+    // Your mod decides how to interpret bytes, including an empty byte array.
+});
+
+// Call send on the Minecraft client thread, after joining a compatible server.
+Krypt04McgApi.send("example:sync", new byte[] {0, (byte) 0xff, 42});
+Krypt04McgApi.send("PlayerName", "example:sync", new byte[0]); // Explicit recipient
+Krypt04McgApi.unregisterReceiver("example:sync");
+```
+
+Channels match exactly. Registering again replaces that channel's receiver. Unknown
+channels are ignored. Callbacks run on the client thread only after decryption and
+signature verification; callback exceptions are contained. The channel and opaque
+bytes are both inside the encrypted, signed envelope. Krypt04Mcg does not parse or
+validate the application's data format. Base64 is only an internal encoding for
+reuse of the existing encryption code.
+
+`send` throws `IllegalStateException` if disabled, not initialized, called off the
+client thread, disconnected, missing a peer key, distrusted, or already sending.
+It queues a transfer; it does not acknowledge delivery. Large encryption operations
+currently run on the calling client thread. Transport bounds remain in force:
+16 MiB encrypted plaintext envelope, up to 2048 fragments of 12,000 characters,
+four outgoing fragments per tick, one outgoing transfer at a time. Actual byte
+capacity depends on channel and envelope overhead. Assembly expires after 60 seconds.
+Disabling the API or disconnecting clears pending transfers. Signed message IDs
+prevent replay during their validity window (bounded to 1024 remembered messages).
+
+### Relay support
+
+The server relay must register and forward the new optional `krypt04mcg:data`
+channel. Existing relays that only support chat/file channels need an update; this
+repository contains the client mod, not the relay. Wire fields match the existing
+file payload: `writeUtf(peer, 16)`, `writeUtf(fragment, 12100)`, `writeVarInt(1)`.
+On client-to-server packets, `peer` is the destination player; on forwarded
+server-to-client packets it must be replaced with the authenticated sender's player
+name. Forward `fragment` and version unchanged only to the named recipient subscribed
+to this channel. Fragments and envelopes reuse the existing optional-transfer and
+signed KEM formats, with encrypted domain `krypt04mcg:data:v1`. No chat fallback occurs.

@@ -76,6 +76,7 @@ public final class Krypt04McgMod {
     private ChatSendService chatSendService;
     private ChatReceiveHandler chatReceiveHandler;
     private ChatConversationStore conversationStore;
+    private dev.krypt04mcg.service.DataTransferService dataApi;
 
     public static Krypt04McgMod instance() {
         return instance;
@@ -148,6 +149,15 @@ public final class Krypt04McgMod {
         var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
                 keyTrustService, cryptoService, root);
         optionalSharing.register();
+        dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService,
+                () -> canSend(dev.krypt04mcg.protocol.DataPayload.TYPE), ClientPacketDistributor::sendToServer);
+        dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
+            if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
+            dataApi.send(player, channel, data);
+        });
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> dataApi.tick());
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> dataApi.clear());
+        OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());
         OptionalClothConfig.registerSaveListener(updated -> optionalSharing.applySettings());
 
         CommandRegistrar.register(chatSendService, keyStoreService, keyTrustService, sessionService, decryptionHistoryService,
@@ -235,6 +245,7 @@ public final class Krypt04McgMod {
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
         var registrar = event.registrar("1").optional();
         registrar.playBidirectional(NeoChatPayload.TYPE, NeoChatPayload.CODEC, (payload, context) -> {});
+        registrar.playBidirectional(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC, (payload, context) -> {});
         dev.krypt04mcg.client.OptionalSharing.registerPayloads(registrar);
     }
 
@@ -247,6 +258,8 @@ public final class Krypt04McgMod {
             }
             chatReceiveHandler.handle(payload.peer(), payload.fragment());
         });
+        event.register(dev.krypt04mcg.protocol.DataPayload.TYPE, (payload, context) ->
+                context.enqueueWork(() -> { if (dataApi != null) dataApi.receive(payload); }));
         dev.krypt04mcg.client.OptionalSharing.registerClientPayloads(event);
     }
 

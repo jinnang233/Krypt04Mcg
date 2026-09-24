@@ -6,6 +6,8 @@ import me.shedaniel.autoconfig.annotation.ConfigEntry;
 
 @Config(name = "krypt04mcg")
 public final class ClothKrypt04McgConfig implements ConfigData {
+    public boolean enableDataApi = false;
+    public String apiReceiver = "";
     public boolean enableFileSending = false;
     public boolean enableFileReceiving = false;
     public boolean permanentlyDisableFileSharing = false;
@@ -60,6 +62,8 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     }
 
     void copyTo(Krypt04McgConfig config) {
+        config.enableDataApi = enableDataApi;
+        config.apiReceiver = apiReceiver;
         config.enableFileSending = enableFileSending;
         config.enableFileReceiving = enableFileReceiving;
         config.permanentlyDisableFileSharing = permanentlyDisableFileSharing;

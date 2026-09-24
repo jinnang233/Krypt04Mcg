@@ -1,4 +1,6 @@
 {
+  "text.autoconfig.krypt04mcg.option.enableDataApi": "啟用二進位資料 API（預設關閉）",
+  "text.autoconfig.krypt04mcg.option.apiReceiver": "API 預設接收玩家",
   "text.krypt04mcg.share.lock_failed": "無法儲存檔案分享永久停用標記，請查看日誌。",
   "text.krypt04mcg.share.disabled": "目前帳號的檔案分享已永久停用。",
   "text.krypt04mcg.share.mode": "需要 CUSTOM_PAYLOAD 模式。",
