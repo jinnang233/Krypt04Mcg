@@ -256,6 +256,28 @@ class KryptSocketTest {
         assertEquals(KryptStreamRegistry.Kind.RESET, sent.get("Alice").getLast().kind);
     }
 
+    @Test void failedResetIsRemovedAndSamePeerAndChannelCanReconnect() throws Exception {
+        var dataCompletion = new CompletableFuture<TransferResult>();
+        KryptSession session = new KryptSession("Bob", CompletableFuture.completedFuture("ready"), (channel, bytes) -> {
+            KryptStreamRegistry.Frame frame = KryptStreamRegistry.Frame.decode(bytes);
+            if (frame.kind == KryptStreamRegistry.Kind.RESET) throw new IllegalStateException("relay disconnected");
+            if (frame.kind == KryptStreamRegistry.Kind.DATA)
+                return new DataTransfer(UUID.randomUUID(), dataCompletion);
+            return completedTransfer(TransferResult.Status.DELIVERED);
+        }, () -> { }, () -> true);
+        var registry = new KryptStreamRegistry();
+        KryptSocket first = registry.connect(session, "test:stream");
+        first.getOutputStream().write(1);
+        dataCompletion.complete(new TransferResult(UUID.randomUUID(), TransferResult.Status.TIMEOUT));
+
+        assertTrue(first.isClosed());
+        assertEquals(0, registry.socketCount());
+        KryptSocket second = registry.connect(session, "test:stream");
+        assertNotEquals(first.streamId(), second.streamId());
+        assertFalse(second.isClosed());
+        assertEquals(1, registry.socketCount());
+    }
+
     private static KryptSession recordingSession(String peer, Deque<KryptStreamRegistry.Frame> sent) {
         return new KryptSession(peer, CompletableFuture.completedFuture("ready"), (channel, bytes) -> {
             sent.addLast(KryptStreamRegistry.Frame.decode(bytes));

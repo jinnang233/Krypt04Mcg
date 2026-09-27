@@ -90,7 +90,13 @@ final class KryptStreamRegistry {
     }
 
     private DataTransfer send(KryptSession session, Frame frame, UUID id) {
-        DataTransfer transfer = session.send(WIRE_CHANNEL, frame.encode());
+        final DataTransfer transfer;
+        try { transfer = session.send(WIRE_CHANNEL, frame.encode()); }
+        catch (RuntimeException e) {
+            KryptSocket socket = sockets.remove(id);
+            if (socket != null) socket.remoteReset();
+            throw e;
+        }
         if (frame.kind == Kind.DATA) return transfer;
         transfer.whenComplete(result -> {
             if (result.status() != Status.DELIVERED) {
@@ -100,6 +106,8 @@ final class KryptStreamRegistry {
         });
         return transfer;
     }
+
+    int socketCount() { return sockets.size(); }
 
     private void reject(String sender, UUID id) {
         try { reject(Krypt04McgApi.connect(sender), id); }
