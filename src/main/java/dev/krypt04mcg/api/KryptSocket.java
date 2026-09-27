@@ -64,7 +64,8 @@ public final class KryptSocket implements AutoCloseable {
         boolean accepted;
         synchronized (lock) {
             accepted = !failed && !remoteClosed && sequence == receiveSequence
-                    && bytes.length <= CHUNK_BYTES && queuedIncoming() <= config.socketMaxBufferedMiB() * 1024 * 1024 - bytes.length;
+                    && sequence != Long.MAX_VALUE && bytes != null && bytes.length > 0 && bytes.length <= CHUNK_BYTES
+                    && queuedIncoming() <= config.socketMaxBufferedMiB() * 1024 * 1024 - bytes.length;
             if (accepted) {
                 receiveSequence++;
                 incoming.addLast(bytes);
@@ -73,6 +74,8 @@ public final class KryptSocket implements AutoCloseable {
         }
         if (!accepted) abort();
     }
+
+    void protocolError() { abort(); }
 
     void remoteClose() {
         synchronized (lock) { remoteClosed = true; lock.notifyAll(); }

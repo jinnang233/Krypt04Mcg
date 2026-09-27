@@ -55,17 +55,28 @@ final class KryptStreamRegistry {
         catch (RuntimeException e) { return; }
         KryptSocket socket = sockets.get(frame.streamId);
         if (frame.kind == Kind.OPEN) {
-            if (socket != null) return;
+            if (socket != null) {
+                socket.protocolError();
+                sockets.remove(frame.streamId);
+                reject(sender, frame.streamId);
+                return;
+            }
             Consumer<KryptSocket> listener = listeners.get(frame.channel);
             KryptSession session = Krypt04McgApi.connect(sender);
-            if (listener == null) { send(session, Frame.reset(frame.streamId), frame.streamId); return; }
+            if (listener == null) { reject(session, frame.streamId); return; }
             socket = new KryptSocket(sender, frame.channel, frame.streamId, reply -> send(session, reply, frame.streamId), config);
             sockets.put(frame.streamId, socket);
             try { listener.accept(socket); }
             catch (RuntimeException e) { socket.close(); throw e; }
             return;
         }
-        if (socket == null || !socket.peer().equalsIgnoreCase(sender)) return;
+        if (socket == null) { reject(sender, frame.streamId); return; }
+        if (!socket.peer().equalsIgnoreCase(sender)) {
+            socket.protocolError();
+            sockets.remove(frame.streamId);
+            reject(sender, frame.streamId);
+            return;
+        }
         switch (frame.kind) {
             case DATA -> socket.data(frame.sequence, frame.data);
             case CLOSE -> { socket.remoteClose(); sockets.remove(frame.streamId); }
@@ -84,6 +95,16 @@ final class KryptStreamRegistry {
             } else if (frame.kind == Kind.CLOSE || frame.kind == Kind.RESET) sockets.remove(id);
         });
         return transfer;
+    }
+
+    private void reject(String sender, UUID id) {
+        try { reject(Krypt04McgApi.connect(sender), id); }
+        catch (RuntimeException ignored) { }
+    }
+
+    private void reject(KryptSession session, UUID id) {
+        try { session.send(WIRE_CHANNEL, Frame.reset(id).encode()); }
+        catch (RuntimeException ignored) { }
     }
 
     private static void validateChannel(String channel) {
@@ -141,7 +162,8 @@ final class KryptStreamRegistry {
                 } else if (kind == Kind.DATA) {
                     long sequence = in.readLong();
                     int size = in.readInt();
-                    if (sequence < 0 || size < 0 || size > KryptSocket.CHUNK_BYTES) throw new IOException("data");
+                    if (sequence < 0 || sequence == Long.MAX_VALUE || size <= 0 || size > KryptSocket.CHUNK_BYTES)
+                        throw new IOException("data");
                     byte[] data = in.readNBytes(size);
                     if (data.length != size) throw new IOException("truncated");
                     frame = data(id, sequence, data);
