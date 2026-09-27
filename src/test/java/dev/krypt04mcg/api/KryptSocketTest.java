@@ -2,11 +2,15 @@ package dev.krypt04mcg.api;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.krypt04mcg.config.Krypt04McgConfig;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 class KryptSocketTest {
@@ -18,27 +22,29 @@ class KryptSocketTest {
         assertEquals(id, decoded.streamId);
         assertEquals(17, decoded.sequence);
         assertArrayEquals(data, decoded.data);
-        assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(new byte[] {1}));
+        assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(new byte[] {2}));
         assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(
                 Arrays.copyOf(KryptStreamRegistry.Frame.close(id).encode(), 20)));
     }
 
-    @Test void chunksFlowThroughWindowInOrderAndCloseAfterFinalAck() throws Exception {
+    @Test void chunksFlowThroughWindowInOrderAndCloseAfterFinalCompletion() throws Exception {
         UUID id = UUID.randomUUID();
-        Deque<KryptStreamRegistry.Frame> leftWire = new ArrayDeque<>();
-        Deque<KryptStreamRegistry.Frame> rightWire = new ArrayDeque<>();
-        KryptSocket left = new KryptSocket("Bob", "test:stream", id, leftWire::addLast);
-        KryptSocket right = new KryptSocket("Alice", "test:stream", id, rightWire::addLast);
+        TestTransport transport = new TestTransport();
+        KryptSocket left = new KryptSocket("Bob", "test:stream", id, transport);
+        KryptSocket right = new KryptSocket("Alice", "test:stream", id, new TestTransport());
         byte[] source = new byte[KryptSocket.CHUNK_BYTES * 6 + 31];
         for (int i = 0; i < source.length; i++) source[i] = (byte) i;
 
         left.getOutputStream().write(source);
-        assertEquals(KryptSocket.WINDOW_CHUNKS, leftWire.size());
+        assertEquals(KryptSocket.WINDOW_CHUNKS, transport.frames.size());
         left.close();
 
-        while (!leftWire.isEmpty() || !rightWire.isEmpty()) {
-            while (!leftWire.isEmpty()) deliver(leftWire.removeFirst(), right);
-            while (!rightWire.isEmpty()) deliver(rightWire.removeFirst(), left);
+        while (!transport.frames.isEmpty()) {
+            KryptStreamRegistry.Frame frame = transport.frames.removeFirst();
+            if (frame.kind == KryptStreamRegistry.Kind.DATA) {
+                right.data(frame.sequence, frame.data);
+                transport.complete(frame.sequence, TransferResult.Status.DELIVERED);
+            } else if (frame.kind == KryptStreamRegistry.Kind.CLOSE) right.remoteClose();
         }
 
         var received = new ByteArrayOutputStream();
@@ -55,67 +61,77 @@ class KryptSocketTest {
 
     @Test void boundsQueuedWritesAndResetsOnOutOfOrderData() throws Exception {
         UUID id = UUID.randomUUID();
-        Deque<KryptStreamRegistry.Frame> wire = new ArrayDeque<>();
-        KryptSocket socket = new KryptSocket("Bob", "test:stream", id, wire::addLast);
+        TestTransport transport = new TestTransport();
+        KryptSocket socket = new KryptSocket("Bob", "test:stream", id, transport);
         assertThrows(java.io.IOException.class,
                 () -> socket.getOutputStream().write(new byte[KryptSocket.MAX_BUFFERED_BYTES + 1]));
 
-        KryptSocket receiver = new KryptSocket("Alice", "test:stream", id, wire::addLast);
+        KryptSocket receiver = new KryptSocket("Alice", "test:stream", id, transport);
         receiver.data(1, new byte[] {1});
         assertTrue(receiver.isClosed());
-        assertEquals(KryptStreamRegistry.Kind.RESET, wire.getLast().kind);
+        assertEquals(KryptStreamRegistry.Kind.RESET, transport.frames.getLast().kind);
     }
 
     @Test void configuredBufferAndWindowApplyToWritesAndLiveChanges() throws Exception {
-        var config = new dev.krypt04mcg.config.Krypt04McgConfig();
+        var config = new Krypt04McgConfig();
         config.socketMaxBufferedMiB = 2;
         config.socketWindowChunks = 1;
-        Deque<KryptStreamRegistry.Frame> wire = new ArrayDeque<>();
-        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), wire::addLast, config);
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport, config);
         socket.getOutputStream().write(new byte[2 * 1024 * 1024]);
-        assertEquals(1, wire.size());
+        assertEquals(1, transport.frames.size());
         socket.getOutputStream().write(new byte[KryptSocket.CHUNK_BYTES]);
         assertThrows(java.io.IOException.class, () -> socket.getOutputStream().write(1));
-        assertEquals(1, wire.size());
+        assertEquals(1, transport.frames.size());
         config.socketWindowChunks = 3;
-        socket.ack(0);
-        assertEquals(4, wire.size());
+        transport.complete(0, TransferResult.Status.DELIVERED);
+        assertEquals(4, transport.frames.size());
         config.socketWindowChunks = 1;
-        socket.ack(1);
-        socket.ack(2);
-        assertEquals(4, wire.size());
-        socket.ack(3);
-        assertEquals(5, wire.size());
+        transport.complete(1, TransferResult.Status.DELIVERED);
+        transport.complete(2, TransferResult.Status.DELIVERED);
+        assertEquals(4, transport.frames.size());
+        transport.complete(3, TransferResult.Status.DELIVERED);
+        assertEquals(5, transport.frames.size());
         config.socketMaxBufferedMiB = 1;
         assertThrows(java.io.IOException.class, () -> socket.getOutputStream().write(1));
         config.socketMaxBufferedMiB = 3;
         assertDoesNotThrow(() -> socket.getOutputStream().write(1));
     }
 
-    @Test void configuredIncomingLimitReleasesCapacityAfterReads() throws Exception {
-        var config = new dev.krypt04mcg.config.Krypt04McgConfig();
+    @Test void configuredIncomingLimitReleasesCapacityAfterReadsWithoutSendingAck() throws Exception {
+        var config = new Krypt04McgConfig();
         config.socketMaxBufferedMiB = 2;
-        Deque<KryptStreamRegistry.Frame> wire = new ArrayDeque<>();
-        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), wire::addLast, config);
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport, config);
         int chunks = 2 * 1024 * 1024 / KryptSocket.CHUNK_BYTES;
         for (int i = 0; i < chunks; i++) socket.data(i, new byte[KryptSocket.CHUNK_BYTES]);
         assertFalse(socket.isClosed());
-        assertEquals(chunks, wire.size());
+        assertTrue(transport.frames.isEmpty());
         assertEquals(0, socket.getInputStream().read());
         socket.data(chunks, new byte[] {42});
         assertFalse(socket.isClosed());
         socket.data(chunks + 1, new byte[] {43});
         assertTrue(socket.isClosed());
-        assertEquals(KryptStreamRegistry.Kind.RESET, wire.getLast().kind);
+        assertEquals(KryptStreamRegistry.Kind.RESET, transport.frames.getLast().kind);
     }
 
-    private static void deliver(KryptStreamRegistry.Frame frame, KryptSocket target) {
-        switch (frame.kind) {
-            case DATA -> target.data(frame.sequence, frame.data);
-            case ACK -> target.ack(frame.sequence);
-            case CLOSE -> target.remoteClose();
-            case RESET -> target.remoteReset();
-            default -> { }
+    private static final class TestTransport implements KryptSocket.Transport {
+        final Deque<KryptStreamRegistry.Frame> frames = new ArrayDeque<>();
+        final Map<Long, CompletableFuture<TransferResult>> dataCompletions = new HashMap<>();
+
+        @Override public DataTransfer send(KryptStreamRegistry.Frame frame) {
+            frames.addLast(frame);
+            var completion = new CompletableFuture<TransferResult>();
+            var transfer = new DataTransfer(UUID.randomUUID(), completion);
+            if (frame.kind == KryptStreamRegistry.Kind.DATA) dataCompletions.put(frame.sequence, completion);
+            else completion.complete(new TransferResult(transfer.transferId(), TransferResult.Status.DELIVERED));
+            return transfer;
+        }
+
+        void complete(long sequence, TransferResult.Status status) {
+            var completion = dataCompletions.remove(sequence);
+            assertNotNull(completion, "missing DATA completion " + sequence);
+            completion.complete(new TransferResult(UUID.randomUUID(), status));
         }
     }
 }

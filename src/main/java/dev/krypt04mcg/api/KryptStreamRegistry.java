@@ -68,20 +68,22 @@ final class KryptStreamRegistry {
         if (socket == null || !socket.peer().equalsIgnoreCase(sender)) return;
         switch (frame.kind) {
             case DATA -> socket.data(frame.sequence, frame.data);
-            case ACK -> socket.ack(frame.sequence);
             case CLOSE -> { socket.remoteClose(); sockets.remove(frame.streamId); }
             case RESET -> { socket.remoteReset(); sockets.remove(frame.streamId); }
             default -> { }
         }
     }
 
-    private void send(KryptSession session, Frame frame, UUID id) {
-        session.send(WIRE_CHANNEL, frame.encode()).whenComplete(result -> {
+    private DataTransfer send(KryptSession session, Frame frame, UUID id) {
+        DataTransfer transfer = session.send(WIRE_CHANNEL, frame.encode());
+        if (frame.kind == Kind.DATA) return transfer;
+        transfer.whenComplete(result -> {
             if (result.status() != Status.DELIVERED) {
                 KryptSocket socket = sockets.remove(id);
                 if (socket != null) socket.remoteReset();
             } else if (frame.kind == Kind.CLOSE || frame.kind == Kind.RESET) sockets.remove(id);
         });
+        return transfer;
     }
 
     private static void validateChannel(String channel) {
@@ -90,7 +92,7 @@ final class KryptStreamRegistry {
         if (bytes == 0 || bytes > 256) throw new IllegalArgumentException("Stream channel must be 1..256 UTF-8 bytes");
     }
 
-    enum Kind { OPEN, DATA, ACK, CLOSE, RESET }
+    enum Kind { OPEN, DATA, CLOSE, RESET }
 
     static final class Frame {
         final Kind kind;
@@ -103,7 +105,6 @@ final class KryptStreamRegistry {
         }
         static Frame open(UUID id, String channel) { return new Frame(Kind.OPEN, id, -1, channel, null); }
         static Frame data(UUID id, long sequence, byte[] data) { return new Frame(Kind.DATA, id, sequence, null, data.clone()); }
-        static Frame ack(UUID id, long sequence) { return new Frame(Kind.ACK, id, sequence, null, null); }
         static Frame close(UUID id) { return new Frame(Kind.CLOSE, id, -1, null, null); }
         static Frame reset(UUID id) { return new Frame(Kind.RESET, id, -1, null, null); }
 
@@ -118,7 +119,7 @@ final class KryptStreamRegistry {
                     out.writeShort(name.length); out.write(name);
                 } else if (kind == Kind.DATA) {
                     out.writeLong(sequence); out.writeInt(data.length); out.write(data);
-                } else if (kind == Kind.ACK) out.writeLong(sequence);
+                }
                 return bytes.toByteArray();
             } catch (IOException impossible) { throw new AssertionError(impossible); }
         }
@@ -144,10 +145,6 @@ final class KryptStreamRegistry {
                     byte[] data = in.readNBytes(size);
                     if (data.length != size) throw new IOException("truncated");
                     frame = data(id, sequence, data);
-                } else if (kind == Kind.ACK) {
-                    long sequence = in.readLong();
-                    if (sequence < 0) throw new IOException("ack");
-                    frame = ack(id, sequence);
                 } else frame = kind == Kind.CLOSE ? close(id) : reset(id);
                 if (in.available() != 0) throw new IOException("trailing data");
                 return frame;

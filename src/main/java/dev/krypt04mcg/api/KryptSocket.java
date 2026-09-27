@@ -7,7 +7,9 @@ import java.io.OutputStream;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -19,8 +21,9 @@ public final class KryptSocket implements AutoCloseable {
     static final int CHUNK_BYTES = 128 * 1024;
     static final int WINDOW_CHUNKS = 4;
     static final int MAX_BUFFERED_BYTES = 1024 * 1024;
+    private static final int MAX_WINDOW_CHUNKS = 1024;
 
-    interface Transport { void send(KryptStreamRegistry.Frame frame); }
+    interface Transport { DataTransfer send(KryptStreamRegistry.Frame frame); }
 
     private final String peer, channel;
     private final UUID streamId;
@@ -29,11 +32,12 @@ public final class KryptSocket implements AutoCloseable {
     private final Object lock = new Object();
     private final Deque<byte[]> outgoing = new ArrayDeque<>();
     private final Deque<byte[]> incoming = new ArrayDeque<>();
+    private final Set<Long> completedSequences = new HashSet<>();
     private final Input input = new Input();
     private final Output output = new Output();
-    private long sendSequence, receiveSequence, nextAckSequence;
+    private long sendSequence, receiveSequence, nextCompletionSequence;
     private int inFlight, bufferedOutgoing, incomingOffset;
-    private boolean localClosing, localClosed, remoteClosed, failed;
+    private boolean localClosing, localClosed, remoteClosed, failed, pumping;
 
     KryptSocket(String peer, String channel, UUID streamId, Transport transport) {
         this(peer, channel, streamId, transport, new Krypt04McgConfig());
@@ -54,7 +58,7 @@ public final class KryptSocket implements AutoCloseable {
     public OutputStream getOutputStream() { return output; }
     public boolean isClosed() { synchronized (lock) { return localClosed || failed; } }
 
-    void opened() { transport.send(KryptStreamRegistry.Frame.open(streamId, channel)); }
+    void opened() { sendControl(KryptStreamRegistry.Frame.open(streamId, channel)); }
 
     void data(long sequence, byte[] bytes) {
         boolean accepted;
@@ -67,17 +71,7 @@ public final class KryptSocket implements AutoCloseable {
                 lock.notifyAll();
             }
         }
-        if (accepted) transport.send(KryptStreamRegistry.Frame.ack(streamId, sequence));
-        else abort();
-    }
-
-    void ack(long sequence) {
-        synchronized (lock) {
-            if (failed || sequence != nextAckSequence || inFlight == 0) return;
-            nextAckSequence++;
-            inFlight--;
-        }
-        pump();
+        if (!accepted) abort();
     }
 
     void remoteClose() {
@@ -85,7 +79,7 @@ public final class KryptSocket implements AutoCloseable {
     }
 
     void remoteReset() {
-        synchronized (lock) { failed = true; outgoing.clear(); bufferedOutgoing = 0; lock.notifyAll(); }
+        synchronized (lock) { failed = true; releaseState(); lock.notifyAll(); }
     }
 
     private int queuedIncoming() {
@@ -95,10 +89,17 @@ public final class KryptSocket implements AutoCloseable {
     }
 
     private void pump() {
+        synchronized (lock) {
+            if (pumping) return;
+            pumping = true;
+        }
         while (true) {
             KryptStreamRegistry.Frame next;
             synchronized (lock) {
-                if (failed || inFlight >= config.socketWindowChunks()) return;
+                if (failed || inFlight >= config.socketWindowChunks()) {
+                    pumping = false;
+                    return;
+                }
                 byte[] bytes = outgoing.pollFirst();
                 if (bytes != null) {
                     bufferedOutgoing -= bytes.length;
@@ -108,22 +109,69 @@ public final class KryptSocket implements AutoCloseable {
                 } else if (localClosing && !localClosed && inFlight == 0) {
                     localClosed = true;
                     next = KryptStreamRegistry.Frame.close(streamId);
-                } else return;
+                } else {
+                    pumping = false;
+                    return;
+                }
             }
-            transport.send(next);
+            if (next.kind == KryptStreamRegistry.Kind.DATA) sendData(next);
+            else sendControl(next);
         }
     }
+
+    private void sendData(KryptStreamRegistry.Frame frame) {
+        final DataTransfer transfer;
+        try { transfer = Objects.requireNonNull(transport.send(frame), "DATA transfer"); }
+        catch (RuntimeException e) { deliveryFailed(); return; }
+        transfer.completion().whenComplete((result, error) -> {
+            if (error != null || result == null || result.status() != TransferResult.Status.DELIVERED) {
+                deliveryFailed();
+                return;
+            }
+            boolean valid;
+            synchronized (lock) {
+                long sequence = frame.sequence;
+                valid = !failed && sequence >= nextCompletionSequence && sequence < sendSequence
+                        && sequence - nextCompletionSequence < MAX_WINDOW_CHUNKS
+                        && completedSequences.size() < MAX_WINDOW_CHUNKS
+                        && completedSequences.add(sequence);
+                if (valid) {
+                    while (completedSequences.remove(nextCompletionSequence)) {
+                        nextCompletionSequence++;
+                        inFlight--;
+                    }
+                }
+            }
+            if (!valid) deliveryFailed();
+            else pump();
+        });
+    }
+
+    private void sendControl(KryptStreamRegistry.Frame frame) {
+        try { Objects.requireNonNull(transport.send(frame), "control transfer"); }
+        catch (RuntimeException e) { if (frame.kind != KryptStreamRegistry.Kind.RESET) deliveryFailed(); }
+    }
+
+    private void deliveryFailed() { abort(); }
 
     private void abort() {
         boolean notify;
         synchronized (lock) {
             notify = !failed;
             failed = true;
-            outgoing.clear();
-            bufferedOutgoing = 0;
+            releaseState();
             lock.notifyAll();
         }
-        if (notify) transport.send(KryptStreamRegistry.Frame.reset(streamId));
+        if (notify) sendControl(KryptStreamRegistry.Frame.reset(streamId));
+    }
+
+    private void releaseState() {
+        outgoing.clear();
+        incoming.clear();
+        completedSequences.clear();
+        bufferedOutgoing = 0;
+        incomingOffset = 0;
+        inFlight = 0;
     }
 
     @Override public void close() {
