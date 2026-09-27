@@ -115,6 +115,21 @@ class KryptSocketTest {
         assertEquals(KryptStreamRegistry.Kind.RESET, transport.frames.getLast().kind);
     }
 
+    @Test void closeWaitsForEverySubmittedDataCompletionIncludingOutOfOrderResults() throws Exception {
+        var config = new Krypt04McgConfig();
+        config.socketWindowChunks = 4;
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport, config);
+        socket.getOutputStream().write(new byte[KryptSocket.CHUNK_BYTES * 3]);
+        socket.close();
+
+        transport.complete(2, TransferResult.Status.DELIVERED);
+        transport.complete(0, TransferResult.Status.DELIVERED);
+        assertTrue(transport.frames.stream().noneMatch(frame -> frame.kind == KryptStreamRegistry.Kind.CLOSE));
+        transport.complete(1, TransferResult.Status.DELIVERED);
+        assertEquals(KryptStreamRegistry.Kind.CLOSE, transport.frames.getLast().kind);
+    }
+
     private static final class TestTransport implements KryptSocket.Transport {
         final Deque<KryptStreamRegistry.Frame> frames = new ArrayDeque<>();
         final Map<Long, CompletableFuture<TransferResult>> dataCompletions = new HashMap<>();
