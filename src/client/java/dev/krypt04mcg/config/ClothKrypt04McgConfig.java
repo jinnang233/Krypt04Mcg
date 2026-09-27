@@ -79,7 +79,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     public int dataTransferTimeoutSeconds = 240;
 
     @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
-    public int dataFragmentsPerTick = 4;
+    public int dataFragmentsPerTick = 8;
 
     @ConfigEntry.BoundedDiscrete(min = 1, max = 300)
     public int sharingOfferTimeoutSeconds = 60;

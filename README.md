@@ -82,7 +82,7 @@ not cancel work already queued.
 | `socketWindowChunks` | 4 | 1–1024 |
 | `dataAckTimeoutSeconds` | 65 | 61–299 |
 | `dataTransferTimeoutSeconds` | 240 | 1–86400 |
-| `dataFragmentsPerTick` | 4 | 1–1024 |
+| `dataFragmentsPerTick` | 8 | 1–1024 |
 | `sharingOfferTimeoutSeconds` | 60 | 1–300 |
 | `maxPendingSharingOffers` | 4 | 1–1024 |
 

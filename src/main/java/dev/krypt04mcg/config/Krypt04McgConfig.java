@@ -41,7 +41,7 @@ public class Krypt04McgConfig {
     public int socketWindowChunks = 4;
     public int dataAckTimeoutSeconds = 65;
     public int dataTransferTimeoutSeconds = 240;
-    public int dataFragmentsPerTick = 4;
+    public int dataFragmentsPerTick = 8;
     public int sharingOfferTimeoutSeconds = 60;
     public int maxPendingSharingOffers = 4;
 
