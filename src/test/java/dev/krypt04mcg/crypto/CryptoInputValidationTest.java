@@ -99,6 +99,30 @@ final class CryptoInputValidationTest {
     }
 
     @Test
+    void malformedSenderCannotBeNormalizedIntoAnotherAuthenticatedIdentity() {
+        CryptoService crypto = new CryptoService();
+        assertThrows(CryptoException.class, () -> crypto.encryptWithSession("bob", "alice\ud800", SECRET,
+                SESSION_ID, 0, "hello", false, AeadAlgorithm.AES_256_GCM));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KemAlgorithm.class, names = {"ML_KEM_768", "CMCE_MCELIECE348864", "HQC_HQC128",
+            "NTRULPRIME_NTRULPR653", "SNTRUPRIME_SNTRUP653"})
+    void malformedEncapsulationIsRejectedAsCryptoFailure(KemAlgorithm algorithm) throws Exception {
+        CryptoService crypto = new CryptoService();
+        var keys = crypto.generateLocalKeys("bob", "uuid", algorithm, SignatureAlgorithm.ML_DSA_44);
+        var identity = new PublicIdentity("bob", "uuid", keys.kemPublicKey(), keys.signaturePublicKey());
+        var p = crypto.encryptFor(identity, null, "alice", "hello", false);
+        for (int length : new int[] {0, 1, p.kemCiphertext().length - 1, p.kemCiphertext().length + 1}) {
+            var malformed = new EncryptedPacket(p.protocolVersion(), p.type(), p.flags(), p.sender(), p.receiver(),
+                    p.timestampMillis(), p.messageId(), p.aadFragmentIndex(), p.aadFragmentTotal(), p.algorithms(),
+                    p.nonce(), java.util.Arrays.copyOf(p.kemCiphertext(), length), p.ciphertext(), p.signature());
+            assertThrows(CryptoException.class, () -> crypto.decrypt(malformed, keys, null),
+                    algorithm + " encapsulation length " + length);
+        }
+    }
+
+    @Test
     void unsignedEncryptionDoesNotRequireSigningKeys() throws Exception {
         CryptoService crypto = new CryptoService();
         var keys = crypto.generateLocalKeys("bob", "uuid", KemAlgorithm.ML_KEM_512, SignatureAlgorithm.ML_DSA_44);

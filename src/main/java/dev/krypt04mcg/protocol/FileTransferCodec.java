@@ -30,19 +30,26 @@ public final class FileTransferCodec {
         if (encoded.length() > MAX_CHUNKS * OptionalTransferAssembler.CHUNK)
             throw new IllegalArgumentException("Envelope too large");
         var packet = packets.decode(Base64Url.decode(encoded));
-        if (packet.type() != PacketType.SIGNED_KEM_MESSAGE || !packet.signed()
-                || (packet.flags() & CryptoService.FLAG_SIGNED) == 0
-                || (packet.flags() & CryptoService.FLAG_COMPRESSED) != 0
-                || !sender.equalsIgnoreCase(packet.sender())
+        requireSignedEnvelope(packet);
+        if (!sender.equalsIgnoreCase(packet.sender())
                 || packet.timestampMillis() < now - 300000 || packet.timestampMillis() > now + 60000)
             throw new IllegalArgumentException("Invalid file envelope");
         return packet;
     }
 
     public FileData decrypt(EncryptedPacket packet, LocalKeyMaterial receiver, PublicIdentity sender) throws Exception {
+        requireSignedEnvelope(packet);
         FileData data = gson.fromJson(crypto.decrypt(packet, receiver, sender), FileData.class);
         validate(data);
         return data;
+    }
+
+    // Enforce authentication here too: callers may pass a decoded packet directly.
+    static void requireSignedEnvelope(EncryptedPacket packet) {
+        if (packet == null || packet.type() != PacketType.SIGNED_KEM_MESSAGE || !packet.signed()
+                || packet.flags() != CryptoService.FLAG_SIGNED) {
+            throw new IllegalArgumentException("Transfer requires an uncompressed signed KEM message");
+        }
     }
 
     private static void validate(FileData data) {

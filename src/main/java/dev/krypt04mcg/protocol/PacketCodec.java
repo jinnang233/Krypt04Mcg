@@ -11,6 +11,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.util.Arrays;
 
@@ -178,7 +180,20 @@ public final class PacketCodec {
     }
 
     private static void writeString(DataOutputStream out, String value) throws IOException {
-        byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
+        if (value == null || value.length() > MAX_STRING_BYTES) {
+            throw new IOException("String is missing or too long");
+        }
+        byte[] encoded;
+        try {
+            ByteBuffer buffer = StandardCharsets.UTF_8.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(value));
+            encoded = new byte[buffer.remaining()];
+            buffer.get(encoded);
+        } catch (CharacterCodingException e) {
+            throw new IllegalArgumentException("Protocol string contains invalid Unicode", e);
+        }
         if (encoded.length > MAX_STRING_BYTES) {
             throw new IOException("String too long");
         }

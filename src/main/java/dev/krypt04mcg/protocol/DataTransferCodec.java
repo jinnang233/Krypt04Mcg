@@ -85,6 +85,7 @@ public final class DataTransferCodec {
     }
 
     public Data decrypt(EncryptedPacket packet, LocalKeyMaterial receiver, PublicIdentity sender) throws Exception {
+        FileTransferCodec.requireSignedEnvelope(packet);
         return parse(crypto.decrypt(packet, receiver, sender), false);
     }
 

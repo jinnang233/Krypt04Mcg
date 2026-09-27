@@ -11,6 +11,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class PacketCodecTest {
     @Test
+    void rejectsMalformedUnicodeBeforeAuthenticatingOrEncoding() {
+        PacketCodec codec = new PacketCodec();
+        EncryptedPacket packet = new EncryptedPacket((byte) 4, PacketType.SIGNED_KEM_MESSAGE, (byte) 1,
+                String.valueOf((char) 0xd800), "bob", 123L, bytes(16, 7), (short) 0, (short) 1,
+                AlgorithmSuite.defaults(), bytes(12, 1), bytes(32, 2), bytes(64, 3), bytes(48, 4));
+        assertThrows(IllegalArgumentException.class, () -> codec.encode(packet));
+        assertThrows(IllegalArgumentException.class, () -> codec.aadFor(packet));
+        assertThrows(IllegalArgumentException.class, () -> codec.signatureInput(packet));
+    }
+
+    @Test
     void rejectsMalformedUtf8InsteadOfNormalizingAuthenticatedFields() {
         PacketCodec codec = new PacketCodec();
         EncryptedPacket packet = new EncryptedPacket((byte) 4, PacketType.SIGNED_KEM_MESSAGE, (byte) 1,

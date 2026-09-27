@@ -157,6 +157,7 @@ public final class CryptoService {
         SignatureAlgorithm signatureAlgorithm = sign
                 ? signatureAlgorithm(senderKeys == null ? null : senderKeys.signaturePrivateKey()) : null;
         AeadAlgorithm selectedAead = aeadAlgorithm == null ? AeadAlgorithm.AES_256_GCM : aeadAlgorithm;
+        byte[] derivedKey = null;
         try {
             byte[] messageId = randomMessageId();
             PublicKey kemPublic = decodePublicKey(kemAlgorithm.jcaName(), kemAlgorithm.provider(),
@@ -168,8 +169,7 @@ public final class CryptoService {
                     .withNoKdf().build(), secureRandom);
             SecretKeyWithEncapsulation kemSecret = (SecretKeyWithEncapsulation) keyGenerator.generateKey();
             byte[] encapsulation = kemSecret.getEncapsulation();
-            byte[] derivedKey = hkdf(kemSecret.getEncoded(), messageId,
-                    "krypt04mcg message aead".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
+            derivedKey = deriveMessageKey(kemSecret, messageId);
             byte[] nonce = randomNonce();
             byte flags = (byte) ((sign ? FLAG_SIGNED : 0) | (compress ? FLAG_COMPRESSED : 0) | extraFlags);
             byte[] payload = compress ? deflate(plaintext) : plaintext;
@@ -194,6 +194,8 @@ public final class CryptoService {
                     unsigned.ciphertext(), signature);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to encrypt message", e);
+        } finally {
+            if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
@@ -203,9 +205,10 @@ public final class CryptoService {
         byte[] plaintext = encodePlaintext(message);
         validateSessionMetadata(sessionId, sequence);
         AeadAlgorithm selectedAead = aeadAlgorithm == null ? AeadAlgorithm.AES_256_GCM : aeadAlgorithm;
+        byte[] derivedKey = null;
         try {
             byte[] messageId = randomMessageId();
-            byte[] derivedKey = deriveSessionSecret(sessionSecret, messageId);
+            derivedKey = deriveSessionSecret(sessionSecret, messageId);
             byte[] nonce = randomNonce();
             byte flags = compress ? FLAG_COMPRESSED : 0;
             EncryptedPacket template = new EncryptedPacket(EncryptedPacket.VERSION, PacketType.SESSION_MESSAGE,
@@ -219,6 +222,8 @@ public final class CryptoService {
                     new byte[0], ciphertext, new byte[0], sessionId, sequence);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to encrypt session message", e);
+        } finally {
+            if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
@@ -282,6 +287,7 @@ public final class CryptoService {
                 ? signatureAlgorithm(packet.algorithms().signature()) : null;
         AeadAlgorithm packetAead = aeadAlgorithm(packet.algorithms().aead());
         validateHkdf(packet.algorithms().hkdf());
+        byte[] derivedKey = null;
         try {
             if (packet.signed()) {
                 requireSameAlgorithm("signature", packetSignature.identifier(),
@@ -297,14 +303,15 @@ public final class CryptoService {
             keyGenerator.init(new KEMExtractSpec.Builder(privateKey, packet.kemCiphertext(), "AES",
                     AEAD_KEY_BYTES * 8).withNoKdf().build());
             SecretKeyWithEncapsulation kemSecret = (SecretKeyWithEncapsulation) keyGenerator.generateKey();
-            byte[] derivedKey = hkdf(kemSecret.getEncoded(), packet.messageId(),
-                    "krypt04mcg message aead".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
+            derivedKey = deriveMessageKey(kemSecret, packet.messageId());
             byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
                     packet.ciphertext());
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
             return decodePlaintext(payload);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt message", e);
+        } finally {
+            if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
@@ -323,14 +330,17 @@ public final class CryptoService {
         }
         AeadAlgorithm packetAead = aeadAlgorithm(packet.algorithms().aead());
         validateHkdf(packet.algorithms().hkdf());
+        byte[] derivedKey = null;
         try {
-            byte[] derivedKey = deriveSessionSecret(sessionSecret, packet.messageId());
+            derivedKey = deriveSessionSecret(sessionSecret, packet.messageId());
             byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
                     packet.ciphertext());
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
             return decodePlaintext(payload);
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt session message", e);
+        } finally {
+            if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
@@ -780,8 +790,13 @@ public final class CryptoService {
 
     private static PrivateKey decodePrivateKey(String algorithm, String provider, String base64)
             throws GeneralSecurityException {
-        return KeyFactory.getInstance(algorithm, provider)
-                .generatePrivate(new PKCS8EncodedKeySpec(Base64Url.decode(base64)));
+        byte[] encoded = Base64Url.decode(base64);
+        try {
+            return KeyFactory.getInstance(algorithm, provider)
+                    .generatePrivate(new PKCS8EncodedKeySpec(encoded));
+        } finally {
+            Arrays.fill(encoded, (byte) 0);
+        }
     }
 
     private static byte[] aeadEncrypt(AeadAlgorithm algorithm, byte[] key, byte[] nonce, byte[] aad,
@@ -817,13 +832,25 @@ public final class CryptoService {
         }
     }
 
+    private static byte[] deriveMessageKey(SecretKeyWithEncapsulation secret, byte[] messageId)
+            throws CryptoException {
+        byte[] encoded = secret.getEncoded();
+        try {
+            return hkdf(encoded, messageId,
+                    "krypt04mcg message aead".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
+        } finally {
+            Arrays.fill(encoded, (byte) 0);
+        }
+    }
+
     private static byte[] hkdf(byte[] ikm, byte[] salt, byte[] info, int length) throws CryptoException {
+        byte[] prk = null;
+        byte[] previous = new byte[0];
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(salt == null || salt.length == 0 ? new byte[32] : salt, "HmacSHA256"));
-            byte[] prk = mac.doFinal(ikm);
+            prk = mac.doFinal(ikm);
             byte[] okm = new byte[length];
-            byte[] previous = new byte[0];
             int offset = 0;
             int counter = 1;
             while (offset < length) {
@@ -831,6 +858,7 @@ public final class CryptoService {
                 mac.update(previous);
                 mac.update(info);
                 mac.update((byte) counter);
+                Arrays.fill(previous, (byte) 0);
                 previous = mac.doFinal();
                 int copy = Math.min(previous.length, length - offset);
                 System.arraycopy(previous, 0, okm, offset, copy);
@@ -840,6 +868,9 @@ public final class CryptoService {
             return okm;
         } catch (GeneralSecurityException e) {
             throw new CryptoException("HKDF failed", e);
+        } finally {
+            if (prk != null) Arrays.fill(prk, (byte) 0);
+            Arrays.fill(previous, (byte) 0);
         }
     }
 
