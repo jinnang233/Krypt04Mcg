@@ -34,6 +34,9 @@ public final class DataTransferService implements AutoCloseable {
     private final Deque<Receipt> receipts = new ArrayDeque<>();
     private final Deque<Wire> controls = new ArrayDeque<>();
     private final Map<String, Seen> seen = new HashMap<>();
+    // Deliberately one in-flight DataTransfer: SessionService currently persists a monotonic
+    // receive sequence, not a bounded reorder window. Parallel retries could make an older,
+    // otherwise valid sequence arrive after a newer one and be rejected as replay.
     private Wire wire;
     private long queuedBytes, incomingChars, generation;
     private boolean preferSend, preparingReceipt, closed, resetting;
