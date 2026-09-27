@@ -14,9 +14,10 @@ public final class KryptStreamTestEndpoint {
     public static SocketStats stats(KryptSocket socket) {
         KryptSocket.State state = socket.state();
         return new SocketStats(state.queuedChunks(), state.inFlightChunks(),
-                state.completedOutOfOrderChunks(), state.bufferedIncomingBytes());
+                state.completedOutOfOrderChunks(), state.reorderedIncomingChunks(), state.bufferedIncomingBytes());
     }
 
     public record SocketStats(int queuedChunks, int inFlightChunks,
-                              int completedOutOfOrderChunks, int bufferedIncomingBytes) {}
+                              int completedOutOfOrderChunks, int reorderedIncomingChunks,
+                              int bufferedIncomingBytes) {}
 }

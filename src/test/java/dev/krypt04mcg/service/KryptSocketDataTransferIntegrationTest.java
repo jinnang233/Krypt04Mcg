@@ -108,6 +108,28 @@ class KryptSocketDataTransferIntegrationTest {
 
     @Test
     @Timeout(value = 120, unit = TimeUnit.SECONDS)
+    void streamDataFramesMayArriveOutOfOrderWithoutResettingTheSocket() throws Exception {
+        try (var pair = new StreamPair()) {
+            SocketPair sockets = pair.open();
+            byte[] source = pattern(3 * 1024, 127);
+            CompletableFuture<byte[]> received = readExactlyAsync(sockets.remote(), source.length);
+            pair.holdAlice = true;
+            for (int offset = 0; offset < source.length; offset += 1024)
+                sockets.local().getOutputStream().write(source, offset, 1024);
+            pair.pumpUntil(() -> pair.heldAliceEnvelopeCount() == 3);
+
+            pair.releaseAliceEnvelopes(0, 2, 1);
+            pair.pumpUntil(() -> received.isDone() && pair.alice.pipelineStats().pending() == 0);
+
+            assertArrayEquals(source, received.join());
+            assertFalse(sockets.local().isClosed());
+            assertFalse(sockets.remote().isClosed());
+            assertEquals(0, KryptStreamTestEndpoint.stats(sockets.remote()).reorderedIncomingChunks());
+        }
+    }
+
+    @Test
+    @Timeout(value = 120, unit = TimeUnit.SECONDS)
     void lostDataTransferTimesOutOnlyItsSocketAndReleasesPipelineState() throws Exception {
         try (var pair = new StreamPair()) {
             pair.config.maxDataAttempts = 1;
@@ -155,8 +177,8 @@ class KryptSocketDataTransferIntegrationTest {
         final DataTransferService alice, bob;
         final KryptStreamTestEndpoint aliceStreams = new KryptStreamTestEndpoint();
         final KryptStreamTestEndpoint bobStreams = new KryptStreamTestEndpoint();
-        final List<DataPayload> heldBob = new ArrayList<>();
-        boolean holdBob, dropNextAliceEnvelope;
+        final List<DataPayload> heldAlice = new ArrayList<>(), heldBob = new ArrayList<>();
+        boolean holdAlice, holdBob, dropNextAliceEnvelope;
         String droppedAliceEnvelope;
 
         StreamPair() throws Exception {
@@ -216,7 +238,8 @@ class KryptSocketDataTransferIntegrationTest {
             String envelope = payload.fragment().split(":", 2)[0];
             if (dropNextAliceEnvelope && droppedAliceEnvelope == null) droppedAliceEnvelope = envelope;
             if (envelope.equals(droppedAliceEnvelope)) return;
-            bob.receive(new DataPayload("Alice", payload.fragment(), 1));
+            if (holdAlice) heldAlice.add(payload);
+            else bob.receive(new DataPayload("Alice", payload.fragment(), 1));
         }
 
         void fromBob(DataPayload payload) {
@@ -234,6 +257,24 @@ class KryptSocketDataTransferIntegrationTest {
             heldBob.clear();
             for (List<DataPayload> envelope : envelopes)
                 for (DataPayload payload : envelope) alice.receive(new DataPayload("Bob", payload.fragment(), 1));
+        }
+
+        int heldAliceEnvelopeCount() { return grouped(heldAlice).size(); }
+
+        void releaseAliceEnvelopes(int... order) {
+            List<List<DataPayload>> envelopes = new ArrayList<>(grouped(heldAlice).values());
+            assertEquals(envelopes.size(), order.length);
+            holdAlice = false;
+            heldAlice.clear();
+            for (int index : order)
+                for (DataPayload payload : envelopes.get(index)) bob.receive(new DataPayload("Alice", payload.fragment(), 1));
+        }
+
+        private Map<String, List<DataPayload>> grouped(List<DataPayload> payloads) {
+            Map<String, List<DataPayload>> grouped = new LinkedHashMap<>();
+            for (DataPayload payload : payloads)
+                grouped.computeIfAbsent(payload.fragment().split(":", 2)[0], ignored -> new ArrayList<>()).add(payload);
+            return grouped;
         }
 
         void write(byte[] source, OutputStream output) throws Exception {

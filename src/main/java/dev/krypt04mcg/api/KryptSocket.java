@@ -8,8 +8,10 @@ import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /**
@@ -32,6 +34,7 @@ public final class KryptSocket implements AutoCloseable {
     private final Object lock = new Object();
     private final Deque<byte[]> outgoing = new ArrayDeque<>();
     private final Deque<byte[]> incoming = new ArrayDeque<>();
+    private final NavigableMap<Long, byte[]> reorderedIncoming = new TreeMap<>();
     private final Set<Long> completedSequences = new HashSet<>();
     private final Input input = new Input();
     private final Output output = new Output();
@@ -60,24 +63,41 @@ public final class KryptSocket implements AutoCloseable {
 
     State state() {
         synchronized (lock) {
-            return new State(outgoing.size(), inFlight, completedSequences.size(), queuedIncoming());
+            return new State(outgoing.size(), inFlight, completedSequences.size(),
+                    reorderedIncoming.size(), bufferedIncoming());
         }
     }
 
-    record State(int queuedChunks, int inFlightChunks, int completedOutOfOrderChunks, int bufferedIncomingBytes) {}
+    record State(int queuedChunks, int inFlightChunks, int completedOutOfOrderChunks,
+                 int reorderedIncomingChunks, int bufferedIncomingBytes) {}
 
     void opened() { sendControl(KryptStreamRegistry.Frame.open(streamId, channel)); }
 
     void data(long sequence, byte[] bytes) {
-        boolean accepted;
+        boolean accepted = false;
         synchronized (lock) {
-            accepted = !failed && !remoteClosed && sequence == receiveSequence
-                    && sequence != Long.MAX_VALUE && bytes != null && bytes.length > 0 && bytes.length <= CHUNK_BYTES
-                    && queuedIncoming() <= config.socketMaxBufferedMiB() * 1024 * 1024 - bytes.length;
-            if (accepted) {
-                receiveSequence++;
-                incoming.addLast(bytes);
-                lock.notifyAll();
+            if (!failed && !remoteClosed && sequence >= 0 && sequence != Long.MAX_VALUE
+                    && bytes != null && bytes.length > 0 && bytes.length <= CHUNK_BYTES) {
+                if (sequence < receiveSequence || reorderedIncoming.containsKey(sequence)) {
+                    accepted = true; // A retransmitted stream frame is never delivered twice.
+                } else {
+                    long distance = sequence - receiveSequence;
+                    int window = config.socketWindowChunks();
+                    if (distance < window && bufferedIncoming() <= maxBufferedBytes() - bytes.length) {
+                        accepted = true;
+                        if (distance == 0) {
+                            incoming.addLast(bytes);
+                            receiveSequence++;
+                            while ((bytes = reorderedIncoming.remove(receiveSequence)) != null) {
+                                incoming.addLast(bytes);
+                                receiveSequence++;
+                            }
+                            lock.notifyAll();
+                        } else {
+                            reorderedIncoming.put(sequence, bytes);
+                        }
+                    }
+                }
             }
         }
         if (!accepted) abort();
@@ -99,11 +119,14 @@ public final class KryptSocket implements AutoCloseable {
         synchronized (lock) { failed = true; releaseState(); lock.notifyAll(); }
     }
 
-    private int queuedIncoming() {
+    private int bufferedIncoming() {
         int size = -incomingOffset;
         for (byte[] bytes : incoming) size += bytes.length;
+        for (byte[] bytes : reorderedIncoming.values()) size += bytes.length;
         return size;
     }
+
+    private int maxBufferedBytes() { return config.socketMaxBufferedMiB() * 1024 * 1024; }
 
     private void pump() {
         synchronized (lock) {
@@ -190,6 +213,7 @@ public final class KryptSocket implements AutoCloseable {
     private void releaseState() {
         releaseOutgoingState();
         incoming.clear();
+        reorderedIncoming.clear();
         incomingOffset = 0;
     }
 

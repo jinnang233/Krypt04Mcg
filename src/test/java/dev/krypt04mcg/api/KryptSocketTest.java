@@ -68,7 +68,7 @@ class KryptSocketTest {
         assertTrue(left.isClosed());
     }
 
-    @Test void boundsQueuedWritesAndResetsOnOutOfOrderData() throws Exception {
+    @Test void boundsQueuedWritesAndResetsBeyondReorderWindow() throws Exception {
         UUID id = UUID.randomUUID();
         TestTransport transport = new TestTransport();
         KryptSocket socket = new KryptSocket("Bob", "test:stream", id, transport);
@@ -76,9 +76,37 @@ class KryptSocketTest {
                 () -> socket.getOutputStream().write(new byte[KryptSocket.MAX_BUFFERED_BYTES + 1]));
 
         KryptSocket receiver = new KryptSocket("Alice", "test:stream", id, transport);
-        receiver.data(1, new byte[] {1});
+        receiver.data(4, new byte[] {1});
         assertTrue(receiver.isClosed());
         assertEquals(KryptStreamRegistry.Kind.RESET, transport.frames.getLast().kind);
+    }
+
+    @Test void reordersDataFramesAndDeliversDuplicatesOnlyOnce() throws Exception {
+        var config = new Krypt04McgConfig();
+        config.socketWindowChunks = 4;
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport, config);
+
+        socket.data(0, new byte[] {0});
+        socket.data(2, new byte[] {2});
+        socket.data(2, new byte[] {99});
+        socket.data(1, new byte[] {1});
+        socket.data(1, new byte[] {98});
+
+        assertFalse(socket.isClosed());
+        assertEquals(0, socket.state().reorderedIncomingChunks());
+        assertArrayEquals(new byte[] {0, 1, 2}, socket.getInputStream().readNBytes(3));
+        assertTrue(transport.frames.isEmpty());
+    }
+
+    @Test void resetClearsReorderedData() {
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), new TestTransport());
+        socket.data(2, new byte[KryptSocket.CHUNK_BYTES]);
+        assertEquals(1, socket.state().reorderedIncomingChunks());
+        assertEquals(KryptSocket.CHUNK_BYTES, socket.state().bufferedIncomingBytes());
+        socket.remoteReset();
+        assertEquals(0, socket.state().reorderedIncomingChunks());
+        assertEquals(0, socket.state().bufferedIncomingBytes());
     }
 
     @Test void configuredBufferAndWindowApplyToWritesAndLiveChanges() throws Exception {
