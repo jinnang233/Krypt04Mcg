@@ -34,9 +34,8 @@ public final class DataTransferService implements AutoCloseable {
     private final Deque<Receipt> receipts = new ArrayDeque<>();
     private final Deque<Wire> controls = new ArrayDeque<>();
     private final Map<String, Seen> seen = new HashMap<>();
-    // Deliberately one in-flight DataTransfer: SessionService currently persists a monotonic
-    // receive sequence, not a bounded reorder window. Parallel retries could make an older,
-    // otherwise valid sequence arrive after a newer one and be rejected as replay.
+    // Fragments for one envelope remain contiguous, while multiple completed envelopes may
+    // wait for independent ACKs. SessionService supplies the bounded replay/reorder window.
     private Wire wire;
     private long queuedBytes, incomingChars, generation;
     private boolean preferSend, preparingReceipt, closed, resetting;
@@ -206,9 +205,9 @@ public final class DataTransferService implements AutoCloseable {
         for (int i = 0; i < config.dataFragmentsPerTick() && active(epoch); i++) {
             if (wire == null) {
                 wire = controls.pollFirst();
-                Pending head = pending.peekFirst();
-                if (wire == null && head != null && head.ready != null) {
-                    wire = head.ready; head.ready = null; head.inFlight = true; head.attempts++;
+                Pending ready = activeTransferCount() < config.dataTransferWindow() ? nextReady() : null;
+                if (wire == null && ready != null) {
+                    wire = ready.ready; ready.ready = null; ready.inFlight = true; ready.attempts++;
                 }
             }
             if (wire == null) break;
@@ -257,9 +256,8 @@ public final class DataTransferService implements AutoCloseable {
                     });
             return;
         }
-        Pending head = pending.peekFirst();
-        boolean canPrepare = head != null && !head.preparing && !head.inFlight && !head.waiting && head.ready == null;
-        if (canPrepare && head.connection != null && !head.connection.ready.isDone()) canPrepare = false;
+        Pending candidate = pipelineOccupancy() < config.dataTransferWindow() ? nextPreparable() : null;
+        boolean canPrepare = candidate != null;
         if (!incoming.isEmpty() && (!preferSend || !canPrepare)) {
             Incoming input = incoming.removeFirst();
             preferSend = true;
@@ -281,55 +279,83 @@ public final class DataTransferService implements AutoCloseable {
             });
         } else if (canPrepare) {
             preferSend = false;
-            head.preparing = true;
-            byte[] bytes = head.bytes;
-            String existing = head.encoded;
+            Pending request = candidate;
+            request.preparing = true;
+            byte[] bytes = request.bytes;
+            String existing = request.encoded;
             var algorithm = config.aeadAlgorithm;
             var ephemeral = config.ephemeralKemAlgorithm;
             long sequence;
             try {
-                if (head.connection != null) {
-                    if (head.connection.disposed || head.connection.id == null) throw new IllegalStateException("Session not ready");
-                    SessionRecord current = currentSession(head.peer, head.identity, head.local, head.connection.id, existing != null);
-                    if (existing == null) head.session = current;
+                if (request.connection != null) {
+                    if (request.connection.disposed || request.connection.id == null) throw new IllegalStateException("Session not ready");
+                    SessionRecord current = currentSession(request.peer, request.identity, request.local, request.connection.id, existing != null);
+                    if (existing == null) request.session = current;
                 }
-                sequence = existing == null && head.session != null
-                        ? sessions.reserveApiSend(head.peer, head.session.sessionId(), false, bytes.length) : 0;
-            } catch (Exception e) { head.preparing = false; finish(head, Status.FAILED); return; }
+                sequence = existing == null && request.session != null
+                        ? sessions.reserveApiSend(request.peer, request.session.sessionId(), false, bytes.length) : 0;
+            } catch (Exception e) { request.preparing = false; finish(request, Status.FAILED); return; }
             worker.submit(() -> {
                 // Retry the same signed packet, with a fresh assembly ID for a lost ACK.
                 String requestId = null;
                 try {
                     String encoded = existing;
-                    if (encoded == null && head.begin != null) {
-                        var request = handshakes.begin(head.identity, head.local, ephemeral, false, algorithm);
-                        requestId = Hex.encode(request.messageId());
-                        encoded = codec.exchange(head.id, codec.encodePacket(request), head.identity, head.local, algorithm);
-                    } else if (encoded == null && head.kind == Kind.EXCHANGE)
-                        encoded = codec.exchange(head.id, bytes, head.identity, head.local, algorithm);
-                    else if (encoded == null) encoded = head.session == null
-                            ? codec.encrypt(head.id, head.channel, bytes, head.identity, head.local, algorithm)
-                            : codec.encryptSession(head.id, head.channel, bytes, Kind.DATA, head.identity, head.local, head.session, sequence, algorithm);
-                    return new Prepared(encoded, new Wire(head.peer, head.identity, head.local, head, encoded, head.session), requestId);
+                    if (encoded == null && request.begin != null) {
+                        var exchange = handshakes.begin(request.identity, request.local, ephemeral, false, algorithm);
+                        requestId = Hex.encode(exchange.messageId());
+                        encoded = codec.exchange(request.id, codec.encodePacket(exchange), request.identity, request.local, algorithm);
+                    } else if (encoded == null && request.kind == Kind.EXCHANGE)
+                        encoded = codec.exchange(request.id, bytes, request.identity, request.local, algorithm);
+                    else if (encoded == null) encoded = request.session == null
+                            ? codec.encrypt(request.id, request.channel, bytes, request.identity, request.local, algorithm)
+                            : codec.encryptSession(request.id, request.channel, bytes, Kind.DATA, request.identity, request.local, request.session, sequence, algorithm);
+                    return new Prepared(encoded, new Wire(request.peer, request.identity, request.local, request, encoded, request.session), requestId);
                 } catch (Exception e) {
-                    if (requestId != null) handshakes.cancel(head.peer, requestId);
+                    if (requestId != null) handshakes.cancel(request.peer, requestId);
                     throw e;
                 }
             }, completions::add, (prepared, error) -> {
                 if (prepared != null && prepared.requestId != null) {
-                    if (epoch != generation || !pending.contains(head)) handshakes.cancel(head.peer, prepared.requestId);
-                    else head.begin.requestId = prepared.requestId;
+                    if (epoch != generation || !pending.contains(request)) handshakes.cancel(request.peer, prepared.requestId);
+                    else request.begin.requestId = prepared.requestId;
                 }
-                if (epoch != generation || !pending.contains(head)) return;
-                head.preparing = false;
-                if (error != null) finish(head, Status.FAILED);
+                if (epoch != generation || !pending.contains(request)) return;
+                request.preparing = false;
+                if (error != null) finish(request, Status.FAILED);
                 else if (active(epoch)) {
-                    head.bytes = null;
-                    head.encoded = prepared.encoded;
-                    head.ready = prepared.wire;
+                    request.bytes = null;
+                    request.encoded = prepared.encoded;
+                    request.ready = prepared.wire;
                 }
             });
         }
+    }
+
+    private Pending nextReady() {
+        for (Pending request : pending)
+            if (request.ready != null && !request.inFlight && !request.waiting) return request;
+        return null;
+    }
+
+    private Pending nextPreparable() {
+        for (Pending request : pending) {
+            if (request.preparing || request.inFlight || request.waiting || request.ready != null) continue;
+            if (request.connection == null || request.connection.ready.isDone()) return request;
+        }
+        return null;
+    }
+
+    private int activeTransferCount() {
+        int count = 0;
+        for (Pending request : pending) if (request.inFlight || request.waiting) count++;
+        return count;
+    }
+
+    private int pipelineOccupancy() {
+        int count = 0;
+        for (Pending request : pending)
+            if (request.preparing || request.inFlight || request.waiting || request.ready != null) count++;
+        return count;
     }
 
     private void accept(Incoming input, Verified verified) {

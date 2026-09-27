@@ -42,6 +42,7 @@ class RuntimeLimitsTest {
         var defaults = ConfigFileStore.load(file);
         assertEquals(4, defaults.socketMaxBufferedMiB());
         assertEquals(4, defaults.socketWindowChunks());
+        assertEquals(4, defaults.dataTransferWindow());
         assertEquals(8, defaults.dataFragmentsPerTick());
         Files.writeString(file, "{\"socketMaxBufferedMiB\":2,\"socketWindowChunks\":8,\"dataFragmentsPerTick\":4}");
         var config = ConfigFileStore.load(file);
@@ -50,13 +51,17 @@ class RuntimeLimitsTest {
         assertEquals(4, config.dataFragmentsPerTick());
         config.socketMaxBufferedMiB = Integer.MAX_VALUE;
         config.socketWindowChunks = Integer.MAX_VALUE;
+        config.dataTransferWindow = Integer.MAX_VALUE;
         assertEquals(1024 * 1024 * 1024, config.socketMaxBufferedMiB() * 1024 * 1024);
         assertEquals(1024, config.socketWindowChunks());
+        assertEquals(64, config.dataTransferWindow());
         config.socketMaxBufferedMiB = Integer.MIN_VALUE;
         config.socketWindowChunks = 0;
+        config.dataTransferWindow = 0;
         config.dataFragmentsPerTick = Integer.MAX_VALUE;
         assertEquals(1, config.socketMaxBufferedMiB());
         assertEquals(1, config.socketWindowChunks());
+        assertEquals(1, config.dataTransferWindow());
         assertEquals(1024, config.dataFragmentsPerTick());
         config.dataFragmentsPerTick = 0;
         assertEquals(1, config.dataFragmentsPerTick());

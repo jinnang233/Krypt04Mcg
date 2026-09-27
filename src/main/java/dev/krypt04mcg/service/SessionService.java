@@ -137,7 +137,8 @@ public final class SessionService {
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
                 expectedSequence + 1, session.nextReceiveSequence(), session.localFingerprint(),
                 session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
-                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed()));
+                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed(),
+                session.apiReceiveWindow(), session.apiControlReceiveWindow()));
     }
 
     public synchronized void recordReceivedMessage(String peer, String sessionId, long sequence, long bytes)
@@ -151,7 +152,8 @@ public final class SessionService {
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
                 session.nextSendSequence(), sequence + 1, session.localFingerprint(),
                 session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
-                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed()));
+                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed(),
+                session.apiReceiveWindow(), session.apiControlReceiveWindow()));
     }
 
     /** Reserve and persist before encryption. Gaps are safe; a failed send never reuses its sequence. */
@@ -168,10 +170,26 @@ public final class SessionService {
     public synchronized void recordApiReceived(String peer, String sessionId, long sequence, boolean control, long bytes) throws IOException {
         SessionRecord session = requireEpoch(peer, sessionId);
         long next = control ? session.nextApiControlReceiveSequence() : session.nextApiReceiveSequence();
-        if (sequence < 0 || sequence == Long.MAX_VALUE || (sequence & 1) != (control ? 1 : 0) || sequence / 2 < next)
+        if (sequence < 0 || sequence == Long.MAX_VALUE || (sequence & 1) != (control ? 1 : 0))
             throw new IOException("Repeated or invalid API sequence");
-        saveApiCounters(session, session.nextApiSendSequence(), control ? session.nextApiReceiveSequence() : sequence / 2 + 1,
-                session.nextApiControlSendSequence(), control ? sequence / 2 + 1 : session.nextApiControlReceiveSequence(), control, bytes);
+        Long storedWindow = control ? session.apiControlReceiveWindow() : session.apiReceiveWindow();
+        long window = storedWindow == null ? legacyWindow(next) : storedWindow;
+        long index = sequence / 2;
+        long updatedNext = next;
+        if (index >= next) {
+            long shift = index - next + 1;
+            window = shift >= Long.SIZE ? 1L : (window << shift) | 1L;
+            updatedNext = index + 1;
+        } else {
+            long distance = next - 1 - index;
+            if (distance >= Long.SIZE || (window & (1L << distance)) != 0)
+                throw new IOException("Repeated or invalid API sequence");
+            window |= 1L << distance;
+        }
+        saveApiCounters(session, session.nextApiSendSequence(), control ? session.nextApiReceiveSequence() : updatedNext,
+                session.nextApiControlSendSequence(), control ? updatedNext : session.nextApiControlReceiveSequence(),
+                control ? session.apiReceiveWindow() : window,
+                control ? window : session.apiControlReceiveWindow(), control, bytes);
     }
 
     private SessionRecord requireEpoch(String peer, String id) throws IOException {
@@ -182,11 +200,23 @@ public final class SessionService {
 
     private void saveApiCounters(SessionRecord s, long send, long receive, long controlSend, long controlReceive,
                                   boolean control, long bytes) throws IOException {
+        saveApiCounters(s, send, receive, controlSend, controlReceive, s.apiReceiveWindow(),
+                s.apiControlReceiveWindow(), control, bytes);
+    }
+
+    private void saveApiCounters(SessionRecord s, long send, long receive, long controlSend, long controlReceive,
+                                 Long receiveWindow, Long controlReceiveWindow, boolean control, long bytes) throws IOException {
         save(new SessionRecord(s.peer(), s.peerFingerprint(), s.sessionId(), s.createdAt(), Instant.now(), s.secret(),
                 s.messageCount(), s.bytesUsed(),
                 s.nextSendSequence(), s.nextReceiveSequence(), s.localFingerprint(), send, receive, controlSend, controlReceive,
                 control ? s.apiMessageCount() : Math.addExact(s.apiMessageCount(), 1),
-                control ? s.apiBytesUsed() : Math.addExact(s.apiBytesUsed(), Math.max(0, bytes))));
+                control ? s.apiBytesUsed() : Math.addExact(s.apiBytesUsed(), Math.max(0, bytes)),
+                receiveWindow, controlReceiveWindow));
+    }
+
+    private static long legacyWindow(long next) {
+        if (next <= 0) return 0;
+        return next >= Long.SIZE ? -1L : (1L << next) - 1;
     }
 
     public boolean isExpired(SessionRecord session, int ttlMinutes, int maxMessages, long rotateAfterBytes) {

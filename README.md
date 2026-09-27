@@ -78,6 +78,7 @@ not cancel work already queued.
 | `maxDataReceipts` | 32 | 1–8192 |
 | `maxDataAttempts` | 3 | 1–100 |
 | `maxDataQueuedMiB` | 16 | 1–4096 |
+| `dataTransferWindow` | 4 | 1–64 |
 | `apiMaxMessagesPerSession` | 65536 | 1–1000000 |
 | `apiRotateAfterBytes` | 1073741824 | positive byte count |
 | `socketMaxBufferedMiB` | 4 | 1–1024 |
@@ -487,9 +488,11 @@ malformed or expired packets, or while the receiving API is disabled.
   accounting). One message may contain at most 10 MiB; the existing 16 MiB plaintext
   envelope and 2048-fragment transport bounds also apply. These are resource limits,
   not application data-format restrictions.
-- Transfers are processed in order, one awaiting confirmation at a time. At most
-  four 12,000-character fragments are sent per client tick. Receipts have priority
-  between complete envelopes; fragments of different envelopes are not interleaved.
+- Complete envelopes are emitted in order, but up to `dataTransferWindow` transfers
+  may concurrently wait for ACK. At most eight 12,000-character fragments are sent
+  per client tick. Receipts have priority between complete envelopes; fragments of
+  different envelopes are not interleaved. ACK/NACK completion is matched by UUID
+  and may arrive out of order.
 - Wait 65 seconds for an ACK after the final fragment, then retry the whole signed
   packet with a fresh assembly ID. The UUID and encrypted packet stay unchanged.
   There are at most three attempts and a four-minute deadline from enqueue, including
@@ -649,9 +652,10 @@ plaintext domain is `krypt04mcg:data:session:v1`.
 
 API counters are stored atomically alongside the encrypted session record, separately
 from chat counters. DATA uses even wire sequences; receipts use odd sequences, with
-independent monotonic receive counters. Gaps are accepted because a failed encryption
-may consume a reserved sequence. Receipts can overtake queued data without blocking
-it. Counters are reserved before encryption and never reused; retrying a transfer
+independent persisted 64-entry replay/reorder windows. Gaps and bounded reordering are
+accepted because encryption failure, pipelining, delayed ACKs, and retry may reorder
+arrival; duplicates and packets older than the window remain rejected. Receipts can
+overtake queued data without blocking it. Counters are reserved before encryption and never reused; retrying a transfer
 reuses its original authenticated packet and sequence. Cached duplicates only resend
 the original result. After a restart without the outcome cache, persisted receive
 counters reject old data instead of calling the receiver again. This still is not a

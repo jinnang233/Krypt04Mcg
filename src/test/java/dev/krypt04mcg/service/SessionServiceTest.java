@@ -58,9 +58,15 @@ final class SessionServiceTest {
         assertEquals(12, restored.bytesUsed());
         assertEquals(2, restored.apiMessageCount()); // ACKs do not consume either rotation budget.
         assertEquals(30, restored.apiBytesUsed());
+        sessions.recordApiReceived("bob", created.sessionId(), 0, false, 0);
+        sessions.recordApiReceived("bob", created.sessionId(), 2, false, 0);
+        sessions.recordApiReceived("bob", created.sessionId(), 1, true, 0);
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 4, false, 0));
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 2, false, 0));
+        assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 1, true, 0));
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 5, false, 0));
+        sessions.recordApiReceived("bob", created.sessionId(), 200, false, 0);
+        assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 20, false, 0));
         assertThrows(java.io.IOException.class, () -> sessions.reserveApiSend("bob", "different-epoch", false, 0));
     }
 }
