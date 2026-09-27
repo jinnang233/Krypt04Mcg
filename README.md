@@ -78,7 +78,7 @@ not cancel work already queued.
 | `maxDataReceipts` | 32 | 1–8192 |
 | `maxDataAttempts` | 3 | 1–100 |
 | `maxDataQueuedMiB` | 16 | 1–4096 |
-| `socketMaxBufferedMiB` | 1 | 1–1024 |
+| `socketMaxBufferedMiB` | 4 | 1–1024 |
 | `socketWindowChunks` | 4 | 1–1024 |
 | `dataAckTimeoutSeconds` | 65 | 61–299 |
 | `dataTransferTimeoutSeconds` | 240 | 1–86400 |
@@ -552,21 +552,23 @@ try (KryptSocket socket = Krypt04McgApi.connect("Alice", "mymod:test")) {
 }
 ```
 
-The stream wire format is internal and versioned. Each frame carries a random stream
-UUID and is one of `OPEN`, `DATA`, `ACK`, `CLOSE`, or `RESET`. DATA frames contain a
-monotonic 64-bit sequence and at most 16 KiB. `socketWindowChunks` controls the number
+The stream wire format is internal and versioned as `krypt04mcg:stream:v2`. Each frame
+carries a random stream UUID and is one of `OPEN`, `DATA`, `CLOSE`, or `RESET`. DATA
+frames contain a monotonic 64-bit sequence and at most 128 KiB. `socketWindowChunks` controls the number
 of in-flight chunks (default 4). `socketMaxBufferedMiB` limits each socket's queued
-output and unread input separately (default 1 MiB each); in-flight output is separate
+output and unread input separately (default 4 MiB each); in-flight output is separate
 from the queued output limit. Both settings apply to outgoing and accepted sockets.
 Saving in Cloth Config applies the limits to subsequent writes, received DATA, and
 window checks on existing sockets; lowering them does not discard buffered data or
 cancel in-flight chunks. A write exceeding the available buffer limit throws
 `IOException` instead of blocking the client thread. Frames are themselves sent with
 the reliable Session API, so encryption, peer authentication, retries, Relay routing,
-and transport ACK/NACK remain unchanged. The stream ACK is separate: it advances the
-per-stream window and protects ordering at the byte-stream layer.
+and transport ACK/NACK remain unchanged. v2 adds no second stream ACK: a DATA
+DataTransfer reaching `DELIVERED` confirms that chunk. Completions may arrive out of
+order, but only a bounded contiguous prefix advances the per-stream window; any
+non-delivery result resets the socket. Session sequence and replay checks remain enabled.
 
-`close()` drains queued and acknowledged DATA before sending CLOSE. End-of-stream is
+`close()` drains queued DATA and waits for every submitted DATA completion before sending CLOSE. End-of-stream is
 reported as `-1` after the peer CLOSE. Malformed, out-of-order, or over-capacity input
 causes RESET and subsequent reads fail with `IOException`. Register at most one socket
 receiver per logical channel; a new registration replaces the previous listener.
