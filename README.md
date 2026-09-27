@@ -578,6 +578,9 @@ reported as `-1` after the peer CLOSE. Malformed, out-of-order, or over-capacity
 causes RESET and subsequent reads fail with `IOException`. Register at most one socket
 receiver per logical channel; a new registration replaces the previous listener.
 
+The default protocol-rate calculation and remaining client/Relay bottlenecks are
+documented in [PERFORMANCE.md](PERFORMANCE.md).
+
 ## Session API (0.19.0)
 
 `connect` reuses a valid authenticated `/exchange` session or starts that same exchange
