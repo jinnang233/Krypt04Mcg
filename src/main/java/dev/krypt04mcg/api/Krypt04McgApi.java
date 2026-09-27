@@ -11,6 +11,7 @@ public final class Krypt04McgApi {
     private static final ConcurrentHashMap<String, BiConsumer<String, byte[]>> RECEIVERS = new ConcurrentHashMap<>();
     private static volatile Sender sender;
     private static volatile Function<String, KryptSession> connector;
+    private static final KryptStreamRegistry STREAMS = new KryptStreamRegistry();
 
     private Krypt04McgApi() {}
 
@@ -20,6 +21,21 @@ public final class Krypt04McgApi {
         if (current == null) throw new IllegalStateException("Krypt04Mcg session API is not initialized");
         return current.apply(Objects.requireNonNull(player, "player"));
     }
+
+    /** Opens a reliable, ordered byte stream to one application channel. */
+    public static KryptSocket connect(String player, String channel) {
+        return STREAMS.connect(connect(player), channel);
+    }
+
+    /**
+     * Registers the listener for remotely opened streams on this exact application channel.
+     * The listener runs on the Minecraft client thread and must return quickly.
+     */
+    public static void registerSocketReceiver(String channel, Consumer<KryptSocket> receiver) {
+        STREAMS.register(channel, receiver);
+    }
+
+    public static void unregisterSocketReceiver(String channel) { STREAMS.unregister(channel); }
 
     /** Sends to the default player selected in apiReceiver. */
     public static DataTransfer send(String channel, byte[] data) { return send(null, channel, data); }

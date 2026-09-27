@@ -481,6 +481,41 @@ are independent of the Minecraft payload channel. There is no chat fallback.
 The static `send` API continues
 to use signed KEM cryptography. The optional Session API below avoids KEM on subsequent data messages.
 
+## Stream API
+
+`KryptSocket` adds an ordered, full-duplex byte stream on top of the authenticated
+Session API. It uses the existing `krypt04mcg:data` Minecraft Custom Payload and
+therefore requires no Relay update beyond support for that payload.
+
+```java
+import dev.krypt04mcg.api.Krypt04McgApi;
+import dev.krypt04mcg.api.KryptSocket;
+
+// Register during client initialization. The callback runs on the client thread.
+Krypt04McgApi.registerSocketReceiver("mymod:test", socket -> {
+    // Hand the socket to a worker before performing blocking reads.
+});
+
+try (KryptSocket socket = Krypt04McgApi.connect("Alice", "mymod:test")) {
+    socket.getOutputStream().write(bytes); // call writes on the client thread
+    // InputStream.read(...) is blocking; call it from a worker, never the client thread.
+}
+```
+
+The stream wire format is internal and versioned. Each frame carries a random stream
+UUID and is one of `OPEN`, `DATA`, `ACK`, `CLOSE`, or `RESET`. DATA frames contain a
+monotonic 64-bit sequence and at most 16 KiB. Up to four chunks may be in flight;
+queued output is bounded to 1 MiB and a write exceeding the available bound throws
+`IOException` instead of blocking the client thread. Frames are themselves sent with
+the reliable Session API, so encryption, peer authentication, retries, Relay routing,
+and transport ACK/NACK remain unchanged. The stream ACK is separate: it advances the
+per-stream window and protects ordering at the byte-stream layer.
+
+`close()` drains queued and acknowledged DATA before sending CLOSE. End-of-stream is
+reported as `-1` after the peer CLOSE. Malformed, out-of-order, or over-capacity input
+causes RESET and subsequent reads fail with `IOException`. Register at most one socket
+receiver per logical channel; a new registration replaces the previous listener.
+
 ## Session API (0.19.0)
 
 `connect` reuses a valid authenticated `/exchange` session or starts that same exchange
