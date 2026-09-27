@@ -153,7 +153,7 @@ public final class Krypt04McgMod {
                 () -> canSend(dev.krypt04mcg.protocol.DataPayload.TYPE), ClientPacketDistributor::sendToServer);
         dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
             if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
-            dataApi.send(player, channel, data);
+            return dataApi.send(player, channel, data);
         });
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> dataApi.tick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> dataApi.clear());

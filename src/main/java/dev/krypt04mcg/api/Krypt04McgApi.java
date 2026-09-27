@@ -13,15 +13,18 @@ public final class Krypt04McgApi {
     private Krypt04McgApi() {}
 
     /** Sends to the default player selected in apiReceiver. */
-    public static void send(String channel, byte[] data) { send(null, channel, data); }
+    public static DataTransfer send(String channel, byte[] data) { return send(null, channel, data); }
 
-    /** Requires an enabled API, a connected relay and the player's imported public key. */
-    public static void send(String player, String channel, byte[] data) {
+    /**
+     * Queues a reliable transfer. Disabled/unavailable transport and queue saturation complete the
+     * returned handle with a failure status. Null input, wrong thread and uninitialized API throw.
+     */
+    public static DataTransfer send(String player, String channel, byte[] data) {
         Objects.requireNonNull(channel, "channel");
         Objects.requireNonNull(data, "data");
         Sender current = sender;
         if (current == null) throw new IllegalStateException("Krypt04Mcg is not initialized");
-        current.send(player, channel, data);
+        return current.send(player, channel, data);
     }
 
     /** Replaces the previous receiver for this exact channel; registration works before initialization. */
@@ -44,11 +47,13 @@ public final class Krypt04McgApi {
     public static void initialize(Sender transport) { sender = Objects.requireNonNull(transport); }
 
     /** Internal: call only after decrypting and authenticating the entire envelope. */
-    public static void dispatch(String channel, String sender, byte[] data) {
+    public static boolean dispatch(String channel, String sender, byte[] data) {
         BiConsumer<String, byte[]> receiver = RECEIVERS.get(channel);
-        if (receiver != null) receiver.accept(sender, data);
+        if (receiver == null) return false;
+        receiver.accept(sender, data);
+        return true;
     }
 
     @FunctionalInterface
-    public interface Sender { void send(String player, String channel, byte[] data); }
+    public interface Sender { DataTransfer send(String player, String channel, byte[] data); }
 }

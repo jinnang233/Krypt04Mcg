@@ -73,8 +73,8 @@ gradle wrapper
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag v0.17.0
-git push origin v0.17.0
+git tag v0.18.0
+git push origin v0.18.0
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -88,7 +88,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.17.0.jar.sign krypt04mcg-0.17.0.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.18.0.jar.sign krypt04mcg-0.18.0.jar
 ```
 
 ## License
@@ -365,7 +365,7 @@ Incoming chunks received while that worker is busy are dropped; retry a transfer
 Disconnecting, disabling sharing, or changing transport mode invalidates pending background results.
 Expired assemblies and confirmation requests are cleaned up on client ticks, including on idle connections.
 
-## Binary data API for other client mods (0.17.0)
+## Reliable Data API for other client mods (0.18.0)
 
 Enable `enableDataApi` in Cloth Config on both clients (default: `false`). Set
 `apiReceiver` to the default recipient's Minecraft player name. Without Cloth Config,
@@ -375,49 +375,108 @@ independently of `chatSendMode` and the file-sharing settings.
 
 ```java
 import dev.krypt04mcg.api.Krypt04McgApi;
+import dev.krypt04mcg.api.DataTransfer;
 
-// Registration can happen during your mod's initialization.
+// Registration is allowed during client mod initialization.
 Krypt04McgApi.registerReceiver("example:sync", (sender, bytes) -> {
-    // sender is the player name from the verified, signed envelope (since 0.17.1).
-    // Your mod decides how to interpret bytes, including an empty byte array.
+    // sender is the verified player's name. Your mod interprets the opaque bytes.
+    // Empty byte arrays are supported. Return normally to acknowledge delivery.
 });
 
-// Call send on the Minecraft client thread, after joining a compatible server.
-Krypt04McgApi.send("example:sync", new byte[] {0, (byte) 0xff, 42});
-Krypt04McgApi.send("PlayerName", "example:sync", new byte[0]); // Explicit recipient
+// Call send on the Minecraft client thread after joining a compatible server.
+DataTransfer transfer = Krypt04McgApi.send("Alice", "example:sync", new byte[] {0, (byte) 0xff});
+System.out.println(transfer.transferId()); // Stable UUID, also present in the result.
+transfer.whenComplete(result -> {
+    switch (result.status()) {
+        case DELIVERED -> System.out.println("Remote receiver returned normally");
+        case REJECTED -> System.out.println("Remote receiver missing, failed, or at capacity");
+        case TIMEOUT -> System.out.println("No confirmation; delivery is uncertain");
+        default -> System.out.println("Local failure: " + result.status());
+    }
+});
+
+// Two-argument send uses apiReceiver and returns the same kind of handle.
+Krypt04McgApi.send("example:sync", new byte[0]);
 Krypt04McgApi.unregisterReceiver("example:sync");
 ```
 
-The original `registerReceiver(channel, Consumer<byte[]>)` overload remains supported
-for mods that do not need the sender. The new overload accepts `BiConsumer<String, byte[]>`;
-the sender matches the relay peer (case-insensitively) and retains the signed name's spelling.
-The wire protocol is unchanged, so this addition requires no relay update.
+The original `registerReceiver(channel, Consumer<byte[]>)` overload remains supported.
+Registering either overload replaces the receiver for that exact channel. The sender
+name comes from the verified signed envelope and must match the relay peer, ignoring
+case. Application byte arrays are not parsed or validated by Krypt04Mcg.
 
-Channels match exactly. Registering again using either overload replaces that channel's receiver. Unknown
-channels are ignored. Callbacks run on the client thread only after decryption and
-signature verification; callback exceptions are contained. The channel and opaque
-bytes are both inside the encrypted, signed envelope. Krypt04Mcg does not parse or
-validate the application's data format. Base64 is only an internal encoding for
-reuse of the existing encryption code.
+`send` copies the input bytes before returning. Encryption, signatures, decryption,
+verification and splitting run on one background worker. Receiver callbacks and
+transfer completion run on the client thread. A `whenComplete` observer registered
+after completion runs immediately on its caller; keep all callbacks short and never
+block waiting for a transfer on the client thread. Observer exceptions do not alter
+the transfer result. `completion()` exposes a read-only `CompletionStage<TransferResult>`
+for standard Java chaining; completing or cancelling its converted future does not
+complete or cancel the underlying transfer.
 
-`send` throws `IllegalStateException` if disabled, not initialized, called off the
-client thread, disconnected, missing a peer key, distrusted, or already sending.
-It queues a transfer; it does not acknowledge delivery. Large encryption operations
-currently run on the calling client thread. Transport bounds remain in force:
-16 MiB encrypted plaintext envelope, up to 2048 fragments of 12,000 characters,
-four outgoing fragments per tick, one outgoing transfer at a time. Actual byte
-capacity depends on channel and envelope overhead. Assembly expires after 60 seconds.
-Disabling the API or disconnecting clears pending transfers. Signed message IDs
-prevent replay during their validity window (bounded to 1024 remembered messages).
+| Result | Meaning |
+| --- | --- |
+| `DELIVERED` | Authenticated ACK from the intended peer, after its receiver returned normally. |
+| `REJECTED` | Authenticated NACK: unknown channel, receiver exception, or full deduplication cache. |
+| `TIMEOUT` | Confirmation did not arrive within the retry/deadline budget. The peer may have processed the data. |
+| `BACKPRESSURE` | Local queue count/byte budget or per-message size limit exceeded. Nothing was queued. |
+| `DISABLED` | Local API is disabled or was disabled while a transfer was pending. |
+| `DISCONNECTED` | Relay unavailable, disconnected, or transport closed. |
+| `FAILED` | Key missing/changed/distrusted, encryption failure, or local payload send failure. |
 
-### Relay support
+Null arguments, calling before mod initialization, or sending off the client thread
+remain programming errors that throw. Queue saturation returns a completed handle
+instead of throwing `already sending`. No acknowledgements are sent for unauthenticated,
+malformed or expired packets, or while the receiving API is disabled.
 
-The server relay must register and forward the new optional `krypt04mcg:data`
-channel. Existing relays that only support chat/file channels need an update; this
-repository contains the client mod, not the relay. Wire fields match the existing
-file payload: `writeUtf(peer, 16)`, `writeUtf(fragment, 12100)`, `writeVarInt(1)`.
-On client-to-server packets, `peer` is the destination player; on forwarded
-server-to-client packets it must be replaced with the authenticated sender's player
-name. Forward `fragment` and version unchanged only to the named recipient subscribed
-to this channel. Fragments and envelopes reuse the existing optional-transfer and
-signed KEM formats, with encrypted domain `krypt04mcg:data:v1`. No chat fallback occurs.
+### Limits, retries and delivery semantics
+
+- Up to 16 pending transfers and 16 MiB of queued input (bytes plus channel string
+  accounting). One message may contain at most 10 MiB; the existing 16 MiB plaintext
+  envelope and 2048-fragment transport bounds also apply. These are resource limits,
+  not application data-format restrictions.
+- Transfers are processed in order, one awaiting confirmation at a time. At most
+  four 12,000-character fragments are sent per client tick. Receipts have priority
+  between complete envelopes; fragments of different envelopes are not interleaved.
+- Wait 65 seconds for an ACK after the final fragment, then retry the whole signed
+  packet with a fresh assembly ID. The UUID and encrypted packet stay unchanged.
+  There are at most three attempts and a four-minute deadline from enqueue, including
+  queue time and encryption. The wait exceeds the assembler's 60-second expiry so a
+  missing fragment cannot permanently block a retry.
+- Receive assembly, the verification queue and receipt queue are bounded. Excess
+  incoming work is dropped and may be retried by the sender. ACK and NACK use the
+  same encrypted, signed KEM envelope as data and are bound to the intended peer
+  and transfer UUID. Receipts never acknowledge other receipts.
+- Up to 1024 received outcomes are retained until the signed packet expires. A
+  duplicate transfer resends its original ACK/NACK without running the callback
+  again. Full outcome storage rejects new messages rather than evicting unexpired
+  outcomes. Disabling clears pending work but keeps outcomes; disconnecting clears
+  connection state, and stale background results cannot send or deliver afterward.
+- This is bounded retry with deduplication within a connection, not durable exactly-once
+  delivery across reconnects or restarts. `DELIVERED` does not mean saved to disk.
+  A throwing receiver may already have partial side effects; it gets NACK and is not
+  called again for that transfer. Applications needing durable transactions should
+  implement their own IDs and storage. Do not blindly treat `TIMEOUT` as non-delivery.
+
+### Compatibility and relay support
+
+Both endpoints need 0.18.0 or newer for reliable sending. New clients still receive
+legacy v1 fire-and-forget data without receipts; new v2 messages sent to older clients
+time out. Changing `send` from `void` to `DataTransfer` preserves source calls that
+ignore the result, but changes the JVM method signature: **recompile dependent mods**
+and require Krypt04Mcg >= 0.18.0. No separate API JAR is required.
+
+The server relay still forwards the optional `krypt04mcg:data` channel. No relay
+protocol change is needed if it already forwards this channel opaquely. Wire fields
+remain `writeUtf(peer, 16)`, `writeUtf(fragment, 12100)`, `writeVarInt(1)`, using
+Minecraft UTF-8/VarInt encoding. Client-to-server `peer` is the recipient; the relay
+must replace it with the authenticated sender's name on server-to-client packets.
+Only forward to the named online recipient subscribed to the channel.
+
+The encrypted envelope domain is `krypt04mcg:data:v2`, with `transferId` (canonical
+UUID), `kind` (`DATA`, `ACK`, `NACK`), and DATA-only `channel` and Base64 `data` fields.
+The relay does not parse these fields or decrypt contents. Application channel names
+are independent of the Minecraft payload channel. There is no chat fallback.
+
+Session reuse (`connect`) and stream/socket APIs are deferred; this version continues
+to reuse the existing signed KEM cryptography without changing chat/session protocols.
