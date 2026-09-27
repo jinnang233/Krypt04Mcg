@@ -32,13 +32,21 @@ class DataTransferServiceTest {
         assertThrows(IllegalStateException.class, () -> sender.send(null, "service:test", bytes));
         config.enableDataApi = true;
         var calls = new AtomicInteger();
-        Krypt04McgApi.registerReceiver("service:test", data -> { assertArrayEquals(bytes, data); calls.incrementAndGet(); });
+        Krypt04McgApi.registerReceiver("service:test", (name, data) -> {
+            assertEquals("Alice", name);
+            assertArrayEquals(bytes, data);
+            calls.incrementAndGet();
+        });
         try {
             sender.send(null, "service:test", bytes);
             assertThrows(IllegalStateException.class, () -> sender.send(null, "service:test", bytes));
             for (int i = 0; i < 10; i++) sender.tick();
             assertFalse(sent.isEmpty());
-            for (var p : sent) receiver.receive(new DataPayload("Alice", p.fragment(), p.version()));
+            // Bob has a known key, but cannot claim Alice's signed message as his own.
+            for (var p : sent) receiver.receive(new DataPayload("Bob", p.fragment(), p.version()));
+            assertEquals(0, calls.get());
+            // Preserve the signed sender's spelling rather than the relay's spelling.
+            for (var p : sent) receiver.receive(new DataPayload("alice", p.fragment(), p.version()));
             assertEquals(1, calls.get());
             // Change fragment IDs to verify replay protection uses the signed message ID.
             String envelope = sent.stream().map(p -> p.fragment().split(":", 4)[3]).reduce("", String::concat);

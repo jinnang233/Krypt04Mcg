@@ -52,7 +52,8 @@ public final class DataTransferService {
             if (seen.containsKey(id) || seen.size() >= 1024) return;
             var data = codec.decrypt(packet, keys.local(), identity);
             seen.put(id, packet.timestampMillis() + 300000);
-            Krypt04McgApi.dispatch(data.channel(), data.bytes());
+            // Use the signed envelope's sender, already matched to the relay peer and verified above.
+            Krypt04McgApi.dispatch(data.channel(), packet.sender(), data.bytes());
         } catch (Exception ignored) {
             // Malformed input and third-party callback failures must not crash the client.
         }

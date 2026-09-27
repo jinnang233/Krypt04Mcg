@@ -377,7 +377,8 @@ independently of `chatSendMode` and the file-sharing settings.
 import dev.krypt04mcg.api.Krypt04McgApi;
 
 // Registration can happen during your mod's initialization.
-Krypt04McgApi.registerReceiver("example:sync", bytes -> {
+Krypt04McgApi.registerReceiver("example:sync", (sender, bytes) -> {
+    // sender is the player name from the verified, signed envelope (since 0.17.1).
     // Your mod decides how to interpret bytes, including an empty byte array.
 });
 
@@ -387,7 +388,12 @@ Krypt04McgApi.send("PlayerName", "example:sync", new byte[0]); // Explicit recip
 Krypt04McgApi.unregisterReceiver("example:sync");
 ```
 
-Channels match exactly. Registering again replaces that channel's receiver. Unknown
+The original `registerReceiver(channel, Consumer<byte[]>)` overload remains supported
+for mods that do not need the sender. The new overload accepts `BiConsumer<String, byte[]>`;
+the sender matches the relay peer (case-insensitively) and retains the signed name's spelling.
+The wire protocol is unchanged, so this addition requires no relay update.
+
+Channels match exactly. Registering again using either overload replaces that channel's receiver. Unknown
 channels are ignored. Callbacks run on the client thread only after decryption and
 signature verification; callback exceptions are contained. The channel and opaque
 bytes are both inside the encrypted, signed envelope. Krypt04Mcg does not parse or
