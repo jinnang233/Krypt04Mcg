@@ -576,13 +576,17 @@ cancel in-flight chunks. A write exceeding the available buffer limit throws
 the reliable Session API, so encryption, peer authentication, retries, Relay routing,
 and transport ACK/NACK remain unchanged. v2 adds no second stream ACK: a DATA
 DataTransfer reaching `DELIVERED` confirms that chunk. Completions may arrive out of
-order, but only a bounded contiguous prefix advances the per-stream window; any
-non-delivery result resets the socket. Session sequence and replay checks remain enabled.
+order, but only a bounded contiguous prefix advances the per-stream send window; any
+non-delivery result resets the socket. The receiver accepts DATA within a bounded
+`socketWindowChunks` reorder window, delivers only contiguous sequences, and ignores
+duplicate stream sequences. DATA beyond that window, malformed frames, and receive
+buffer overflow reset the stream. Session sequence and replay checks remain enabled.
 
 `close()` drains queued DATA and waits for every submitted DATA completion before sending CLOSE. End-of-stream is
-reported as `-1` after the peer CLOSE. Malformed, out-of-order, or over-capacity input
-causes RESET and subsequent reads fail with `IOException`. Register at most one socket
-receiver per logical channel; a new registration replaces the previous listener.
+reported as `-1` after the peer CLOSE. Closing only the returned `InputStream` discards
+future inbound bytes and wakes blocked readers with `IOException`, but leaves the output
+direction usable and does not send RESET. Register at most one socket receiver per
+logical channel; a new registration replaces the previous listener.
 
 The default protocol-rate calculation and remaining client/Relay bottlenecks are
 documented in [PERFORMANCE.md](PERFORMANCE.md).
