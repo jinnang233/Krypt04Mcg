@@ -106,7 +106,7 @@ public final class SessionHandshakeService implements AutoCloseable {
         SessionExchangePayload payload = exchange.payload();
         validateCommon(packet, payload, sender, receiverKeys);
         if (isResponse(packet)) {
-            completeResponse(packet, payload, sender);
+            completeResponse(packet, payload, sender, receiverKeys);
             return true;
         } else {
             return completeRequest(packet, payload, sender, receiverKeys, compress, aeadAlgorithm, packetSender);
@@ -133,7 +133,8 @@ public final class SessionHandshakeService implements AutoCloseable {
         KeyRecord ephemeralPublic = cryptoService.validateEphemeralKemPublicKey(payload.ephemeralKem(),
                 payload.initiator(), payload.initiatorUuid(), payload.ephemeralPublicKey(),
                 Instant.ofEpochMilli(payload.createdAtMillis()));
-        SessionRecord session = sessionService.newSession(sender.owner(), fingerprint(sender), payload.sessionId());
+        SessionRecord session = sessionService.newSession(sender.owner(), fingerprint(sender), payload.sessionId())
+                .withLocalFingerprint(fingerprint(receiverKeys));
         SessionExchangePayload response = new SessionExchangePayload(SessionExchangePayload.VERSION,
                 SessionExchangePayload.Kind.RESPONSE, payload.initiator(), payload.initiatorUuid(),
                 payload.responder(), payload.responderUuid(), session.sessionId(), Hex.encode(packet.messageId()),
@@ -151,7 +152,7 @@ public final class SessionHandshakeService implements AutoCloseable {
         return true;
     }
 
-    private void completeResponse(EncryptedPacket packet, SessionExchangePayload payload, PublicIdentity sender)
+    private void completeResponse(EncryptedPacket packet, SessionExchangePayload payload, PublicIdentity sender, LocalKeyMaterial receiverKeys)
             throws IOException {
         PendingHandshake pendingHandshake = pending.get(normalize(sender.owner()));
         if (pendingHandshake == null || payload.kind() != SessionExchangePayload.Kind.RESPONSE
@@ -163,8 +164,8 @@ public final class SessionHandshakeService implements AutoCloseable {
                 || Base64Url.decode(payload.sessionSecret()).length != 32) {
             throw new IOException("Session exchange response does not match the pending request");
         }
-        sessionService.acceptRemoteSession(sender.owner(), fingerprint(sender), payload.sessionId(),
-                payload.sessionSecret());
+        sessionService.save(new SessionRecord(sender.owner(), fingerprint(sender), payload.sessionId(), Instant.now(), Instant.now(),
+                payload.sessionSecret(), 0, 0L).withLocalFingerprint(fingerprint(receiverKeys)));
         pending.remove(normalize(sender.owner()));
         pendingHandshake.ephemeral().close();
     }
@@ -216,6 +217,15 @@ public final class SessionHandshakeService implements AutoCloseable {
             }
             return false;
         });
+    }
+
+    /** Cancel only the API-owned request; never discard a newer exchange started by chat. */
+    public synchronized void cancel(String peer, String requestMessageId) {
+        PendingHandshake request = pending.get(normalize(peer));
+        if (request != null && request.requestMessageId().equals(requestMessageId)) {
+            pending.remove(normalize(peer));
+            request.ephemeral().close();
+        }
     }
 
     private static void requireSignedExchange(EncryptedPacket packet) throws CryptoException {

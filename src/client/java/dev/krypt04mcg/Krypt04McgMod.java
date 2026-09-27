@@ -123,13 +123,13 @@ public final class Krypt04McgMod implements ClientModInitializer {
         var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
                 keyTrustService, cryptoService, root);
         optionalSharing.register();
-        var dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService,
+        var dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService, sessionService, sessionHandshakeService,
                 () -> client.getConnection() != null && ClientPlayNetworking.canSend(dev.krypt04mcg.protocol.DataPayload.TYPE),
                 ClientPlayNetworking::send);
         dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
             if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
             return dataApi.send(player, channel, data);
-        });
+        }, dataApi::connect);
         PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.DataPayload.TYPE,

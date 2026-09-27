@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class SessionServiceTest {
     @TempDir
@@ -33,5 +34,31 @@ final class SessionServiceTest {
         assertEquals(1, updated.nextReceiveSequence());
         assertEquals(2, updated.messageCount());
         assertEquals(12, updated.bytesUsed());
+    }
+
+    @Test void apiSequenceLanesPersistWithoutChangingChatSequenceAndRejectReplays() throws Exception {
+        SessionService sessions = new SessionService(tempDir);
+        SessionRecord created = sessions.newSession("bob", "kem:sig").withLocalFingerprint("own:keys");
+        sessions.save(created);
+        assertEquals(0, sessions.reserveApiSend("bob", created.sessionId(), false, 10));
+        assertEquals(1, sessions.reserveApiSend("bob", created.sessionId(), true, 0));
+        sessions.recordApiReceived("bob", created.sessionId(), 4, false, 20); // A failed encryption may leave a gap.
+        sessions.recordApiReceived("bob", created.sessionId(), 3, true, 0);
+        sessions.recordSentMessage("bob", 0, 5);
+        sessions.recordReceivedMessage("bob", created.sessionId(), 0, 7);
+        SessionRecord restored = new SessionService(tempDir).find("bob").orElseThrow();
+        assertEquals("own:keys", restored.localFingerprint());
+        assertEquals(1, restored.nextApiSendSequence());
+        assertEquals(3, restored.nextApiReceiveSequence());
+        assertEquals(1, restored.nextApiControlSendSequence());
+        assertEquals(2, restored.nextApiControlReceiveSequence());
+        assertEquals(1, restored.nextSendSequence());
+        assertEquals(1, restored.nextReceiveSequence());
+        assertEquals(4, restored.messageCount()); // ACKs do not consume the application rotation budget.
+        assertEquals(42, restored.bytesUsed());
+        assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 4, false, 0));
+        assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 2, false, 0));
+        assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 5, false, 0));
+        assertThrows(java.io.IOException.class, () -> sessions.reserveApiSend("bob", "different-epoch", false, 0));
     }
 }

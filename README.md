@@ -73,8 +73,8 @@ gradle wrapper
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag v0.18.0
-git push origin v0.18.0
+git tag v0.19.0
+git push origin v0.19.0
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -88,7 +88,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.18.0.jar.sign krypt04mcg-0.18.0.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.19.0.jar.sign krypt04mcg-0.19.0.jar
 ```
 
 ## License
@@ -478,5 +478,90 @@ UUID), `kind` (`DATA`, `ACK`, `NACK`), and DATA-only `channel` and Base64 `data`
 The relay does not parse these fields or decrypt contents. Application channel names
 are independent of the Minecraft payload channel. There is no chat fallback.
 
-Session reuse (`connect`) and stream/socket APIs are deferred; this version continues
-to reuse the existing signed KEM cryptography without changing chat/session protocols.
+The static `send` API continues
+to use signed KEM cryptography. The optional Session API below avoids KEM on subsequent data messages.
+
+## Session API (0.19.0)
+
+`connect` reuses a valid authenticated `/exchange` session or starts that same exchange
+automatically over the reliable `krypt04mcg:data` transport. Both endpoints must run
+0.19.0 or newer and enable `enableDataApi`. The relay wire format is unchanged: an
+existing transparent relay does not need new channels or knowledge of session secrets.
+
+```java
+import dev.krypt04mcg.api.KryptSession;
+import dev.krypt04mcg.api.Krypt04McgApi;
+
+KryptSession session = Krypt04McgApi.connect("Alice");
+// This is safe before readiness; it uses the existing bounded transfer queue.
+session.send("mymod:data", bytes).whenComplete(result -> {
+    System.out.println(result.status()); // Same reliable transfer results as static send.
+});
+
+session.ready().whenComplete((connected, error) -> {
+    if (error != null) {
+        System.err.println("Session establishment failed: " + error.getMessage());
+    } else {
+        System.out.println(connected.peer() + ": " + connected.sessionId());
+    }
+});
+// Later, when this integration no longer needs the handle:
+// session.close();
+```
+
+- Call `connect`, `session.send` and `session.close` on the client thread. Connection
+  establishment returns immediately with a handle. `ready()` is a read-only
+  `CompletionStage<KryptSession>` and fails on handshake failure, timeout, disable
+  or disconnect. Do not block the client thread waiting for it.
+- Existing `registerReceiver(channel, (sender, bytes) -> ...)` handlers receive both
+  signed KEM and session messages. For session messages, the sender is authenticated
+  by AEAD under the identity-bound handshake secret, not by a new signature per message.
+- `peer()`, `isReady()` and `sessionId()` expose no secret. Readiness describes successful
+  local setup, not a live connection check; every send rechecks trust, key identity,
+  expiry and session epoch. Both peers retain the same master session ID and secret.
+- At most 16 peer handles are retained. Repeated `connect` for the same valid peer
+  returns its current handle. Establishment and data share the 16-transfer/16-MiB
+  queue and four-minute deadlines; handshake responses have priority to prevent
+  queued data from blocking establishment. Failures never fall back to unsigned data.
+- `close()` invalidates the local handle and fails its queued sends. It does not erase
+  the stored chat session or send a stream-close frame. Closing immediately after
+  calling `send` can cancel it, so retain the handle until its transfers finish.
+- Session TTL, `maxMessagesPerSession`, and `rotateAfterBytes` apply to API data as
+  well as chat. Data contributes to the shared usage budget; receipts do not, so a
+  final message can still be acknowledged at the rotation threshold. An exhausted,
+  replaced or mismatched epoch fails closed. Call `connect` again to obtain a fresh
+  epoch; existing handles never silently switch keys for queued/retried data.
+- Disable/disconnect invalidates handles and pending work. A subsequent connection
+  may reuse an unexpired persisted session. Sessions written by versions before
+  0.19.0 lack local-key binding, so the first `connect` refreshes them through exchange.
+  The static v0.18 reliable send API remains compatible and independent.
+
+### Session authentication and sequence handling
+
+Handshake control messages use reliable signed KEM envelopes (`EXCHANGE` in the
+existing v2 Data API envelope), containing the existing signed `SESSION_EXCHANGE`
+packet. Ephemeral key generation and outer envelope encryption run on the background
+worker; completing the small handshake and committing session state use the client
+thread. Retries resend the same handshake packet and do not regenerate the session
+secret. Simultaneous connections use the existing deterministic exchange tie-break.
+
+After setup, data and ACK/NACK use protocol-v4 `SESSION_MESSAGE` packets with session
+ID and authenticated sequence metadata. The API derives a separate 32-byte key with
+HKDF-SHA256, using the master secret, session ID as salt, and the label
+`krypt04mcg data session v1`. Chat continues using its original key derivation.
+A data ciphertext cannot be replayed into chat or vice versa. The encrypted API
+plaintext domain is `krypt04mcg:data:session:v1`.
+
+API counters are stored atomically alongside the encrypted session record, separately
+from chat counters. DATA uses even wire sequences; receipts use odd sequences, with
+independent monotonic receive counters. Gaps are accepted because a failed encryption
+may consume a reserved sequence. Receipts can overtake queued data without blocking
+it. Counters are reserved before encryption and never reused; retrying a transfer
+reuses its original authenticated packet and sequence. Cached duplicates only resend
+the original result. After a restart without the outcome cache, persisted receive
+counters reject old data instead of calling the receiver again. This still is not a
+durable exactly-once transaction or proof of application persistence.
+
+Stream/socket APIs remain deferred. Files retain their existing signed KEM transfer
+format; this release adds shared sessions for the Data API without changing file or
+chat message formats.

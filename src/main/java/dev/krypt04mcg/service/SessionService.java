@@ -78,7 +78,7 @@ public final class SessionService {
         return record;
     }
 
-    public Optional<SessionRecord> find(String peer) throws IOException {
+    public synchronized Optional<SessionRecord> find(String peer) throws IOException {
         Path path = pathFor(peer);
         if (!Files.exists(path)) {
             return Optional.empty();
@@ -91,7 +91,7 @@ public final class SessionService {
         return Optional.of(record);
     }
 
-    public void save(SessionRecord record) throws IOException {
+    public synchronized void save(SessionRecord record) throws IOException {
         validate(record);
         sensitiveFiles.writeString(pathFor(record.peer()), gson.toJson(record));
     }
@@ -123,7 +123,7 @@ public final class SessionService {
         }
     }
 
-    public void clear(String peer) throws IOException {
+    public synchronized void clear(String peer) throws IOException {
         Files.deleteIfExists(pathFor(peer));
     }
 
@@ -135,7 +135,9 @@ public final class SessionService {
         }
         save(new SessionRecord(session.peer(), session.peerFingerprint(), session.sessionId(), session.createdAt(),
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
-                expectedSequence + 1, session.nextReceiveSequence()));
+                expectedSequence + 1, session.nextReceiveSequence(), session.localFingerprint(),
+                session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
+                session.nextApiControlReceiveSequence()));
     }
 
     public synchronized void recordReceivedMessage(String peer, String sessionId, long sequence, long bytes)
@@ -147,7 +149,43 @@ public final class SessionService {
         }
         save(new SessionRecord(session.peer(), session.peerFingerprint(), session.sessionId(), session.createdAt(),
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
-                session.nextSendSequence(), sequence + 1));
+                session.nextSendSequence(), sequence + 1, session.localFingerprint(),
+                session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
+                session.nextApiControlReceiveSequence()));
+    }
+
+    /** Reserve and persist before encryption. Gaps are safe; a failed send never reuses its sequence. */
+    public synchronized long reserveApiSend(String peer, String sessionId, boolean control, long bytes) throws IOException {
+        SessionRecord session = requireEpoch(peer, sessionId);
+        long next = control ? session.nextApiControlSendSequence() : session.nextApiSendSequence();
+        if (next >= (Long.MAX_VALUE - 1) / 2) throw new IOException("API sequence exhausted");
+        saveApiCounters(session, control ? session.nextApiSendSequence() : next + 1, session.nextApiReceiveSequence(),
+                control ? next + 1 : session.nextApiControlSendSequence(), session.nextApiControlReceiveSequence(), control, bytes);
+        return next * 2 + (control ? 1 : 0);
+    }
+
+    /** DATA and receipts have independent monotonic sequences, encoded in even/odd wire numbers. */
+    public synchronized void recordApiReceived(String peer, String sessionId, long sequence, boolean control, long bytes) throws IOException {
+        SessionRecord session = requireEpoch(peer, sessionId);
+        long next = control ? session.nextApiControlReceiveSequence() : session.nextApiReceiveSequence();
+        if (sequence < 0 || sequence == Long.MAX_VALUE || (sequence & 1) != (control ? 1 : 0) || sequence / 2 < next)
+            throw new IOException("Repeated or invalid API sequence");
+        saveApiCounters(session, session.nextApiSendSequence(), control ? session.nextApiReceiveSequence() : sequence / 2 + 1,
+                session.nextApiControlSendSequence(), control ? sequence / 2 + 1 : session.nextApiControlReceiveSequence(), control, bytes);
+    }
+
+    private SessionRecord requireEpoch(String peer, String id) throws IOException {
+        SessionRecord session = find(peer).orElseThrow(() -> new IOException("Missing session"));
+        if (!session.sessionId().equals(id)) throw new IOException("Session changed");
+        return session;
+    }
+
+    private void saveApiCounters(SessionRecord s, long send, long receive, long controlSend, long controlReceive,
+                                  boolean control, long bytes) throws IOException {
+        save(new SessionRecord(s.peer(), s.peerFingerprint(), s.sessionId(), s.createdAt(), Instant.now(), s.secret(),
+                control ? s.messageCount() : Math.addExact(s.messageCount(), 1),
+                control ? s.bytesUsed() : Math.addExact(s.bytesUsed(), Math.max(0, bytes)),
+                s.nextSendSequence(), s.nextReceiveSequence(), s.localFingerprint(), send, receive, controlSend, controlReceive));
     }
 
     public boolean isExpired(SessionRecord session, int ttlMinutes, int maxMessages, long rotateAfterBytes) {
@@ -173,7 +211,9 @@ public final class SessionService {
                     || Base64Url.decode(record.sessionId()).length != 16
                     || Base64Url.decode(record.secret()).length != 32
                     || record.messageCount() < 0 || record.bytesUsed() < 0
-                    || record.nextSendSequence() < 0 || record.nextReceiveSequence() < 0) {
+                    || record.nextSendSequence() < 0 || record.nextReceiveSequence() < 0
+                    || record.nextApiSendSequence() < 0 || record.nextApiReceiveSequence() < 0
+                    || record.nextApiControlSendSequence() < 0 || record.nextApiControlReceiveSequence() < 0) {
                 throw new IOException("Session record is invalid");
             }
         } catch (IllegalArgumentException e) {

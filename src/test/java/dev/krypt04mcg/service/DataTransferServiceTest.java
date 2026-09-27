@@ -4,6 +4,8 @@ import dev.krypt04mcg.api.*;
 import dev.krypt04mcg.api.TransferResult.Status;
 import dev.krypt04mcg.config.*;
 import dev.krypt04mcg.crypto.CryptoService;
+import dev.krypt04mcg.crypto.CryptoException;
+import dev.krypt04mcg.model.*;
 import dev.krypt04mcg.protocol.*;
 import dev.krypt04mcg.protocol.DataTransferCodec.Kind;
 import dev.krypt04mcg.util.*;
@@ -233,6 +235,196 @@ class DataTransferServiceTest {
         }
     }
 
+    @Test void connectQueuesUntilHandshakeAndSendsDomainSeparatedAead() throws Exception {
+        try (var pair = new Pair()) {
+            AtomicInteger calls = new AtomicInteger();
+            Krypt04McgApi.registerReceiver(CHANNEL, (sender, bytes) -> { assertEquals("Alice", sender); calls.incrementAndGet(); });
+            KryptSession session = pair.alice.connect("Bob");
+            assertFalse(session.isReady());
+            session.ready().toCompletableFuture().complete(session); // Observer cannot forge readiness.
+            assertFalse(session.isReady());
+            var first = session.send(CHANNEL, new byte[]{0, -1});
+            var second = session.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> done(first) && done(second));
+            assertTrue(session.isReady());
+            assertEquals(Status.DELIVERED, status(first));
+            assertEquals(Status.DELIVERED, status(second));
+            assertEquals(2, calls.get());
+            SessionRecord remote = pair.bobSessions.find("Alice").orElseThrow();
+            assertEquals(remote.sessionId(), session.sessionId());
+            var dataPackets = packets(pair.aliceSent).stream().filter(p -> p.type() == PacketType.SESSION_MESSAGE).toList();
+            assertEquals(2, dataPackets.size());
+            assertEquals(0, dataPackets.get(0).sequence());
+            assertEquals(2, dataPackets.get(1).sequence());
+            for (var packet : dataPackets) {
+                assertFalse(packet.signed());
+                assertEquals(0, packet.kemCiphertext().length);
+                assertEquals(session.sessionId(), packet.sessionId());
+                assertThrows(CryptoException.class, () -> new CryptoService().decryptWithSession(packet, "Bob", "Alice",
+                        Base64Url.decode(remote.secret()), remote.sessionId(), packet.sequence()));
+            }
+            assertEquals(0, remote.nextReceiveSequence()); // Chat sequence space remains untouched.
+            assertEquals(2, remote.nextApiReceiveSequence());
+        }
+    }
+
+    @Test void reusesChatExchangeAndClosingHandleDoesNotDeleteChatSession() throws Exception {
+        try (var pair = new Pair()) {
+            pair.exchange();
+            String id = pair.aliceSessions.find("Bob").orElseThrow().sessionId();
+            KryptSession session = pair.alice.connect("Bob");
+            assertTrue(session.isReady());
+            assertEquals(id, session.sessionId());
+            assertSame(session, pair.alice.connect("bob"));
+            Krypt04McgApi.registerReceiver(CHANNEL, bytes -> {});
+            var transfer = session.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> done(transfer));
+            assertEquals(Status.DELIVERED, status(transfer));
+            assertTrue(packets(pair.aliceSent).stream().allMatch(p -> p.type() == PacketType.SESSION_MESSAGE));
+            var cancelled = session.send(CHANNEL, new byte[0]);
+            session.close();
+            assertFalse(session.isReady());
+            assertEquals(Status.FAILED, status(cancelled));
+            assertEquals(Status.FAILED, status(session.send(CHANNEL, new byte[0])));
+            assertEquals(id, pair.aliceSessions.find("Bob").orElseThrow().sessionId());
+            assertTrue(pair.alice.connect("Bob").isReady());
+        }
+    }
+
+    @Test void sessionLostAckRetryReusesSequenceAndPersistedReplayProtection() throws Exception {
+        try (var pair = new Pair()) {
+            pair.exchange();
+            var session = pair.alice.connect("Bob");
+            AtomicInteger calls = new AtomicInteger();
+            Krypt04McgApi.registerReceiver(CHANNEL, bytes -> calls.incrementAndGet());
+            pair.dropBob = true;
+            var transfer = session.send(CHANNEL, new byte[]{42});
+            pair.pumpUntil(() -> !pair.bobSent.isEmpty());
+            String original = assembled(pair.aliceSent);
+            pair.aliceSent.clear();
+            pair.dropBob = false;
+            pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+            pair.pumpUntil(() -> done(transfer));
+            assertEquals(Status.DELIVERED, status(transfer));
+            assertEquals(original, assembled(pair.aliceSent));
+            assertEquals(1, calls.get());
+            assertEquals(1, pair.aliceSessions.find("Bob").orElseThrow().nextApiSendSequence());
+            assertEquals(1, new SessionService(root.resolve("bob")).find("Alice").orElseThrow().nextApiReceiveSequence());
+            pair.bob.clear(); // Erases in-memory outcomes, not durable sequence state.
+            int sent = pair.bobSent.size();
+            for (String part : OptionalTransferAssembler.split(original, FileTransferCodec.MAX_CHUNKS))
+                pair.bob.receive(new DataPayload("Alice", part, 1));
+            pair.pumpUntil(() -> pair.bobSent.size() > sent);
+            assertEquals(1, calls.get());
+        }
+    }
+
+    @Test void simultaneousConnectionsConvergeOnOneEpoch() throws Exception {
+        try (var pair = new Pair()) {
+            var alice = pair.alice.connect("Bob");
+            var bob = pair.bob.connect("Alice");
+            var calls = new AtomicInteger();
+            Krypt04McgApi.registerReceiver(CHANNEL, bytes -> calls.incrementAndGet());
+            var a = alice.send(CHANNEL, new byte[]{1});
+            var b = bob.send(CHANNEL, new byte[]{2});
+            pair.pumpUntil(() -> done(a) && done(b));
+            assertEquals(Status.DELIVERED, status(a));
+            assertEquals(Status.DELIVERED, status(b));
+            assertEquals(alice.sessionId(), bob.sessionId());
+            assertEquals(2, calls.get());
+        }
+    }
+
+    @Test void lostHandshakeResponseRetriesWithoutReplacingEstablishedSecret() throws Exception {
+        try (var pair = new Pair()) {
+            pair.dropBob = true;
+            var session = pair.alice.connect("Bob");
+            Krypt04McgApi.registerReceiver(CHANNEL, bytes -> {});
+            var sent = session.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> pair.bobSent.stream().filter(DataTransferServiceTest::lastFragment).count() >= 2);
+            String secret = pair.bobSessions.find("Alice").orElseThrow().secret();
+            assertFalse(session.isReady());
+            pair.dropBob = false;
+            pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+            pair.pumpUntil(() -> done(sent));
+            assertEquals(Status.DELIVERED, status(sent));
+            assertEquals(secret, pair.aliceSessions.find("Bob").orElseThrow().secret());
+            assertEquals(secret, pair.bobSessions.find("Alice").orElseThrow().secret());
+        }
+    }
+
+    @Test void signedReceiptCannotAcknowledgeSessionTransfer() throws Exception {
+        try (var pair = new Pair()) {
+            pair.exchange();
+            pair.dropAlice = true;
+            var session = pair.alice.connect("Bob");
+            var sent = session.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> !pair.aliceSent.isEmpty());
+            var codec = new DataTransferCodec();
+            pair.inject("Bob", codec.receipt(sent.transferId(), Kind.ACK, pair.aliceKeys.ownPublicIdentity(), pair.bobKeys.local(), AeadAlgorithm.AES_256_GCM));
+            for (int i = 0; i < 100; i++) { pair.tick(); Thread.sleep(2); }
+            assertFalse(done(sent));
+            var remote = pair.bobSessions.find("Alice").orElseThrow();
+            long sequence = pair.bobSessions.reserveApiSend("Alice", remote.sessionId(), true, 0);
+            pair.inject("Bob", codec.encryptSession(sent.transferId(), null, null, Kind.ACK, pair.aliceKeys.ownPublicIdentity(),
+                    pair.bobKeys.local(), remote, sequence, AeadAlgorithm.AES_256_GCM));
+            pair.pumpUntil(() -> done(sent));
+            assertEquals(Status.DELIVERED, status(sent));
+        }
+    }
+
+    @Test void exhaustedSessionFailsClosedAndExplicitReconnectCreatesFreshEpoch() throws Exception {
+        try (var pair = new Pair()) {
+            pair.exchange();
+            pair.config.maxMessagesPerSession = 1;
+            Krypt04McgApi.registerReceiver(CHANNEL, bytes -> {});
+            var old = pair.alice.connect("Bob");
+            String id = old.sessionId();
+            var one = old.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> done(one));
+            assertEquals(Status.DELIVERED, status(one)); // Receipt still works at the rotation limit.
+            var exhausted = old.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> done(exhausted));
+            assertEquals(Status.FAILED, status(exhausted));
+            var fresh = pair.alice.connect("Bob");
+            assertFalse(old.isReady());
+            var two = fresh.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> done(two));
+            assertEquals(Status.DELIVERED, status(two));
+            assertNotEquals(id, fresh.sessionId());
+        }
+    }
+
+    @Test void disconnectInvalidatesConnectingHandleAndItsBoundedQueuedSends() throws Exception {
+        try (var pair = new Pair()) {
+            var connection = pair.alice.connect("Bob");
+            List<DataTransfer> queued = new ArrayList<>();
+            for (int i = 0; i < DataTransferService.MAX_TRANSFERS - 1; i++) queued.add(connection.send(CHANNEL, new byte[0]));
+            assertEquals(Status.BACKPRESSURE, status(connection.send(CHANNEL, new byte[0])));
+            pair.alice.tick();
+            pair.alice.clear();
+            assertTrue(connection.ready().toCompletableFuture().isCompletedExceptionally());
+            assertFalse(connection.isReady());
+            for (var send : queued) assertEquals(Status.DISCONNECTED, status(send));
+            Krypt04McgApi.registerReceiver(CHANNEL, bytes -> {});
+            var next = pair.alice.connect("Bob");
+            var sent = next.send(CHANNEL, new byte[0]);
+            pair.pumpUntil(() -> done(sent));
+            assertEquals(Status.DELIVERED, status(sent));
+            assertEquals(Status.FAILED, status(connection.send(CHANNEL, new byte[0])));
+        }
+    }
+
+    private static List<EncryptedPacket> packets(List<DataPayload> payloads) {
+        Map<String, StringBuilder> encoded = new LinkedHashMap<>();
+        for (DataPayload payload : payloads) {
+            String[] fields = payload.fragment().split(":", 4);
+            encoded.computeIfAbsent(fields[0], ignored -> new StringBuilder()).append(fields[3]);
+        }
+        var codec = new PacketCodec(FileTransferCodec.MAX_ENVELOPE_BYTES + 65536);
+        return encoded.values().stream().map(value -> codec.decode(Base64Url.decode(value.toString()))).toList();
+    }
+
     private static boolean done(DataTransfer transfer) { return transfer.completion().toCompletableFuture().isDone(); }
     private static Status status(DataTransfer transfer) { return transfer.completion().toCompletableFuture().join().status(); }
     private static boolean lastFragment(DataPayload payload) {
@@ -249,6 +441,8 @@ class DataTransferServiceTest {
         final List<DataPayload> aliceSent = new ArrayList<>(), bobSent = new ArrayList<>();
         final KeyStoreService aliceKeys, bobKeys;
         final KeyTrustService aliceTrust;
+        final SessionService aliceSessions, bobSessions;
+        final SessionHandshakeService aliceHandshake, bobHandshake;
         final DataTransferService alice, bob;
         boolean dropAlice, dropBob;
         int dropFragment = -1;
@@ -263,8 +457,20 @@ class DataTransferServiceTest {
             bobKeys.importPublicIdentity("Alice", JsonSupport.prettyGson().toJson(aliceKeys.ownPublicIdentity()));
             config.apiReceiver = "Bob"; config.enableDataApi = true;
             aliceTrust = new KeyTrustService(root.resolve("alice"));
-            alice = new DataTransferService(config, aliceKeys, aliceTrust, () -> true, this::fromAlice, now::get);
-            bob = new DataTransferService(config, bobKeys, new KeyTrustService(root.resolve("bob")), () -> true, this::fromBob, now::get);
+            aliceSessions = new SessionService(root.resolve("alice"));
+            bobSessions = new SessionService(root.resolve("bob"));
+            aliceHandshake = new SessionHandshakeService(crypto, aliceSessions);
+            bobHandshake = new SessionHandshakeService(crypto, bobSessions);
+            alice = new DataTransferService(config, aliceKeys, aliceTrust, aliceSessions, aliceHandshake, () -> true, this::fromAlice, now::get);
+            bob = new DataTransferService(config, bobKeys, new KeyTrustService(root.resolve("bob")), bobSessions, bobHandshake, () -> true, this::fromBob, now::get);
+        }
+        void exchange() throws Exception {
+            var request = aliceHandshake.begin(bobKeys.ownPublicIdentity(), aliceKeys.local(), KemAlgorithm.ML_KEM_768, false, AeadAlgorithm.AES_256_GCM);
+            var response = new AtomicReference<EncryptedPacket>();
+            bobHandshake.complete(request, bobHandshake.decrypt(request, bobKeys.local(), aliceKeys.ownPublicIdentity()), aliceKeys.ownPublicIdentity(),
+                    bobKeys.local(), false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> response.set(packet));
+            aliceHandshake.complete(response.get(), aliceHandshake.decrypt(response.get(), aliceKeys.local(), bobKeys.ownPublicIdentity()),
+                    bobKeys.ownPublicIdentity(), aliceKeys.local(), false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> fail("Unexpected response"));
         }
         void fromAlice(DataPayload payload) {
             aliceSent.add(payload);
@@ -291,6 +497,6 @@ class DataTransferServiceTest {
             while (!condition.getAsBoolean() && System.nanoTime() < deadline) { tick(); Thread.sleep(2); }
             assertTrue(condition.getAsBoolean(), "Transport did not reach expected state");
         }
-        @Override public void close() { alice.close(); bob.close(); Krypt04McgApi.unregisterReceiver(CHANNEL); }
+        @Override public void close() { alice.close(); bob.close(); aliceHandshake.close(); bobHandshake.close(); Krypt04McgApi.unregisterReceiver(CHANNEL); }
     }
 }

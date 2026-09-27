@@ -149,12 +149,12 @@ public final class Krypt04McgMod {
         var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
                 keyTrustService, cryptoService, root);
         optionalSharing.register();
-        dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService,
+        dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService, sessionService, sessionHandshakeService,
                 () -> canSend(dev.krypt04mcg.protocol.DataPayload.TYPE), ClientPacketDistributor::sendToServer);
         dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
             if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
             return dataApi.send(player, channel, data);
-        });
+        }, dataApi::connect);
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> dataApi.tick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> dataApi.clear());
         OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());

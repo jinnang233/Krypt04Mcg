@@ -372,6 +372,13 @@ public final class CryptoService {
         }
     }
 
+    /** Domain separation prevents a Data API ciphertext from authenticating as a chat message. */
+    public byte[] deriveDataSessionSecret(byte[] secret, byte[] sessionId) throws CryptoException {
+        if (secret == null || sessionId == null || secret.length != AEAD_KEY_BYTES || sessionId.length != MESSAGE_ID_BYTES)
+            throw new CryptoException("Invalid API session key material");
+        return hkdf(secret, sessionId, "krypt04mcg data session v1".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
+    }
+
     public byte[] deriveSessionSecret(byte[] secret, byte[] messageId) throws CryptoException {
         if (secret == null || secret.length != AEAD_KEY_BYTES) {
             throw new CryptoException("Session secret must contain 32 bytes");
