@@ -16,8 +16,8 @@ import java.util.function.Consumer;
 
 /** Package-private stream multiplexer over the reliable encrypted data channel. */
 final class KryptStreamRegistry {
-    static final String WIRE_CHANNEL = "krypt04mcg:stream:v1";
-    private static final int VERSION = 1;
+    static final String WIRE_CHANNEL = "krypt04mcg:stream:v2";
+    private static final int VERSION = 2;
     private final Map<UUID, KryptSocket> sockets = new HashMap<>();
     private final Map<String, Consumer<KryptSocket>> listeners = new HashMap<>();
     private boolean receiverInstalled;
