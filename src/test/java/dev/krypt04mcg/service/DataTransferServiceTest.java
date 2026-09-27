@@ -393,24 +393,31 @@ class DataTransferServiceTest {
         }
     }
 
-    @Test void exhaustedSessionFailsClosedAndExplicitReconnectCreatesFreshEpoch() throws Exception {
+    @Test void apiUsesIndependentRotationBudgetAndReconnectsAfterItsOwnLimit() throws Exception {
         try (var pair = new Pair()) {
             pair.exchange();
             pair.config.maxMessagesPerSession = 1;
+            pair.config.rotateAfterBytes = 1;
+            pair.config.apiMaxMessagesPerSession = 2;
+            pair.config.apiRotateAfterBytes = 1024;
             Krypt04McgApi.registerReceiver(CHANNEL, bytes -> {});
             var old = pair.alice.connect("Bob");
             String id = old.sessionId();
-            var one = old.send(CHANNEL, new byte[0]);
+            var one = old.send(CHANNEL, new byte[10]);
             pair.pumpUntil(() -> done(one));
-            assertEquals(Status.DELIVERED, status(one)); // Receipt still works at the rotation limit.
-            var exhausted = old.send(CHANNEL, new byte[0]);
+            assertEquals(Status.DELIVERED, status(one));
+            var two = old.send(CHANNEL, new byte[10]);
+            pair.pumpUntil(() -> done(two));
+            assertEquals(Status.DELIVERED, status(two)); // Ordinary 1-message/1-byte budget did not stop API data.
+            assertEquals(id, old.sessionId());
+            var exhausted = old.send(CHANNEL, new byte[10]);
             pair.pumpUntil(() -> done(exhausted));
             assertEquals(Status.FAILED, status(exhausted));
             var fresh = pair.alice.connect("Bob");
             assertFalse(old.isReady());
-            var two = fresh.send(CHANNEL, new byte[0]);
-            pair.pumpUntil(() -> done(two));
-            assertEquals(Status.DELIVERED, status(two));
+            var afterRotation = fresh.send(CHANNEL, new byte[10]);
+            pair.pumpUntil(() -> done(afterRotation));
+            assertEquals(Status.DELIVERED, status(afterRotation));
             assertNotEquals(id, fresh.sessionId());
         }
     }

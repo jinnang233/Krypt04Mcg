@@ -137,7 +137,7 @@ public final class SessionService {
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
                 expectedSequence + 1, session.nextReceiveSequence(), session.localFingerprint(),
                 session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
-                session.nextApiControlReceiveSequence()));
+                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed()));
     }
 
     public synchronized void recordReceivedMessage(String peer, String sessionId, long sequence, long bytes)
@@ -151,7 +151,7 @@ public final class SessionService {
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
                 session.nextSendSequence(), sequence + 1, session.localFingerprint(),
                 session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
-                session.nextApiControlReceiveSequence()));
+                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed()));
     }
 
     /** Reserve and persist before encryption. Gaps are safe; a failed send never reuses its sequence. */
@@ -183,9 +183,10 @@ public final class SessionService {
     private void saveApiCounters(SessionRecord s, long send, long receive, long controlSend, long controlReceive,
                                   boolean control, long bytes) throws IOException {
         save(new SessionRecord(s.peer(), s.peerFingerprint(), s.sessionId(), s.createdAt(), Instant.now(), s.secret(),
-                control ? s.messageCount() : Math.addExact(s.messageCount(), 1),
-                control ? s.bytesUsed() : Math.addExact(s.bytesUsed(), Math.max(0, bytes)),
-                s.nextSendSequence(), s.nextReceiveSequence(), s.localFingerprint(), send, receive, controlSend, controlReceive));
+                s.messageCount(), s.bytesUsed(),
+                s.nextSendSequence(), s.nextReceiveSequence(), s.localFingerprint(), send, receive, controlSend, controlReceive,
+                control ? s.apiMessageCount() : Math.addExact(s.apiMessageCount(), 1),
+                control ? s.apiBytesUsed() : Math.addExact(s.apiBytesUsed(), Math.max(0, bytes))));
     }
 
     public boolean isExpired(SessionRecord session, int ttlMinutes, int maxMessages, long rotateAfterBytes) {
@@ -193,6 +194,13 @@ public final class SessionService {
         return Instant.now().isAfter(expiresAt)
                 || session.messageCount() >= maxMessages
                 || session.bytesUsed() >= rotateAfterBytes;
+    }
+
+    public boolean isApiExpired(SessionRecord session, int ttlMinutes, int maxMessages, long rotateAfterBytes) {
+        Instant expiresAt = session.createdAt().plus(Duration.ofMinutes(ttlMinutes));
+        return Instant.now().isAfter(expiresAt)
+                || session.apiMessageCount() >= maxMessages
+                || session.apiBytesUsed() >= rotateAfterBytes;
     }
 
     private Path pathFor(String peer) {
@@ -213,7 +221,8 @@ public final class SessionService {
                     || record.messageCount() < 0 || record.bytesUsed() < 0
                     || record.nextSendSequence() < 0 || record.nextReceiveSequence() < 0
                     || record.nextApiSendSequence() < 0 || record.nextApiReceiveSequence() < 0
-                    || record.nextApiControlSendSequence() < 0 || record.nextApiControlReceiveSequence() < 0) {
+                    || record.nextApiControlSendSequence() < 0 || record.nextApiControlReceiveSequence() < 0
+                    || record.apiMessageCount() < 0 || record.apiBytesUsed() < 0) {
                 throw new IOException("Session record is invalid");
             }
         } catch (IllegalArgumentException e) {

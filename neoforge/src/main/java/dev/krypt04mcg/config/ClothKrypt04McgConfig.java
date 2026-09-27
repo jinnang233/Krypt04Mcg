@@ -66,6 +66,11 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     @ConfigEntry.BoundedDiscrete(min = 1, max = 4096)
     public int maxDataQueuedMiB = 16;
 
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 1000000)
+    public int apiMaxMessagesPerSession = 65536;
+
+    public long apiRotateAfterBytes = 1024L * 1024L * 1024L;
+
     @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
     public int socketMaxBufferedMiB = 4;
 
@@ -138,6 +143,8 @@ public final class ClothKrypt04McgConfig implements ConfigData {
         config.maxDataReceipts = maxDataReceipts;
         config.maxDataAttempts = maxDataAttempts;
         config.maxDataQueuedMiB = maxDataQueuedMiB;
+        config.apiMaxMessagesPerSession = apiMaxMessagesPerSession;
+        config.apiRotateAfterBytes = apiRotateAfterBytes;
         config.socketMaxBufferedMiB = socketMaxBufferedMiB;
         config.socketWindowChunks = socketWindowChunks;
         config.dataAckTimeoutSeconds = dataAckTimeoutSeconds;

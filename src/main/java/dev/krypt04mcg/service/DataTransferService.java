@@ -126,8 +126,10 @@ public final class DataTransferService implements AutoCloseable {
         String own = local.kemPublicKey().fingerprint() + ":" + local.signaturePublicKey().fingerprint();
         if (!own.equals(session.localFingerprint()) || !session.peerFingerprint().equals(KeyTrustService.fingerprintPair(identity))
                 || (expectedId != null && !expectedId.equals(session.sessionId()))
-                || sessions.isExpired(session, config.sessionTtlMinutes, receipt ? Integer.MAX_VALUE : config.maxMessagesPerSession,
-                        receipt ? Long.MAX_VALUE : config.rotateAfterBytes)) throw new IllegalStateException("Session changed or expired");
+                || sessions.isApiExpired(session, config.sessionTtlMinutes,
+                        receipt ? Integer.MAX_VALUE : config.apiMaxMessagesPerSession,
+                        receipt ? Long.MAX_VALUE : config.apiRotateAfterBytes))
+            throw new IllegalStateException("Session changed or expired");
         return session;
     }
 

@@ -54,8 +54,10 @@ final class SessionServiceTest {
         assertEquals(2, restored.nextApiControlReceiveSequence());
         assertEquals(1, restored.nextSendSequence());
         assertEquals(1, restored.nextReceiveSequence());
-        assertEquals(4, restored.messageCount()); // ACKs do not consume the application rotation budget.
-        assertEquals(42, restored.bytesUsed());
+        assertEquals(2, restored.messageCount());
+        assertEquals(12, restored.bytesUsed());
+        assertEquals(2, restored.apiMessageCount()); // ACKs do not consume either rotation budget.
+        assertEquals(30, restored.apiBytesUsed());
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 4, false, 0));
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 2, false, 0));
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 5, false, 0));

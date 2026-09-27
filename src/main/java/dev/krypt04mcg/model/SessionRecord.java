@@ -17,18 +17,20 @@ public record SessionRecord(
         long nextApiSendSequence,
         long nextApiReceiveSequence,
         long nextApiControlSendSequence,
-        long nextApiControlReceiveSequence
+        long nextApiControlReceiveSequence,
+        int apiMessageCount,
+        long apiBytesUsed
 ) {
     public SessionRecord(String peer, String peerFingerprint, String sessionId, Instant createdAt, Instant lastUsedAt,
                          String secret, int messageCount, long bytesUsed, long nextSendSequence, long nextReceiveSequence) {
         this(peer, peerFingerprint, sessionId, createdAt, lastUsedAt, secret, messageCount, bytesUsed,
-                nextSendSequence, nextReceiveSequence, "", 0, 0, 0, 0);
+                nextSendSequence, nextReceiveSequence, "", 0, 0, 0, 0, 0, 0);
     }
 
     public SessionRecord withLocalFingerprint(String fingerprint) {
         return new SessionRecord(peer, peerFingerprint, sessionId, createdAt, lastUsedAt, secret, messageCount, bytesUsed,
                 nextSendSequence, nextReceiveSequence, fingerprint, nextApiSendSequence, nextApiReceiveSequence,
-                nextApiControlSendSequence, nextApiControlReceiveSequence);
+                nextApiControlSendSequence, nextApiControlReceiveSequence, apiMessageCount, apiBytesUsed);
     }
 
     public SessionRecord(String peer, String peerFingerprint, String sessionId, Instant createdAt, Instant lastUsedAt,

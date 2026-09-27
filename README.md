@@ -78,6 +78,8 @@ not cancel work already queued.
 | `maxDataReceipts` | 32 | 1–8192 |
 | `maxDataAttempts` | 3 | 1–100 |
 | `maxDataQueuedMiB` | 16 | 1–4096 |
+| `apiMaxMessagesPerSession` | 65536 | 1–1000000 |
+| `apiRotateAfterBytes` | 1073741824 | positive byte count |
 | `socketMaxBufferedMiB` | 4 | 1–1024 |
 | `socketWindowChunks` | 4 | 1–1024 |
 | `dataAckTimeoutSeconds` | 65 | 61–299 |
@@ -618,9 +620,10 @@ session.ready().whenComplete((connected, error) -> {
 - `close()` invalidates the local handle and fails its queued sends. It does not erase
   the stored chat session or send a stream-close frame. Closing immediately after
   calling `send` can cancel it, so retain the handle until its transfers finish.
-- Session TTL, `maxMessagesPerSession`, and `rotateAfterBytes` apply to API data as
-  well as chat. Data contributes to the shared usage budget; receipts do not, so a
-  final message can still be acknowledged at the rotation threshold. An exhausted,
+- Session TTL remains shared, while API DATA uses independent
+  `apiMaxMessagesPerSession` and `apiRotateAfterBytes` counters. Bulk streams therefore
+  do not consume the ordinary chat `maxMessagesPerSession`/`rotateAfterBytes` budget;
+  receipts consume neither budget, so a final message can still be acknowledged. An exhausted,
   replaced or mismatched epoch fails closed. Call `connect` again to obtain a fresh
   epoch; existing handles never silently switch keys for queued/retried data.
 - Disable/disconnect invalidates handles and pending work. A subsequent connection
