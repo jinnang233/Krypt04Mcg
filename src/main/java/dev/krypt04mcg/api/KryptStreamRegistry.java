@@ -49,10 +49,14 @@ final class KryptStreamRegistry {
         receiverInstalled = true;
     }
 
-    private void receive(String sender, byte[] encoded) {
+    void receive(String sender, byte[] encoded) {
         final Frame frame;
         try { frame = Frame.decode(encoded); }
-        catch (RuntimeException e) { return; }
+        catch (RuntimeException e) {
+            UUID id = Frame.peekStreamId(encoded);
+            if (id != null) reject(sender, id);
+            return;
+        }
         KryptSocket socket = sockets.get(frame.streamId);
         if (frame.kind == Kind.OPEN) {
             if (socket != null) {
@@ -171,6 +175,14 @@ final class KryptStreamRegistry {
                 if (in.available() != 0) throw new IOException("trailing data");
                 return frame;
             } catch (IOException | IllegalArgumentException e) { throw new IllegalArgumentException("Invalid stream frame", e); }
+        }
+
+        static UUID peekStreamId(byte[] bytes) {
+            if (bytes == null || bytes.length < 18 || (bytes[0] & 0xff) != VERSION) return null;
+            try {
+                var in = new DataInputStream(new ByteArrayInputStream(bytes, 2, 16));
+                return new UUID(in.readLong(), in.readLong());
+            } catch (IOException impossible) { return null; }
         }
     }
 }

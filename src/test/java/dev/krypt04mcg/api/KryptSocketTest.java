@@ -12,11 +12,14 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class KryptSocketTest {
     @Test void frameCodecRejectsMalformedInputAndRoundTripsBinaryData() {
         UUID id = UUID.randomUUID();
-        byte[] data = new byte[] {0, -1, 42};
+        byte[] data = new byte[KryptSocket.CHUNK_BYTES];
+        for (int i = 0; i < data.length; i++) data[i] = (byte) i;
         var decoded = KryptStreamRegistry.Frame.decode(KryptStreamRegistry.Frame.data(id, 17, data).encode());
         assertEquals(KryptStreamRegistry.Kind.DATA, decoded.kind);
         assertEquals(id, decoded.streamId);
@@ -25,6 +28,12 @@ class KryptSocketTest {
         assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(new byte[] {2}));
         assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(
                 Arrays.copyOf(KryptStreamRegistry.Frame.close(id).encode(), 20)));
+    }
+
+    @Test void frameCodecRejectsDataLargerThan128KiB() {
+        UUID id = UUID.randomUUID();
+        byte[] encoded = KryptStreamRegistry.Frame.data(id, 0, new byte[KryptSocket.CHUNK_BYTES + 1]).encode();
+        assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(encoded));
     }
 
     @Test void chunksFlowThroughWindowInOrderAndCloseAfterFinalCompletion() throws Exception {
@@ -148,6 +157,59 @@ class KryptSocketTest {
         remoteReset.data(0, new byte[] {1, 2, 3});
         remoteReset.remoteReset();
         assertThrows(java.io.IOException.class, () -> remoteReset.getInputStream().read());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransferResult.Status.class, names = "DELIVERED", mode = EnumSource.Mode.EXCLUDE)
+    void everyDataTransferFailureStatusResetsSocket(TransferResult.Status status) throws Exception {
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport);
+        socket.getOutputStream().write(new byte[] {1});
+        transport.complete(0, status);
+        assertTrue(socket.isClosed());
+        assertEquals(KryptStreamRegistry.Kind.RESET, transport.frames.getLast().kind);
+    }
+
+    @Test void registryResetsUnknownStreamsWrongPeersAndMalformedKnownFrames() {
+        Map<String, Deque<KryptStreamRegistry.Frame>> sent = new HashMap<>();
+        java.util.function.Function<String, KryptSession> sessions = peer -> recordingSession(peer,
+                sent.computeIfAbsent(peer, ignored -> new ArrayDeque<>()));
+        Krypt04McgApi.initialize((player, channel, data) -> completedTransfer(TransferResult.Status.DELIVERED), sessions);
+        KryptStreamRegistry registry = new KryptStreamRegistry();
+        Deque<KryptStreamRegistry.Frame> bobFrames = sent.computeIfAbsent("Bob", ignored -> new ArrayDeque<>());
+        KryptSocket socket = registry.connect(sessions.apply("Bob"), "test:stream");
+        bobFrames.clear();
+
+        registry.receive("Mallory", KryptStreamRegistry.Frame.close(socket.streamId()).encode());
+        assertTrue(socket.isClosed());
+        assertEquals(KryptStreamRegistry.Kind.RESET, bobFrames.getLast().kind);
+        assertEquals(KryptStreamRegistry.Kind.RESET, sent.get("Mallory").getLast().kind);
+
+        UUID unknown = UUID.randomUUID();
+        registry.receive("Alice", KryptStreamRegistry.Frame.close(unknown).encode());
+        assertEquals(unknown, sent.get("Alice").getLast().streamId);
+
+        UUID malformed = UUID.randomUUID();
+        byte[] oversized = KryptStreamRegistry.Frame.data(malformed, 0, new byte[] {1}).encode();
+        oversized[26] = 0x00;
+        oversized[27] = 0x02;
+        oversized[28] = 0x00;
+        oversized[29] = 0x01;
+        registry.receive("Alice", oversized);
+        assertEquals(malformed, sent.get("Alice").getLast().streamId);
+        assertEquals(KryptStreamRegistry.Kind.RESET, sent.get("Alice").getLast().kind);
+    }
+
+    private static KryptSession recordingSession(String peer, Deque<KryptStreamRegistry.Frame> sent) {
+        return new KryptSession(peer, CompletableFuture.completedFuture("ready"), (channel, bytes) -> {
+            sent.addLast(KryptStreamRegistry.Frame.decode(bytes));
+            return completedTransfer(TransferResult.Status.DELIVERED);
+        }, () -> { }, () -> true);
+    }
+
+    private static DataTransfer completedTransfer(TransferResult.Status status) {
+        UUID id = UUID.randomUUID();
+        return new DataTransfer(id, CompletableFuture.completedFuture(new TransferResult(id, status)));
     }
 
     private static final class TestTransport implements KryptSocket.Transport {
