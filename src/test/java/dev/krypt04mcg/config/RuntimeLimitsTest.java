@@ -37,6 +37,25 @@ class RuntimeLimitsTest {
         assertThrows(java.io.IOException.class, () -> ConfigFileStore.load(file));
     }
 
+    @Test void socketLimitsLoadFromJsonAndClampWithoutByteOverflow() throws Exception {
+        Path file = root.resolve("socket.json");
+        var defaults = ConfigFileStore.load(file);
+        assertEquals(1, defaults.socketMaxBufferedMiB());
+        assertEquals(4, defaults.socketWindowChunks());
+        Files.writeString(file, "{\"socketMaxBufferedMiB\":2,\"socketWindowChunks\":8}");
+        var config = ConfigFileStore.load(file);
+        assertEquals(2, config.socketMaxBufferedMiB());
+        assertEquals(8, config.socketWindowChunks());
+        config.socketMaxBufferedMiB = Integer.MAX_VALUE;
+        config.socketWindowChunks = Integer.MAX_VALUE;
+        assertEquals(1024 * 1024 * 1024, config.socketMaxBufferedMiB() * 1024 * 1024);
+        assertEquals(1024, config.socketWindowChunks());
+        config.socketMaxBufferedMiB = Integer.MIN_VALUE;
+        config.socketWindowChunks = 0;
+        assertEquals(1, config.socketMaxBufferedMiB());
+        assertEquals(1, config.socketWindowChunks());
+    }
+
     @Test void cachesUseConfiguredLimitsAndObserveChanges() throws Exception {
         var config = new Krypt04McgConfig();
         config.maxConversationMessages = 2;

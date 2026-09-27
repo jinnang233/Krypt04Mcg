@@ -1,4 +1,6 @@
 {
+  "text.autoconfig.krypt04mcg.option.socketMaxBufferedMiB": "Socket 緩衝上限（MiB） (1–1024)",
+  "text.autoconfig.krypt04mcg.option.socketWindowChunks": "Socket 未確認分塊上限 (1–1024)",
   "text.autoconfig.krypt04mcg.option.reassemblyTimeoutSeconds": "分片重組逾時（秒） (1–86400)",
   "text.autoconfig.krypt04mcg.option.maxReassemblyMessages": "待重組聊天訊息上限 (1–16384)",
   "text.autoconfig.krypt04mcg.option.maxFragmentsPerMessage": "單則聊天訊息分片上限 (1–65536)",

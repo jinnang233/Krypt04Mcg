@@ -1,5 +1,6 @@
 package dev.krypt04mcg.api;
 
+import dev.krypt04mcg.config.Krypt04McgConfig;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
@@ -73,6 +74,12 @@ public final class Krypt04McgApi {
 
     /** Internal loader bridge. */
     public static void initialize(Sender transport, Function<String, KryptSession> connections) {
+        initialize(transport, connections, new Krypt04McgConfig());
+    }
+
+    /** Internal loader bridge with live stream limits. */
+    public static void initialize(Sender transport, Function<String, KryptSession> connections, Krypt04McgConfig config) {
+        STREAMS.configure(config);
         initialize(transport);
         connector = Objects.requireNonNull(connections);
     }

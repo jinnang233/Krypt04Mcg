@@ -129,7 +129,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
         dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
             if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
             return dataApi.send(player, channel, data);
-        }, dataApi::connect);
+        }, dataApi::connect, config);
         PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.DataPayload.TYPE,

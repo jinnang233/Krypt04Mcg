@@ -1,4 +1,6 @@
 {
+  "text.autoconfig.krypt04mcg.option.socketMaxBufferedMiB": "Socket buffer limit (MiB) (1–1024)",
+  "text.autoconfig.krypt04mcg.option.socketWindowChunks": "Socket in-flight chunk limit (1–1024)",
   "text.autoconfig.krypt04mcg.option.reassemblyTimeoutSeconds": "Fragment reassembly timeout (seconds) (1–86400)",
   "text.autoconfig.krypt04mcg.option.maxReassemblyMessages": "Maximum pending chat assemblies (1–16384)",
   "text.autoconfig.krypt04mcg.option.maxFragmentsPerMessage": "Maximum fragments per chat message (1–65536)",

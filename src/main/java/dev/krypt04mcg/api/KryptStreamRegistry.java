@@ -1,6 +1,7 @@
 package dev.krypt04mcg.api;
 
 import dev.krypt04mcg.api.TransferResult.Status;
+import dev.krypt04mcg.config.Krypt04McgConfig;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -20,12 +21,15 @@ final class KryptStreamRegistry {
     private final Map<UUID, KryptSocket> sockets = new HashMap<>();
     private final Map<String, Consumer<KryptSocket>> listeners = new HashMap<>();
     private boolean receiverInstalled;
+    private Krypt04McgConfig config = new Krypt04McgConfig();
+
+    void configure(Krypt04McgConfig config) { this.config = Objects.requireNonNull(config); }
 
     KryptSocket connect(KryptSession session, String channel) {
         validateChannel(channel);
         installReceiver();
         UUID id = UUID.randomUUID();
-        KryptSocket socket = new KryptSocket(session.peer(), channel, id, frame -> send(session, frame, id));
+        KryptSocket socket = new KryptSocket(session.peer(), channel, id, frame -> send(session, frame, id), config);
         sockets.put(id, socket);
         socket.opened();
         return socket;
@@ -55,7 +59,7 @@ final class KryptStreamRegistry {
             Consumer<KryptSocket> listener = listeners.get(frame.channel);
             KryptSession session = Krypt04McgApi.connect(sender);
             if (listener == null) { send(session, Frame.reset(frame.streamId), frame.streamId); return; }
-            socket = new KryptSocket(sender, frame.channel, frame.streamId, reply -> send(session, reply, frame.streamId));
+            socket = new KryptSocket(sender, frame.channel, frame.streamId, reply -> send(session, reply, frame.streamId), config);
             sockets.put(frame.streamId, socket);
             try { listener.accept(socket); }
             catch (RuntimeException e) { socket.close(); throw e; }

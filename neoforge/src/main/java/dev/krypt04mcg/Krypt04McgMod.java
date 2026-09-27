@@ -154,7 +154,7 @@ public final class Krypt04McgMod {
         dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
             if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
             return dataApi.send(player, channel, data);
-        }, dataApi::connect);
+        }, dataApi::connect, config);
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> dataApi.tick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> dataApi.clear());
         OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());

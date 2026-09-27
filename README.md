@@ -78,13 +78,15 @@ not cancel work already queued.
 | `maxDataReceipts` | 32 | 1–8192 |
 | `maxDataAttempts` | 3 | 1–100 |
 | `maxDataQueuedMiB` | 16 | 1–4096 |
+| `socketMaxBufferedMiB` | 1 | 1–1024 |
+| `socketWindowChunks` | 4 | 1–1024 |
 | `dataAckTimeoutSeconds` | 65 | 61–299 |
 | `dataTransferTimeoutSeconds` | 240 | 1–86400 |
 | `dataFragmentsPerTick` | 4 | 1–1024 |
 | `sharingOfferTimeoutSeconds` | 60 | 1–300 |
 | `maxPendingSharingOffers` | 4 | 1–1024 |
 
-Time fields use seconds; `maxDataQueuedMiB` uses MiB. `maxDataAttempts`
+Time fields use seconds; `maxDataQueuedMiB` and `socketMaxBufferedMiB` use MiB. `maxDataAttempts`
 includes the initial send. The overall transfer timeout includes queueing and may
 end a transfer before all attempts are used. The ACK timeout stays above the
 60-second optional-transfer assembly lifetime. Out-of-range values from JSON are
@@ -552,8 +554,13 @@ try (KryptSocket socket = Krypt04McgApi.connect("Alice", "mymod:test")) {
 
 The stream wire format is internal and versioned. Each frame carries a random stream
 UUID and is one of `OPEN`, `DATA`, `ACK`, `CLOSE`, or `RESET`. DATA frames contain a
-monotonic 64-bit sequence and at most 16 KiB. Up to four chunks may be in flight;
-queued output is bounded to 1 MiB and a write exceeding the available bound throws
+monotonic 64-bit sequence and at most 16 KiB. `socketWindowChunks` controls the number
+of in-flight chunks (default 4). `socketMaxBufferedMiB` limits each socket's queued
+output and unread input separately (default 1 MiB each); in-flight output is separate
+from the queued output limit. Both settings apply to outgoing and accepted sockets.
+Saving in Cloth Config applies the limits to subsequent writes, received DATA, and
+window checks on existing sockets; lowering them does not discard buffered data or
+cancel in-flight chunks. A write exceeding the available buffer limit throws
 `IOException` instead of blocking the client thread. Frames are themselves sent with
 the reliable Session API, so encryption, peer authentication, retries, Relay routing,
 and transport ACK/NACK remain unchanged. The stream ACK is separate: it advances the

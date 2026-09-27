@@ -66,6 +66,49 @@ class KryptSocketTest {
         assertEquals(KryptStreamRegistry.Kind.RESET, wire.getLast().kind);
     }
 
+    @Test void configuredBufferAndWindowApplyToWritesAndLiveChanges() throws Exception {
+        var config = new dev.krypt04mcg.config.Krypt04McgConfig();
+        config.socketMaxBufferedMiB = 2;
+        config.socketWindowChunks = 1;
+        Deque<KryptStreamRegistry.Frame> wire = new ArrayDeque<>();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), wire::addLast, config);
+        socket.getOutputStream().write(new byte[2 * 1024 * 1024]);
+        assertEquals(1, wire.size());
+        socket.getOutputStream().write(new byte[KryptSocket.CHUNK_BYTES]);
+        assertThrows(java.io.IOException.class, () -> socket.getOutputStream().write(1));
+        assertEquals(1, wire.size());
+        config.socketWindowChunks = 3;
+        socket.ack(0);
+        assertEquals(4, wire.size());
+        config.socketWindowChunks = 1;
+        socket.ack(1);
+        socket.ack(2);
+        assertEquals(4, wire.size());
+        socket.ack(3);
+        assertEquals(5, wire.size());
+        config.socketMaxBufferedMiB = 1;
+        assertThrows(java.io.IOException.class, () -> socket.getOutputStream().write(1));
+        config.socketMaxBufferedMiB = 3;
+        assertDoesNotThrow(() -> socket.getOutputStream().write(1));
+    }
+
+    @Test void configuredIncomingLimitReleasesCapacityAfterReads() throws Exception {
+        var config = new dev.krypt04mcg.config.Krypt04McgConfig();
+        config.socketMaxBufferedMiB = 2;
+        Deque<KryptStreamRegistry.Frame> wire = new ArrayDeque<>();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), wire::addLast, config);
+        int chunks = 2 * 1024 * 1024 / KryptSocket.CHUNK_BYTES;
+        for (int i = 0; i < chunks; i++) socket.data(i, new byte[KryptSocket.CHUNK_BYTES]);
+        assertFalse(socket.isClosed());
+        assertEquals(chunks, wire.size());
+        assertEquals(0, socket.getInputStream().read());
+        socket.data(chunks, new byte[] {42});
+        assertFalse(socket.isClosed());
+        socket.data(chunks + 1, new byte[] {43});
+        assertTrue(socket.isClosed());
+        assertEquals(KryptStreamRegistry.Kind.RESET, wire.getLast().kind);
+    }
+
     private static void deliver(KryptStreamRegistry.Frame frame, KryptSocket target) {
         switch (frame.kind) {
             case DATA -> target.data(frame.sequence, frame.data);

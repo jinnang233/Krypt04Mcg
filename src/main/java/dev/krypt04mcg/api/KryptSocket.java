@@ -1,5 +1,6 @@
 package dev.krypt04mcg.api;
 
+import dev.krypt04mcg.config.Krypt04McgConfig;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,6 +25,7 @@ public final class KryptSocket implements AutoCloseable {
     private final String peer, channel;
     private final UUID streamId;
     private final Transport transport;
+    private final Krypt04McgConfig config;
     private final Object lock = new Object();
     private final Deque<byte[]> outgoing = new ArrayDeque<>();
     private final Deque<byte[]> incoming = new ArrayDeque<>();
@@ -34,6 +36,11 @@ public final class KryptSocket implements AutoCloseable {
     private boolean localClosing, localClosed, remoteClosed, failed;
 
     KryptSocket(String peer, String channel, UUID streamId, Transport transport) {
+        this(peer, channel, streamId, transport, new Krypt04McgConfig());
+    }
+
+    KryptSocket(String peer, String channel, UUID streamId, Transport transport, Krypt04McgConfig config) {
+        this.config = Objects.requireNonNull(config);
         this.peer = Objects.requireNonNull(peer);
         this.channel = Objects.requireNonNull(channel);
         this.streamId = Objects.requireNonNull(streamId);
@@ -53,7 +60,7 @@ public final class KryptSocket implements AutoCloseable {
         boolean accepted;
         synchronized (lock) {
             accepted = !failed && !remoteClosed && sequence == receiveSequence
-                    && bytes.length <= CHUNK_BYTES && queuedIncoming() <= MAX_BUFFERED_BYTES - bytes.length;
+                    && bytes.length <= CHUNK_BYTES && queuedIncoming() <= config.socketMaxBufferedMiB() * 1024 * 1024 - bytes.length;
             if (accepted) {
                 receiveSequence++;
                 incoming.addLast(bytes);
@@ -91,7 +98,7 @@ public final class KryptSocket implements AutoCloseable {
         while (true) {
             KryptStreamRegistry.Frame next;
             synchronized (lock) {
-                if (failed || inFlight >= WINDOW_CHUNKS) return;
+                if (failed || inFlight >= config.socketWindowChunks()) return;
                 byte[] bytes = outgoing.pollFirst();
                 if (bytes != null) {
                     bufferedOutgoing -= bytes.length;
@@ -130,7 +137,7 @@ public final class KryptSocket implements AutoCloseable {
             Objects.checkFromIndexSize(offset, length, source.length);
             synchronized (lock) {
                 if (localClosing || failed) throw new IOException("KryptSocket output is closed");
-                if (length > MAX_BUFFERED_BYTES - bufferedOutgoing) throw new IOException("KryptSocket backpressure");
+                if (length > config.socketMaxBufferedMiB() * 1024 * 1024 - bufferedOutgoing) throw new IOException("KryptSocket backpressure");
                 int end = offset + length;
                 while (offset < end) {
                     int count = Math.min(CHUNK_BYTES, end - offset);

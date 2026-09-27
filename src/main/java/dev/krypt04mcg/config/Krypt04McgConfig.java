@@ -37,6 +37,8 @@ public class Krypt04McgConfig {
     public int maxDataReceipts = 32;
     public int maxDataAttempts = 3;
     public int maxDataQueuedMiB = 16;
+    public int socketMaxBufferedMiB = 1;
+    public int socketWindowChunks = 4;
     public int dataAckTimeoutSeconds = 65;
     public int dataTransferTimeoutSeconds = 240;
     public int dataFragmentsPerTick = 4;
@@ -77,6 +79,14 @@ public class Krypt04McgConfig {
 
     public int maxDataQueuedMiB() {
         return Math.clamp(maxDataQueuedMiB, 1, 4096);
+    }
+
+    public int socketMaxBufferedMiB() {
+        return Math.clamp(socketMaxBufferedMiB, 1, 1024);
+    }
+
+    public int socketWindowChunks() {
+        return Math.clamp(socketWindowChunks, 1, 1024);
     }
 
     public int dataAckTimeoutSeconds() {
