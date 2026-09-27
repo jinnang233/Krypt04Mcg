@@ -40,7 +40,7 @@ class RuntimeLimitsTest {
     @Test void socketLimitsLoadFromJsonAndClampWithoutByteOverflow() throws Exception {
         Path file = root.resolve("socket.json");
         var defaults = ConfigFileStore.load(file);
-        assertEquals(1, defaults.socketMaxBufferedMiB());
+        assertEquals(4, defaults.socketMaxBufferedMiB());
         assertEquals(4, defaults.socketWindowChunks());
         Files.writeString(file, "{\"socketMaxBufferedMiB\":2,\"socketWindowChunks\":8}");
         var config = ConfigFileStore.load(file);

@@ -37,7 +37,7 @@ public class Krypt04McgConfig {
     public int maxDataReceipts = 32;
     public int maxDataAttempts = 3;
     public int maxDataQueuedMiB = 16;
-    public int socketMaxBufferedMiB = 1;
+    public int socketMaxBufferedMiB = 4;
     public int socketWindowChunks = 4;
     public int dataAckTimeoutSeconds = 65;
     public int dataTransferTimeoutSeconds = 240;

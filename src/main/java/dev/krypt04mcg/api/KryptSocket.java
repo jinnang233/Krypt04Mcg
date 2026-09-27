@@ -20,7 +20,7 @@ import java.util.UUID;
 public final class KryptSocket implements AutoCloseable {
     static final int CHUNK_BYTES = 128 * 1024;
     static final int WINDOW_CHUNKS = 4;
-    static final int MAX_BUFFERED_BYTES = 1024 * 1024;
+    static final int MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
     private static final int MAX_WINDOW_CHUNKS = 1024;
 
     interface Transport { DataTransfer send(KryptStreamRegistry.Frame frame); }

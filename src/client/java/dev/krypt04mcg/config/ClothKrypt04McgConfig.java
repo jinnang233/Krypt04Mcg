@@ -67,7 +67,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     public int maxDataQueuedMiB = 16;
 
     @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
-    public int socketMaxBufferedMiB = 1;
+    public int socketMaxBufferedMiB = 4;
 
     @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
     public int socketWindowChunks = 4;
