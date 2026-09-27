@@ -29,7 +29,7 @@ class RuntimeLimitsTest {
         assertEquals(61, config.dataAckTimeoutSeconds());
         assertEquals(128, config.maxReassemblyMessages());
         config.maxDataQueuedMiB = Integer.MAX_VALUE;
-        assertEquals(256, config.maxDataQueuedMiB());
+        assertEquals(4096, config.maxDataQueuedMiB());
         Files.writeString(file, "{bad json");
         assertThrows(java.io.IOException.class, () -> ConfigFileStore.load(file));
         assertEquals("{bad json", Files.readString(file));

@@ -44,51 +44,51 @@ public class Krypt04McgConfig {
     public int maxPendingSharingOffers = 4;
 
     public int reassemblyTimeoutSeconds() {
-        return Math.clamp(reassemblyTimeoutSeconds, 1, 3600);
+        return Math.clamp(reassemblyTimeoutSeconds, 1, 86400);
     }
 
     public int maxReassemblyMessages() {
-        return Math.clamp(maxReassemblyMessages, 1, 1024);
+        return Math.clamp(maxReassemblyMessages, 1, 16384);
     }
 
     public int maxFragmentsPerMessage() {
-        return Math.clamp(maxFragmentsPerMessage, 1, 4096);
+        return Math.clamp(maxFragmentsPerMessage, 1, 65536);
     }
 
     public int maxConversationMessages() {
-        return Math.clamp(maxConversationMessages, 1, 10000);
+        return Math.clamp(maxConversationMessages, 1, 100000);
     }
 
     public int maxCachedSentMessages() {
-        return Math.clamp(maxCachedSentMessages, 1, 256);
+        return Math.clamp(maxCachedSentMessages, 1, 4096);
     }
 
     public int maxDataTransfers() {
-        return Math.clamp(maxDataTransfers, 1, 128);
+        return Math.clamp(maxDataTransfers, 1, 4096);
     }
 
     public int maxDataReceipts() {
-        return Math.clamp(maxDataReceipts, 1, 256);
+        return Math.clamp(maxDataReceipts, 1, 8192);
     }
 
     public int maxDataAttempts() {
-        return Math.clamp(maxDataAttempts, 1, 10);
+        return Math.clamp(maxDataAttempts, 1, 100);
     }
 
     public int maxDataQueuedMiB() {
-        return Math.clamp(maxDataQueuedMiB, 1, 256);
+        return Math.clamp(maxDataQueuedMiB, 1, 4096);
     }
 
     public int dataAckTimeoutSeconds() {
-        return Math.clamp(dataAckTimeoutSeconds, 61, 240);
+        return Math.clamp(dataAckTimeoutSeconds, 61, 299);
     }
 
     public int dataTransferTimeoutSeconds() {
-        return Math.clamp(dataTransferTimeoutSeconds, 1, 300);
+        return Math.clamp(dataTransferTimeoutSeconds, 1, 86400);
     }
 
     public int dataFragmentsPerTick() {
-        return Math.clamp(dataFragmentsPerTick, 1, 64);
+        return Math.clamp(dataFragmentsPerTick, 1, 1024);
     }
 
     public int sharingOfferTimeoutSeconds() {
@@ -96,7 +96,7 @@ public class Krypt04McgConfig {
     }
 
     public int maxPendingSharingOffers() {
-        return Math.clamp(maxPendingSharingOffers, 1, 32);
+        return Math.clamp(maxPendingSharingOffers, 1, 1024);
     }
 
     public ChatSendMode chatSendMode = ChatSendMode.CHAT;

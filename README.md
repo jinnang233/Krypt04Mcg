@@ -69,26 +69,33 @@ not cancel work already queued.
 
 | JSON field | Default | Allowed range |
 | --- | ---: | ---: |
-| `reassemblyTimeoutSeconds` | 120 | 1–3600 |
-| `maxReassemblyMessages` | 128 | 1–1024 |
-| `maxFragmentsPerMessage` | 512 | 1–4096 |
-| `maxConversationMessages` | 300 | 1–10000 |
-| `maxCachedSentMessages` | 12 | 1–256 |
-| `maxDataTransfers` | 16 | 1–128 |
-| `maxDataReceipts` | 32 | 1–256 |
-| `maxDataAttempts` | 3 | 1–10 |
-| `maxDataQueuedMiB` | 16 | 1–256 |
-| `dataAckTimeoutSeconds` | 65 | 61–240 |
-| `dataTransferTimeoutSeconds` | 240 | 1–300 |
-| `dataFragmentsPerTick` | 4 | 1–64 |
+| `reassemblyTimeoutSeconds` | 120 | 1–86400 |
+| `maxReassemblyMessages` | 128 | 1–16384 |
+| `maxFragmentsPerMessage` | 512 | 1–65536 |
+| `maxConversationMessages` | 300 | 1–100000 |
+| `maxCachedSentMessages` | 12 | 1–4096 |
+| `maxDataTransfers` | 16 | 1–4096 |
+| `maxDataReceipts` | 32 | 1–8192 |
+| `maxDataAttempts` | 3 | 1–100 |
+| `maxDataQueuedMiB` | 16 | 1–4096 |
+| `dataAckTimeoutSeconds` | 65 | 61–299 |
+| `dataTransferTimeoutSeconds` | 240 | 1–86400 |
+| `dataFragmentsPerTick` | 4 | 1–1024 |
 | `sharingOfferTimeoutSeconds` | 60 | 1–300 |
-| `maxPendingSharingOffers` | 4 | 1–32 |
+| `maxPendingSharingOffers` | 4 | 1–1024 |
 
 Time fields use seconds; `maxDataQueuedMiB` uses MiB. `maxDataAttempts`
 includes the initial send. The overall transfer timeout includes queueing and may
 end a transfer before all attempts are used. The ACK timeout stays above the
 60-second optional-transfer assembly lifetime. Out-of-range values from JSON are
 clamped when used, matching the settings screen bounds.
+
+The overall transfer timeout can be extended to one day to allow longer queue
+waits. Already encrypted data packets still expire after 300 seconds, so this does
+not extend their validity or guarantee delivery after long retry delays. ACK waits
+are capped at 299 seconds and sharing confirmations at 300 seconds to stay within
+that packet lifetime. Larger queue/cache limits permit higher memory and disk use;
+defaults remain unchanged.
 
 Peers should choose compatible `maxFragmentsPerMessage` values for larger chat
 messages. These settings adjust local resource limits and timing; cryptographic

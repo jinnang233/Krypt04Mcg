@@ -157,7 +157,7 @@ public final class ChatConversationStore {
     }
 
     private void trim() {
-        while (entries.size() > Math.clamp(maxMessages.getAsInt(), 1, 10000)) {
+        while (entries.size() > Math.clamp(maxMessages.getAsInt(), 1, 100000)) {
             entries.removeFirst();
         }
     }

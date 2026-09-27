@@ -60,7 +60,7 @@ public final class SentMessageCacheService {
     }
 
     private void trim(Map<String, CachedSentMessage> cache) {
-        while (cache.size() > Math.clamp(maxMessages.getAsInt(), 1, 256)) {
+        while (cache.size() > Math.clamp(maxMessages.getAsInt(), 1, 4096)) {
             String oldest = cache.values().stream()
                     .min(Comparator.comparing(CachedSentMessage::createdAt))
                     .map(CachedSentMessage::messageId)
