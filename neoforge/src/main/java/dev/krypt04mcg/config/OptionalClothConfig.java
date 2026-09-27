@@ -14,15 +14,23 @@ public final class OptionalClothConfig {
 
     public static Krypt04McgConfig loadOrDefault() {
         if (!ModList.get().isLoaded(CLOTH_CONFIG_MOD_ID)) {
-            Krypt04McgMod.LOGGER.info("Cloth Config is not installed; using default Krypt04Mcg settings");
-            return new Krypt04McgConfig();
+            return loadFile();
         }
         try {
             return ClothConfigBridge.load();
         } catch (LinkageError e) {
-            Krypt04McgMod.LOGGER.warn("Unable to load Krypt04Mcg settings from Cloth Config; using defaults", e);
+            Krypt04McgMod.LOGGER.warn("Unable to load Krypt04Mcg settings from Cloth Config; using JSON settings", e);
         }
-        return new Krypt04McgConfig();
+        return loadFile();
+    }
+
+    private static Krypt04McgConfig loadFile() {
+        try {
+            return ConfigFileStore.load(net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("krypt04mcg.json"));
+        } catch (java.io.IOException e) {
+            Krypt04McgMod.LOGGER.warn("Unable to read Krypt04Mcg JSON settings; using defaults", e);
+            return new Krypt04McgConfig();
+        }
     }
 
     public static void registerSaveListener(Consumer<Krypt04McgConfig> listener) {

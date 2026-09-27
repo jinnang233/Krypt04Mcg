@@ -14,10 +14,6 @@ import java.util.function.*;
 
 /** Client-thread state machine; only immutable snapshots cross the single crypto worker. */
 public final class DataTransferService implements AutoCloseable {
-    static final int MAX_TRANSFERS = 16, MAX_RECEIPTS = 32, MAX_ATTEMPTS = 3;
-    static final long MAX_QUEUED_BYTES = 16L * 1024 * 1024;
-    // Longer than the assembler's 60-second lifetime, allowing incomplete attempts to expire.
-    static final long ACK_TIMEOUT_MS = 65000, TRANSFER_TIMEOUT_MS = 240000;
     private final Krypt04McgConfig config;
     private final KeyStoreService keys;
     private final KeyTrustService trust;
@@ -80,7 +76,7 @@ public final class DataTransferService implements AutoCloseable {
         }
         Connection connection = new Connection(player);
         try {
-            if (!active(generation) || resetting || connections.size() >= MAX_TRANSFERS)
+            if (!active(generation) || resetting || connections.size() >= config.maxDataTransfers())
                 throw new IllegalStateException("Session API disabled, unavailable or at capacity");
             connection.identity = trusted(player);
             connection.local = keys.local();
@@ -145,8 +141,8 @@ public final class DataTransferService implements AutoCloseable {
         request.connection = connection; request.kind = kind; request.begin = begin;
         Status failure = closed || resetting ? Status.DISCONNECTED : !config.enableDataApi ? Status.DISABLED
                 : !available.getAsBoolean() ? Status.DISCONNECTED : null;
-        if (failure == null && (pending.size() >= MAX_TRANSFERS || data.length > FileTransferCodec.MAX_FILE_BYTES
-                || request.weight > MAX_QUEUED_BYTES - queuedBytes)) failure = Status.BACKPRESSURE;
+        if (failure == null && (pending.size() >= config.maxDataTransfers() || data.length > FileTransferCodec.MAX_FILE_BYTES
+                || request.weight > config.maxDataQueuedMiB() * 1024L * 1024L - queuedBytes)) failure = Status.BACKPRESSURE;
         if (connection != null && connection.disposed) failure = Status.FAILED;
         if (failure == null) {
             try { request.identity = trusted(request.peer); request.local = keys.local(); }
@@ -189,12 +185,12 @@ public final class DataTransferService implements AutoCloseable {
         seen.values().removeIf(entry -> entry.expires < now);
         exchanges.values().removeIf(expiry -> expiry < now);
         for (Connection connection : List.copyOf(connections.values()))
-            if (!connection.ready.isDone() && now - connection.created >= TRANSFER_TIMEOUT_MS) closeConnection(connection, Status.TIMEOUT);
+            if (!connection.ready.isDone() && now - connection.created >= config.dataTransferTimeoutSeconds() * 1000L) closeConnection(connection, Status.TIMEOUT);
         // Complete outside iteration: an observer may immediately enqueue another transfer.
         for (Pending request : List.copyOf(pending)) {
-            if (now - request.created >= TRANSFER_TIMEOUT_MS) finish(request, Status.TIMEOUT);
+            if (now - request.created >= config.dataTransferTimeoutSeconds() * 1000L) finish(request, Status.TIMEOUT);
             else if (request.waiting && now >= request.ackDeadline) {
-                if (request.attempts >= MAX_ATTEMPTS) finish(request, Status.TIMEOUT);
+                if (request.attempts >= config.maxDataAttempts()) finish(request, Status.TIMEOUT);
                 else request.waiting = false;
             }
         }
@@ -202,7 +198,7 @@ public final class DataTransferService implements AutoCloseable {
         if (!active(epoch)) return;
         prepare();
         // Finish each envelope before selecting a receipt; the assembler admits one per sender.
-        for (int i = 0; i < 4 && active(epoch); i++) {
+        for (int i = 0; i < config.dataFragmentsPerTick() && active(epoch); i++) {
             if (wire == null) {
                 wire = controls.pollFirst();
                 Pending head = pending.peekFirst();
@@ -222,7 +218,7 @@ public final class DataTransferService implements AutoCloseable {
                     if (current.request != null) {
                         current.request.inFlight = false;
                         current.request.waiting = true;
-                        current.request.ackDeadline = now + ACK_TIMEOUT_MS;
+                        current.request.ackDeadline = now + config.dataAckTimeoutSeconds() * 1000L;
                     }
                 }
             } catch (Exception e) {
@@ -346,7 +342,7 @@ public final class DataTransferService implements AutoCloseable {
                         && (request.session == null ? verified.session == null
                             : verified.session != null && request.session.sessionId().equals(packet.sessionId()))
                         && KeyTrustService.fingerprintPair(request.identity).equals(KeyTrustService.fingerprintPair(input.identity)))
-                    finish(request, clock.getAsLong() - request.created >= TRANSFER_TIMEOUT_MS ? Status.TIMEOUT
+                    finish(request, clock.getAsLong() - request.created >= config.dataTransferTimeoutSeconds() * 1000L ? Status.TIMEOUT
                             : data.kind() == Kind.ACK ? Status.DELIVERED : Status.REJECTED);
             }
             return;
@@ -381,7 +377,7 @@ public final class DataTransferService implements AutoCloseable {
             result = entry.result;
         }
         if (data.transferId() != null && receipts.size() + controls.size() + (preparingReceipt ? 1 : 0)
-                + (wire != null && wire.request == null ? 1 : 0) < MAX_RECEIPTS)
+                + (wire != null && wire.request == null ? 1 : 0) < config.maxDataReceipts())
             receipts.addLast(new Receipt(input.peer, data.transferId(), result, input.identity, input.local, verified.session));
     }
 

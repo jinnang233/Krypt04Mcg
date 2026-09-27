@@ -63,7 +63,7 @@ class DataTransferServiceTest {
             int oldReceipts = pair.bobSent.size();
             pair.pumpUntil(() -> pair.bobSent.size() > oldReceipts);
             pair.dropBob = false;
-            pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+            pair.now.addAndGet(pair.config.dataAckTimeoutSeconds() * 1000L + 1);
             pair.pumpUntil(() -> done(failed));
             assertEquals(Status.REJECTED, status(failed));
             assertEquals(1, calls.get());
@@ -82,7 +82,7 @@ class DataTransferServiceTest {
             String original = assembled(pair.aliceSent);
             pair.aliceSent.clear();
             pair.dropBob = false;
-            pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+            pair.now.addAndGet(pair.config.dataAckTimeoutSeconds() * 1000L + 1);
             pair.pumpUntil(() -> done(transfer));
             assertEquals(Status.DELIVERED, status(transfer));
             assertEquals(original, assembled(pair.aliceSent));
@@ -100,10 +100,30 @@ class DataTransferServiceTest {
             var transfer = pair.alice.send(null, CHANNEL, bytes);
             pair.pumpUntil(() -> pair.aliceSent.stream().anyMatch(DataTransferServiceTest::lastFragment));
             assertEquals(0, calls.get());
-            pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+            pair.now.addAndGet(pair.config.dataAckTimeoutSeconds() * 1000L + 1);
             pair.pumpUntil(() -> done(transfer));
             assertEquals(Status.DELIVERED, status(transfer));
             assertEquals(1, calls.get());
+        }
+    }
+
+    @Test void customQueueLimitRetryCountAndAckDeadlineAreUsed() throws Exception {
+        try (var pair = new Pair()) {
+            pair.config.maxDataTransfers = 1;
+            pair.config.maxDataAttempts = 1;
+            pair.config.dataAckTimeoutSeconds = 70;
+            pair.config.dataFragmentsPerTick = 1;
+            pair.dropAlice = true;
+            var transfer = pair.alice.send(null, CHANNEL, new byte[0]);
+            assertEquals(Status.BACKPRESSURE, status(pair.alice.send(null, CHANNEL, new byte[0])));
+            pair.pumpUntil(() -> pair.aliceSent.stream().anyMatch(DataTransferServiceTest::lastFragment));
+            pair.now.addAndGet(69000);
+            pair.tick();
+            assertFalse(done(transfer));
+            pair.now.addAndGet(1001);
+            pair.pumpUntil(() -> done(transfer));
+            assertEquals(Status.TIMEOUT, status(transfer));
+            assertEquals(1, pair.aliceSent.stream().filter(DataTransferServiceTest::lastFragment).count());
         }
     }
 
@@ -111,16 +131,16 @@ class DataTransferServiceTest {
         try (var pair = new Pair()) {
             pair.dropAlice = true;
             var transfer = pair.alice.send(null, CHANNEL, new byte[0]);
-            for (int attempt = 1; attempt <= DataTransferService.MAX_ATTEMPTS; attempt++) {
+            for (int attempt = 1; attempt <= pair.config.maxDataAttempts(); attempt++) {
                 int expected = attempt;
                 pair.pumpUntil(() -> pair.aliceSent.stream().filter(DataTransferServiceTest::lastFragment).count() == expected);
-                pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+                pair.now.addAndGet(pair.config.dataAckTimeoutSeconds() * 1000L + 1);
             }
             pair.pumpUntil(() -> done(transfer));
             assertEquals(Status.TIMEOUT, status(transfer));
             assertEquals(3, pair.aliceSent.stream().filter(DataTransferServiceTest::lastFragment).count());
             var queued = pair.alice.send(null, CHANNEL, new byte[0]);
-            pair.now.addAndGet(DataTransferService.TRANSFER_TIMEOUT_MS);
+            pair.now.addAndGet(pair.config.dataTransferTimeoutSeconds() * 1000L);
             pair.pumpUntil(() -> done(queued));
             assertEquals(Status.TIMEOUT, status(queued));
         }
@@ -132,7 +152,7 @@ class DataTransferServiceTest {
             assertEquals(Status.DISABLED, status(pair.alice.send(null, CHANNEL, new byte[0])));
             pair.config.enableDataApi = true;
             List<DataTransfer> queued = new ArrayList<>();
-            for (int i = 0; i < DataTransferService.MAX_TRANSFERS; i++) queued.add(pair.alice.send(null, CHANNEL, new byte[0]));
+            for (int i = 0; i < pair.config.maxDataTransfers(); i++) queued.add(pair.alice.send(null, CHANNEL, new byte[0]));
             assertEquals(Status.BACKPRESSURE, status(pair.alice.send(null, CHANNEL, new byte[0])));
             AtomicReference<DataTransfer> reentrant = new AtomicReference<>();
             queued.get(0).whenComplete(result -> reentrant.set(pair.alice.send(null, CHANNEL, new byte[0])));
@@ -303,7 +323,7 @@ class DataTransferServiceTest {
             String original = assembled(pair.aliceSent);
             pair.aliceSent.clear();
             pair.dropBob = false;
-            pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+            pair.now.addAndGet(pair.config.dataAckTimeoutSeconds() * 1000L + 1);
             pair.pumpUntil(() -> done(transfer));
             assertEquals(Status.DELIVERED, status(transfer));
             assertEquals(original, assembled(pair.aliceSent));
@@ -345,7 +365,7 @@ class DataTransferServiceTest {
             String secret = pair.bobSessions.find("Alice").orElseThrow().secret();
             assertFalse(session.isReady());
             pair.dropBob = false;
-            pair.now.addAndGet(DataTransferService.ACK_TIMEOUT_MS + 1);
+            pair.now.addAndGet(pair.config.dataAckTimeoutSeconds() * 1000L + 1);
             pair.pumpUntil(() -> done(sent));
             assertEquals(Status.DELIVERED, status(sent));
             assertEquals(secret, pair.aliceSessions.find("Bob").orElseThrow().secret());
@@ -399,7 +419,7 @@ class DataTransferServiceTest {
         try (var pair = new Pair()) {
             var connection = pair.alice.connect("Bob");
             List<DataTransfer> queued = new ArrayList<>();
-            for (int i = 0; i < DataTransferService.MAX_TRANSFERS - 1; i++) queued.add(connection.send(CHANNEL, new byte[0]));
+            for (int i = 0; i < pair.config.maxDataTransfers() - 1; i++) queued.add(connection.send(CHANNEL, new byte[0]));
             assertEquals(Status.BACKPRESSURE, status(connection.send(CHANNEL, new byte[0])));
             pair.alice.tick();
             pair.alice.clear();
@@ -489,8 +509,8 @@ class DataTransferServiceTest {
         void tick() {
             int a = aliceSent.size(), b = bobSent.size();
             alice.tick(); bob.tick();
-            assertTrue(aliceSent.size() - a <= 4);
-            assertTrue(bobSent.size() - b <= 4);
+            assertTrue(aliceSent.size() - a <= config.dataFragmentsPerTick());
+            assertTrue(bobSent.size() - b <= config.dataFragmentsPerTick());
         }
         void pumpUntil(BooleanSupplier condition) throws Exception {
             long deadline = System.nanoTime() + 15_000_000_000L;

@@ -18,6 +18,17 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 final class FragmentServiceTest {
     @Test
+    void configuredReassemblyTimeoutIsUsed() {
+        MutableClock clock = new MutableClock();
+        var config = new dev.krypt04mcg.config.Krypt04McgConfig();
+        config.reassemblyTimeoutSeconds = 2;
+        var reassembler = new FragmentReassembler(clock, config);
+        reassembler.accept(new Fragment("abc", 0, 2, "AAA"));
+        clock.advance(Duration.ofSeconds(3));
+        assertEquals(1, reassembler.cleanup());
+    }
+
+    @Test
     void duplicateFragmentsDoNotExtendCacheLifetime() {
         MutableClock clock = new MutableClock();
         FragmentReassembler reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 10, 10);

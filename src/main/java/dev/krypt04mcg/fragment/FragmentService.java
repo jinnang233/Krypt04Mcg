@@ -10,6 +10,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class FragmentService {
+    private final java.util.function.IntSupplier maxFragments;
+
+    public FragmentService() {
+        this(new dev.krypt04mcg.config.Krypt04McgConfig());
+    }
+
+    public FragmentService(dev.krypt04mcg.config.Krypt04McgConfig config) {
+        this.maxFragments = config::maxFragmentsPerMessage;
+    }
+
     public static final String PREFIX = "[KRYPT04MCG]";
     public static final int MAX_CHAT_MESSAGE_LENGTH = 256;
     private static final int MIN_PAYLOAD_SIZE = 32;
@@ -26,7 +36,7 @@ public final class FragmentService {
         String normalizedPrefix = normalizePrefix(prefix);
         int payloadSize = payloadSizeFor(encoded.length(), id, configuredPayloadSize, normalizedPrefix);
         int total = Math.max(1, (int) Math.ceil(encoded.length() / (double) payloadSize));
-        if (total > FragmentReassembler.DEFAULT_MAX_FRAGMENTS_PER_MESSAGE) {
+        if (total > maxFragments.getAsInt()) {
             throw new IllegalArgumentException("Message requires too many fragments: " + total);
         }
         List<String> result = new ArrayList<>(total);

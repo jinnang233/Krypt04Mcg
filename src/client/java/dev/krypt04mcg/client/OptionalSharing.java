@@ -175,7 +175,7 @@ public final class OptionalSharing {
         if (worker.busy()) return;
         try {
             expire();
-            if (pending.size() >= 4 || (file && seenFiles.size() >= 1024)) return;
+            if (pending.size() >= config.maxPendingSharingOffers() || (file && seenFiles.size() >= 1024)) return;
             if (file && pending.values().stream().anyMatch(p -> p.file != null)) return;
             if (!file && pending.values().stream().anyMatch(p -> p.file == null && p.sender.equalsIgnoreCase(sender))) return;
             Optional<String> assembled = (file ? fileParts : keyParts).accept(sender, fragment, System.currentTimeMillis(), () -> {
@@ -185,7 +185,7 @@ public final class OptionalSharing {
             });
             if (assembled.isEmpty()) return;
             expire();
-            if (pending.size() >= 4) return;
+            if (pending.size() >= config.maxPendingSharingOffers()) return;
             String json = assembled.get();
             if (!file) {
                 if (pending.values().stream().anyMatch(p -> p.file == null && p.sender.equalsIgnoreCase(sender))) return;
@@ -218,7 +218,7 @@ public final class OptionalSharing {
         }
     }
 
-    private void expire() { pending.values().removeIf(p -> System.currentTimeMillis() - p.created > 60000); }
+    private void expire() { pending.values().removeIf(p -> System.currentTimeMillis() - p.created > config.sharingOfferTimeoutSeconds() * 1000L); }
 
     private void offer(Pending request, String text) {
         String token = UUID.randomUUID().toString(); pending.put(token, request);

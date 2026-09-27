@@ -101,8 +101,8 @@ public final class Krypt04McgMod {
 
         PacketCodec packetCodec = new PacketCodec();
         CryptoService cryptoService = new CryptoService();
-        fragmentService = new FragmentService();
-        FragmentReassembler reassembler = new FragmentReassembler();
+        fragmentService = new FragmentService(config);
+        FragmentReassembler reassembler = new FragmentReassembler(config);
         Minecraft client = Minecraft.getInstance();
         String owner = client.getUser().getName();
         String uuid = client.getUser().getProfileId() == null ? "" : client.getUser().getProfileId().toString();
@@ -121,8 +121,8 @@ public final class Krypt04McgMod {
         decryptionHistoryService = new DecryptionHistoryService(root);
         groupService = new GroupService(root);
         keyTrustService = new KeyTrustService(root);
-        sentMessageCacheService = new SentMessageCacheService(root);
-        conversationStore = new ChatConversationStore(root, () -> config.enableConversationHistory);
+        sentMessageCacheService = new SentMessageCacheService(root, config::maxCachedSentMessages);
+        conversationStore = new ChatConversationStore(root, () -> config.enableConversationHistory, config::maxConversationMessages);
 
         try {
             keyStoreService.init(owner, uuid, config.kemAlgorithm, config.signatureAlgorithm);
@@ -334,6 +334,5 @@ public final class Krypt04McgMod {
     private record ShadowMessage(String player, String message) {
     }
 }
-
 
 

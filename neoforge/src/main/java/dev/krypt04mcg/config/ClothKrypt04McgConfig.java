@@ -39,6 +39,48 @@ public final class ClothKrypt04McgConfig implements ConfigData {
 
     public long rotateAfterBytes = 1024L * 1024L;
 
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 3600)
+    public int reassemblyTimeoutSeconds = 120;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
+    public int maxReassemblyMessages = 128;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 4096)
+    public int maxFragmentsPerMessage = 512;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 10000)
+    public int maxConversationMessages = 300;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 256)
+    public int maxCachedSentMessages = 12;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 128)
+    public int maxDataTransfers = 16;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 256)
+    public int maxDataReceipts = 32;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 10)
+    public int maxDataAttempts = 3;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 256)
+    public int maxDataQueuedMiB = 16;
+
+    @ConfigEntry.BoundedDiscrete(min = 61, max = 240)
+    public int dataAckTimeoutSeconds = 65;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 300)
+    public int dataTransferTimeoutSeconds = 240;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 64)
+    public int dataFragmentsPerTick = 4;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 300)
+    public int sharingOfferTimeoutSeconds = 60;
+
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 32)
+    public int maxPendingSharingOffers = 4;
+
     public ChatSendMode chatSendMode = ChatSendMode.CHAT;
     public String serverCommandTemplate = "/msg <receiver> <fragment>";
     public String messagePrefix = "[Krypt04Mcg]";
@@ -81,6 +123,20 @@ public final class ClothKrypt04McgConfig implements ConfigData {
         config.maxFutureSkewSeconds = maxFutureSkewSeconds;
         config.maxMessagesPerSession = maxMessagesPerSession;
         config.rotateAfterBytes = rotateAfterBytes;
+        config.reassemblyTimeoutSeconds = reassemblyTimeoutSeconds;
+        config.maxReassemblyMessages = maxReassemblyMessages;
+        config.maxFragmentsPerMessage = maxFragmentsPerMessage;
+        config.maxConversationMessages = maxConversationMessages;
+        config.maxCachedSentMessages = maxCachedSentMessages;
+        config.maxDataTransfers = maxDataTransfers;
+        config.maxDataReceipts = maxDataReceipts;
+        config.maxDataAttempts = maxDataAttempts;
+        config.maxDataQueuedMiB = maxDataQueuedMiB;
+        config.dataAckTimeoutSeconds = dataAckTimeoutSeconds;
+        config.dataTransferTimeoutSeconds = dataTransferTimeoutSeconds;
+        config.dataFragmentsPerTick = dataFragmentsPerTick;
+        config.sharingOfferTimeoutSeconds = sharingOfferTimeoutSeconds;
+        config.maxPendingSharingOffers = maxPendingSharingOffers;
         config.chatSendMode = chatSendMode;
         config.serverCommandTemplate = serverCommandTemplate;
         config.messagePrefix = messagePrefix;

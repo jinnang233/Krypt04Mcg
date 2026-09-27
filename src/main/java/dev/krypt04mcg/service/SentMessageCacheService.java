@@ -20,12 +20,17 @@ import java.util.Optional;
 public final class SentMessageCacheService {
     private static final Type CACHE_TYPE = new TypeToken<Map<String, CachedSentMessage>>() {
     }.getType();
-    private static final int MAX_CACHED_MESSAGES = 12;
+    private final java.util.function.IntSupplier maxMessages;
 
     private final Path cacheFile;
     private final Gson gson = JsonSupport.prettyGson();
 
     public SentMessageCacheService(Path root) {
+        this(root, () -> 12);
+    }
+
+    public SentMessageCacheService(Path root, java.util.function.IntSupplier maxMessages) {
+        this.maxMessages = maxMessages;
         this.cacheFile = root.resolve("cache").resolve("sent-fragments.json");
     }
 
@@ -54,8 +59,8 @@ public final class SentMessageCacheService {
         return cache == null ? new LinkedHashMap<>() : new LinkedHashMap<>(cache);
     }
 
-    private static void trim(Map<String, CachedSentMessage> cache) {
-        while (cache.size() > MAX_CACHED_MESSAGES) {
+    private void trim(Map<String, CachedSentMessage> cache) {
+        while (cache.size() > Math.clamp(maxMessages.getAsInt(), 1, 256)) {
             String oldest = cache.values().stream()
                     .min(Comparator.comparing(CachedSentMessage::createdAt))
                     .map(CachedSentMessage::messageId)

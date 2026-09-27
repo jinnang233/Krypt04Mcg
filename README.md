@@ -51,7 +51,49 @@ This implementation targets:
 
 The NeoForge build shares the protocol, cryptography, and storage code with Fabric. It requires no server installation for chat transport. Custom payload and public-key sharing still require a server relay that advertises the corresponding channels.
 
-NeoForge's optional Cloth Config integration uses `26.3.158` for Minecraft 26.3 and detects its NeoForge mod ID, `cloth_config`. Install Cloth Config separately to enable saved settings and the config screen. The mod starts with default settings when Cloth Config is absent.
+NeoForge's optional Cloth Config integration uses `26.3.158` for Minecraft 26.3 and detects its NeoForge mod ID, `cloth_config`. Install Cloth Config separately to enable the config screen. JSON settings are available with or without Cloth Config.
+
+## User-configurable runtime limits
+
+Settings are stored in `config/krypt04mcg.json` on both Fabric and NeoForge.
+The file is created with defaults on first startup even without Cloth Config.
+Edit it while the game is closed, then restart the client. Existing files may omit
+new fields; omitted fields retain their defaults. Invalid JSON is logged, defaults
+are used for that launch, and the invalid file is preserved for correction.
+
+With Cloth Config installed, the same settings are available in the mod settings
+screen. Saving updates the running configuration. New queue limits apply when
+admitting work; history/cache limits apply on the next write; already scheduled
+acknowledgement deadlines keep their original value. Reducing a queue limit does
+not cancel work already queued.
+
+| JSON field | Default | Allowed range |
+| --- | ---: | ---: |
+| `reassemblyTimeoutSeconds` | 120 | 1–3600 |
+| `maxReassemblyMessages` | 128 | 1–1024 |
+| `maxFragmentsPerMessage` | 512 | 1–4096 |
+| `maxConversationMessages` | 300 | 1–10000 |
+| `maxCachedSentMessages` | 12 | 1–256 |
+| `maxDataTransfers` | 16 | 1–128 |
+| `maxDataReceipts` | 32 | 1–256 |
+| `maxDataAttempts` | 3 | 1–10 |
+| `maxDataQueuedMiB` | 16 | 1–256 |
+| `dataAckTimeoutSeconds` | 65 | 61–240 |
+| `dataTransferTimeoutSeconds` | 240 | 1–300 |
+| `dataFragmentsPerTick` | 4 | 1–64 |
+| `sharingOfferTimeoutSeconds` | 60 | 1–300 |
+| `maxPendingSharingOffers` | 4 | 1–32 |
+
+Time fields use seconds; `maxDataQueuedMiB` uses MiB. `maxDataAttempts`
+includes the initial send. The overall transfer timeout includes queueing and may
+end a transfer before all attempts are used. The ACK timeout stays above the
+60-second optional-transfer assembly lifetime. Out-of-range values from JSON are
+clamped when used, matching the settings screen bounds.
+
+Peers should choose compatible `maxFragmentsPerMessage` values for larger chat
+messages. These settings adjust local resource limits and timing; cryptographic
+sizes, protocol versions, Minecraft's chat length limit, and fixed wire-format
+limits remain protocol constants.
 
 ## Build
 
@@ -290,7 +332,7 @@ Recent plaintext conversation history is cached locally under:
 config/krypt04mcg/accounts/<minecraft-uuid>/cache/conversations.json
 ```
 
-The encrypted cache is bounded to the most recent 300 entries and is disabled by default. It can be enabled with the `enableConversationHistory` config option. With this option disabled, the GUI still displays up to 300 live conversation entries in memory, without loading or saving conversation history on disk.
+The encrypted cache is bounded by `maxConversationMessages` (300 entries by default) and is disabled by default. It can be enabled with the `enableConversationHistory` config option. With this option disabled, the GUI still displays up to `maxConversationMessages` live conversation entries in memory, without loading or saving conversation history on disk.
 
 ## Known Limitations
 
@@ -341,7 +383,7 @@ and `krypt04mcg:file_share`. Sharing does not fall back to ordinary chat when a 
   Both the filename and contents are encrypted and signed. Both clients must support this limit.
   File encryption uses separate limits; ordinary chat retains its 64 KiB plaintext limit.
 - `enableFileSending` and `enableFileReceiving` control sending and receiving independently; **both default to false**.
-  Enable them through the Cloth Config screen. Without Cloth Config, both remain disabled by default.
+  Enable them through the Cloth Config screen or `config/krypt04mcg.json`. Both are disabled by default.
 - Received files are saved to `received-files` within the current account's storage directory only after
   signature verification and explicit acceptance. Saved names include a random identifier and have path
   characters filtered out. Files are never opened or executed automatically.
@@ -367,9 +409,8 @@ Expired assemblies and confirmation requests are cleaned up on client ticks, inc
 
 ## Reliable Data API for other client mods (0.18.0)
 
-Enable `enableDataApi` in Cloth Config on both clients (default: `false`). Set
-`apiReceiver` to the default recipient's Minecraft player name. Without Cloth Config,
-this optional API remains disabled. Each player must import the other's public key;
+Enable `enableDataApi` in Cloth Config or `config/krypt04mcg.json` on both clients (default: `false`). Set
+`apiReceiver` to the default recipient's Minecraft player name. Each player must import the other's public key;
 the existing Krypt04Mcg trust checks apply. This API always uses payload transport,
 independently of `chatSendMode` and the file-sharing settings.
 

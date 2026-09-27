@@ -15,13 +15,24 @@ public final class FragmentReassembler {
     public static final int DEFAULT_MAX_FRAGMENTS_PER_MESSAGE = 512;
 
     private final Clock clock;
-    private final Duration timeout;
-    private final int maxMessages;
-    private final int maxFragmentsPerMessage;
+    private final java.util.function.LongSupplier timeoutMillis;
+    private final java.util.function.IntSupplier maxMessages;
+    private final java.util.function.IntSupplier maxFragmentsPerMessage;
     private final Map<String, PartialMessage> partials = new HashMap<>();
 
     public FragmentReassembler() {
         this(Clock.systemUTC(), Duration.ofMinutes(2), 128, DEFAULT_MAX_FRAGMENTS_PER_MESSAGE);
+    }
+
+    public FragmentReassembler(dev.krypt04mcg.config.Krypt04McgConfig config) {
+        this(Clock.systemUTC(), config);
+    }
+
+    public FragmentReassembler(Clock clock, dev.krypt04mcg.config.Krypt04McgConfig config) {
+        this.clock = java.util.Objects.requireNonNull(clock);
+        this.timeoutMillis = () -> config.reassemblyTimeoutSeconds() * 1000L;
+        this.maxMessages = config::maxReassemblyMessages;
+        this.maxFragmentsPerMessage = config::maxFragmentsPerMessage;
     }
 
     public FragmentReassembler(Clock clock, Duration timeout, int maxMessages, int maxFragmentsPerMessage) {
@@ -30,9 +41,9 @@ public final class FragmentReassembler {
             throw new IllegalArgumentException("Invalid reassembly limits");
         }
         this.clock = clock;
-        this.timeout = timeout;
-        this.maxMessages = maxMessages;
-        this.maxFragmentsPerMessage = maxFragmentsPerMessage;
+        this.timeoutMillis = timeout::toMillis;
+        this.maxMessages = () -> maxMessages;
+        this.maxFragmentsPerMessage = () -> maxFragmentsPerMessage;
     }
 
     public synchronized Optional<byte[]> accept(Fragment fragment) {
@@ -43,10 +54,10 @@ public final class FragmentReassembler {
             throw new IllegalArgumentException("Invalid fragment");
         }
         cleanupTimedOut();
-        if (fragment.total() > maxFragmentsPerMessage) {
+        if (fragment.total() > maxFragmentsPerMessage.getAsInt()) {
             throw new IllegalArgumentException("Too many fragments: " + fragment.total());
         }
-        if (partials.size() >= maxMessages && !partials.containsKey(fragment.messageId())) {
+        while (partials.size() >= maxMessages.getAsInt() && !partials.containsKey(fragment.messageId())) {
             evictOldest();
         }
         PartialMessage partial = partials.computeIfAbsent(fragment.messageId(),
@@ -73,7 +84,7 @@ public final class FragmentReassembler {
     }
 
     public synchronized List<FragmentProgress> cleanupTimedOut() {
-        long cutoff = clock.millis() - timeout.toMillis();
+        long cutoff = clock.millis() - timeoutMillis.getAsLong();
         List<FragmentProgress> removed = partials.entrySet().stream()
                 .filter(entry -> entry.getValue().lastTouched < cutoff)
                 .map(entry -> new FragmentProgress(entry.getKey(), entry.getValue().fragments.size(), entry.getValue().total))
