@@ -232,6 +232,22 @@ public final class DataTransferService implements AutoCloseable {
         }
     }
 
+    /** Client-thread diagnostic snapshot; reading it has no logging or scheduling side effects. */
+    public PipelineStats pipelineStats() {
+        requireClientThread();
+        int preparing = 0, sending = 0, waiting = 0, ready = 0;
+        for (Pending request : pending) {
+            if (request.preparing) preparing++;
+            if (request.inFlight) sending++;
+            if (request.waiting) waiting++;
+            if (request.ready != null) ready++;
+        }
+        return new PipelineStats(pending.size(), preparing, sending, waiting, ready, queuedBytes);
+    }
+
+    public record PipelineStats(int pending, int preparing, int sending, int waitingAck,
+                                int ready, long queuedBytes) {}
+
     private void prepare() {
         if (worker.busy()) return;
         long epoch = generation;

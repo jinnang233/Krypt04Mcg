@@ -253,6 +253,10 @@ class DataTransferServiceTest {
             assertEquals(4, sentBeforeAck);
             assertEquals(4, pair.aliceSent.stream().filter(DataTransferServiceTest::lastFragment).count());
             assertTrue(transfers.stream().noneMatch(DataTransferServiceTest::done));
+            var full = pair.alice.pipelineStats();
+            assertEquals(6, full.pending());
+            assertEquals(4, full.waitingAck());
+            assertEquals(0, full.sending());
 
             List<List<DataPayload>> delayed = envelopes(pair.bobSent);
             pair.dropBob = false;
@@ -262,6 +266,7 @@ class DataTransferServiceTest {
             pair.pumpUntil(() -> transfers.stream().allMatch(DataTransferServiceTest::done));
             assertTrue(transfers.stream().allMatch(transfer -> status(transfer) == Status.DELIVERED));
             assertEquals(6, pair.aliceSent.stream().filter(DataTransferServiceTest::lastFragment).count());
+            assertEquals(new DataTransferService.PipelineStats(0, 0, 0, 0, 0, 0), pair.alice.pipelineStats());
         }
     }
 

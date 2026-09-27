@@ -58,6 +58,14 @@ public final class KryptSocket implements AutoCloseable {
     public OutputStream getOutputStream() { return output; }
     public boolean isClosed() { synchronized (lock) { return localClosed || failed; } }
 
+    State state() {
+        synchronized (lock) {
+            return new State(outgoing.size(), inFlight, completedSequences.size(), queuedIncoming());
+        }
+    }
+
+    record State(int queuedChunks, int inFlightChunks, int completedOutOfOrderChunks, int bufferedIncomingBytes) {}
+
     void opened() { sendControl(KryptStreamRegistry.Frame.open(streamId, channel)); }
 
     void data(long sequence, byte[] bytes) {

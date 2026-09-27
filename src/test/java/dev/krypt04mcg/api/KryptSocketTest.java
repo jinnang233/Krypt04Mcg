@@ -130,12 +130,16 @@ class KryptSocketTest {
         TestTransport transport = new TestTransport();
         var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport, config);
         socket.getOutputStream().write(new byte[KryptSocket.CHUNK_BYTES * 3]);
+        assertEquals(3, socket.state().inFlightChunks());
         socket.close();
 
         transport.complete(2, TransferResult.Status.DELIVERED);
+        assertEquals(3, socket.state().inFlightChunks());
+        assertEquals(1, socket.state().completedOutOfOrderChunks());
         transport.complete(0, TransferResult.Status.DELIVERED);
         assertTrue(transport.frames.stream().noneMatch(frame -> frame.kind == KryptStreamRegistry.Kind.CLOSE));
         transport.complete(1, TransferResult.Status.DELIVERED);
+        assertEquals(0, socket.state().inFlightChunks());
         assertEquals(KryptStreamRegistry.Kind.CLOSE, transport.frames.getLast().kind);
     }
 
