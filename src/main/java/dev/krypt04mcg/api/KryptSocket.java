@@ -20,6 +20,7 @@ import java.util.UUID;
  * block and therefore must not be made on that thread.
  */
 public final class KryptSocket implements AutoCloseable {
+    private static final System.Logger LOGGER = System.getLogger(KryptSocket.class.getName());
     static final int CHUNK_BYTES = 128 * 1024;
     static final int WINDOW_CHUNKS = 4;
     static final int MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
@@ -166,11 +167,11 @@ public final class KryptSocket implements AutoCloseable {
     private void sendData(KryptStreamRegistry.Frame frame) {
         final DataTransfer transfer;
         try { transfer = Objects.requireNonNull(transport.send(frame), "DATA transfer"); }
-        catch (RuntimeException e) { deliveryFailed(); return; }
+        catch (RuntimeException e) { deliveryFailed(frame, null, e); return; }
         transfer.completion().whenComplete((result, error) -> {
             synchronized (lock) { if (failed || localClosed) return; }
             if (error != null || result == null || result.status() != TransferResult.Status.DELIVERED) {
-                deliveryFailed();
+                deliveryFailed(frame, result, error);
                 return;
             }
             boolean valid;
@@ -187,7 +188,8 @@ public final class KryptSocket implements AutoCloseable {
                     }
                 }
             }
-            if (!valid) deliveryFailed();
+            if (!valid) deliveryFailed(frame, result,
+                    new IllegalStateException("Invalid or duplicate DATA completion"));
             else pump();
         });
     }
@@ -198,6 +200,29 @@ public final class KryptSocket implements AutoCloseable {
     }
 
     private void deliveryFailed() { abort(); }
+
+    private void deliveryFailed(KryptStreamRegistry.Frame frame, TransferResult result, Throwable error) {
+        String message;
+        synchronized (lock) {
+            message = "KryptSocket DATA delivery failed: stream=" + streamId
+                    + " channel=" + channel + " peer=" + peer + " seq=" + frame.sequence
+                    + " status=" + (result == null ? "null" : result.status())
+                    + " inFlight=" + inFlight + " queuedBytes=" + bufferedOutgoing
+                    + " queuedChunks=" + outgoing.size() + " state=" + socketState()
+                    + " error=" + (error == null ? "none" : error);
+        }
+        if (error == null) LOGGER.log(System.Logger.Level.ERROR, message);
+        else LOGGER.log(System.Logger.Level.ERROR, message, error);
+        abort();
+    }
+
+    private String socketState() {
+        if (failed) return "FAILED";
+        if (localClosed) return "CLOSED";
+        if (localClosing) return "CLOSING";
+        if (remoteClosed) return "REMOTE_CLOSED";
+        return "OPEN";
+    }
 
     private void abort() {
         boolean notify;

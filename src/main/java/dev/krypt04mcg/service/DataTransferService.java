@@ -14,6 +14,7 @@ import java.util.function.*;
 
 /** Client-thread state machine; only immutable snapshots cross the single crypto worker. */
 public final class DataTransferService implements AutoCloseable {
+    private static final System.Logger LOGGER = System.getLogger(DataTransferService.class.getName());
     private final Krypt04McgConfig config;
     private final KeyStoreService keys;
     private final KeyTrustService trust;
@@ -227,7 +228,7 @@ public final class DataTransferService implements AutoCloseable {
                 }
             } catch (Exception e) {
                 wire = null;
-                if (current.request != null) finish(current.request, Status.FAILED);
+                if (current.request != null) fail(current.request, "transport", e);
             }
         }
     }
@@ -290,7 +291,13 @@ public final class DataTransferService implements AutoCloseable {
                     try {
                         if (verified.session != null) currentSession(input.peer, input.identity, input.local, verified.session.sessionId(), true);
                         accept(input, verified);
-                    } catch (Exception ignored) { /* Session rotation or replay invalidates queued input. */ }
+                    } catch (Exception e) {
+                        LOGGER.log(System.Logger.Level.WARNING,
+                                "DataTransfer receive rejected after authentication: peer=" + input.peer
+                                        + " session=" + verified.packet.sessionId()
+                                        + " sequence=" + verified.packet.sequence()
+                                        + " error=" + e, e);
+                    }
                 }
             });
         } else if (canPrepare) {
@@ -310,7 +317,7 @@ public final class DataTransferService implements AutoCloseable {
                 }
                 sequence = existing == null && request.session != null
                         ? sessions.reserveApiSend(request.peer, request.session.sessionId(), false, bytes.length) : 0;
-            } catch (Exception e) { request.preparing = false; finish(request, Status.FAILED); return; }
+            } catch (Exception e) { request.preparing = false; fail(request, "session-reserve", e); return; }
             worker.submit(() -> {
                 // Retry the same signed packet, with a fresh assembly ID for a lost ACK.
                 String requestId = null;
@@ -337,7 +344,7 @@ public final class DataTransferService implements AutoCloseable {
                 }
                 if (epoch != generation || !pending.contains(request)) return;
                 request.preparing = false;
-                if (error != null) finish(request, Status.FAILED);
+                if (error != null) fail(request, "encryption", error);
                 else if (active(epoch)) {
                     request.bytes = null;
                     request.encoded = prepared.encoded;
@@ -467,6 +474,15 @@ public final class DataTransferService implements AutoCloseable {
         if (wire != null && wire.request == request) wire = null;
         request.bytes = null; request.encoded = null; request.ready = null;
         request.complete(status);
+    }
+
+    private void fail(Pending request, String stage, Throwable error) {
+        LOGGER.log(System.Logger.Level.ERROR,
+                "DataTransfer failed: transfer=" + request.id + " peer=" + request.peer
+                        + " channel=" + request.channel + " stage=" + stage
+                        + " attempts=" + request.attempts + " queuedBytes=" + queuedBytes
+                        + " error=" + error, error);
+        finish(request, Status.FAILED);
     }
 
     private void reset(Status status, boolean forgetSeen) {
