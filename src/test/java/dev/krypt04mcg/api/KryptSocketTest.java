@@ -139,6 +139,15 @@ class KryptSocketTest {
         assertEquals(KryptStreamRegistry.Kind.CLOSE, transport.frames.getLast().kind);
     }
 
+    @Test void localCloseReleasesUnreadInputAndReportsEof() throws Exception {
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport);
+        socket.data(0, new byte[KryptSocket.CHUNK_BYTES]);
+        socket.close();
+        assertEquals(-1, socket.getInputStream().read());
+        assertEquals(KryptStreamRegistry.Kind.CLOSE, transport.frames.getLast().kind);
+    }
+
     @Test void failureAndResetReleasePendingStateAndDoNotLeakLaterCompletions() throws Exception {
         TestTransport transport = new TestTransport();
         var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport);

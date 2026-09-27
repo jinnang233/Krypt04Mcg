@@ -117,6 +117,10 @@ public final class KryptSocket implements AutoCloseable {
                     next = KryptStreamRegistry.Frame.data(streamId, sequence, bytes);
                 } else if (localClosing && !localClosed && inFlight == 0) {
                     localClosed = true;
+                    remoteClosed = true;
+                    incoming.clear();
+                    incomingOffset = 0;
+                    lock.notifyAll();
                     next = KryptStreamRegistry.Frame.close(streamId);
                 } else {
                     pumping = false;
