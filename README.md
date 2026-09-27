@@ -515,6 +515,12 @@ malformed or expired packets, or while the receiving API is disabled.
 
 ### Compatibility and relay support
 
+This pipeline change does not alter the DataTransfer or stream wire formats and does
+not change the public `KryptSocket`, `KryptSession`, stream, or tunnel entry points.
+New configuration and session-record fields are additive. Older encrypted session
+records load with zero API usage and a conservative replay bitmap that continues to
+reject every sequence below their persisted receive counter.
+
 Both endpoints need 0.18.0 or newer for reliable sending. New clients still receive
 legacy v1 fire-and-forget data without receipts; new v2 messages sent to older clients
 time out. Changing `send` from `void` to `DataTransfer` preserves source calls that

@@ -186,10 +186,11 @@ public final class SessionService {
                 throw new IOException("Repeated or invalid API sequence");
             window |= 1L << distance;
         }
+        Long receiveWindow = control ? session.apiReceiveWindow() : Long.valueOf(window);
+        Long controlReceiveWindow = control ? Long.valueOf(window) : session.apiControlReceiveWindow();
         saveApiCounters(session, session.nextApiSendSequence(), control ? session.nextApiReceiveSequence() : updatedNext,
                 session.nextApiControlSendSequence(), control ? updatedNext : session.nextApiControlReceiveSequence(),
-                control ? session.apiReceiveWindow() : window,
-                control ? window : session.apiControlReceiveWindow(), control, bytes);
+                receiveWindow, controlReceiveWindow, control, bytes);
     }
 
     private SessionRecord requireEpoch(String peer, String id) throws IOException {

@@ -69,4 +69,20 @@ final class SessionServiceTest {
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 20, false, 0));
         assertThrows(java.io.IOException.class, () -> sessions.reserveApiSend("bob", "different-epoch", false, 0));
     }
+
+    @Test void legacySessionWithoutReplayBitmapsKeepsOldSequencesRejected() throws Exception {
+        SessionService sessions = new SessionService(tempDir);
+        SessionRecord created = sessions.newSession("bob", "kem:sig").withLocalFingerprint("own:keys");
+        SessionRecord legacy = new SessionRecord(created.peer(), created.peerFingerprint(), created.sessionId(),
+                created.createdAt(), created.lastUsedAt(), created.secret(), 0, 0, 0, 0,
+                created.localFingerprint(), 0, 3, 0, 0, 0, 0, null, null);
+        sessions.save(legacy);
+
+        assertThrows(java.io.IOException.class,
+                () -> sessions.recordApiReceived("bob", created.sessionId(), 0, false, 0));
+        sessions.recordApiReceived("bob", created.sessionId(), 6, false, 1);
+        SessionRecord migrated = sessions.find("bob").orElseThrow();
+        assertEquals(4, migrated.nextApiReceiveSequence());
+        assertEquals(Long.valueOf(15), migrated.apiReceiveWindow());
+    }
 }
