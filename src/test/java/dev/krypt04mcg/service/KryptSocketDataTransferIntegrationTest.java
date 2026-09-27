@@ -27,7 +27,7 @@ class KryptSocketDataTransferIntegrationTest {
     @TempDir Path root;
 
     @ParameterizedTest(name = "{0} MiB")
-    @ValueSource(ints = {4, 16, 64})
+    @ValueSource(ints = {1, 4, 16})
     @Timeout(value = 240, unit = TimeUnit.SECONDS)
     void transfersMultiMiBThroughRealEncryptedFragmentedServices(int mebibytes) throws Exception {
         try (var pair = new StreamPair()) {
@@ -130,6 +130,28 @@ class KryptSocketDataTransferIntegrationTest {
 
     @Test
     @Timeout(value = 120, unit = TimeUnit.SECONDS)
+    void delayedMiddleDataTransferRetriesAndDrainsFollowingFramesInOrder() throws Exception {
+        try (var pair = new StreamPair()) {
+            SocketPair sockets = pair.open();
+            byte[] source = pattern(4 * 1024, 151);
+            CompletableFuture<byte[]> received = readExactlyAsync(sockets.remote(), source.length);
+            pair.dropAliceEnvelope(1);
+            for (int offset = 0; offset < source.length; offset += 1024)
+                sockets.local().getOutputStream().write(source, offset, 1024);
+            pair.pumpUntil(() -> KryptStreamTestEndpoint.stats(sockets.remote()).reorderedIncomingChunks() == 2);
+
+            pair.now.addAndGet(pair.config.dataAckTimeoutSeconds() * 1000L + 1);
+            pair.pumpUntil(() -> received.isDone() && pair.alice.pipelineStats().pending() == 0);
+
+            assertArrayEquals(source, received.join());
+            assertFalse(sockets.local().isClosed());
+            assertFalse(sockets.remote().isClosed());
+            assertEquals(0, KryptStreamTestEndpoint.stats(sockets.remote()).reorderedIncomingChunks());
+        }
+    }
+
+    @Test
+    @Timeout(value = 120, unit = TimeUnit.SECONDS)
     void lostDataTransferTimesOutOnlyItsSocketAndReleasesPipelineState() throws Exception {
         try (var pair = new StreamPair()) {
             pair.config.maxDataAttempts = 1;
@@ -178,7 +200,9 @@ class KryptSocketDataTransferIntegrationTest {
         final KryptStreamTestEndpoint aliceStreams = new KryptStreamTestEndpoint();
         final KryptStreamTestEndpoint bobStreams = new KryptStreamTestEndpoint();
         final List<DataPayload> heldAlice = new ArrayList<>(), heldBob = new ArrayList<>();
+        final Set<String> aliceEnvelopesSeen = new LinkedHashSet<>();
         boolean holdAlice, holdBob, dropNextAliceEnvelope;
+        int dropAliceEnvelopeIndex = -1;
         String droppedAliceEnvelope;
 
         StreamPair() throws Exception {
@@ -236,7 +260,11 @@ class KryptSocketDataTransferIntegrationTest {
 
         void fromAlice(DataPayload payload) {
             String envelope = payload.fragment().split(":", 2)[0];
-            if (dropNextAliceEnvelope && droppedAliceEnvelope == null) droppedAliceEnvelope = envelope;
+            if (aliceEnvelopesSeen.add(envelope)) {
+                int index = aliceEnvelopesSeen.size() - 1;
+                if (droppedAliceEnvelope == null && (dropNextAliceEnvelope || index == dropAliceEnvelopeIndex))
+                    droppedAliceEnvelope = envelope;
+            }
             if (envelope.equals(droppedAliceEnvelope)) return;
             if (holdAlice) heldAlice.add(payload);
             else bob.receive(new DataPayload("Alice", payload.fragment(), 1));
@@ -260,6 +288,10 @@ class KryptSocketDataTransferIntegrationTest {
         }
 
         int heldAliceEnvelopeCount() { return grouped(heldAlice).size(); }
+
+        void dropAliceEnvelope(int relativeIndex) {
+            dropAliceEnvelopeIndex = aliceEnvelopesSeen.size() + relativeIndex;
+        }
 
         void releaseAliceEnvelopes(int... order) {
             List<List<DataPayload>> envelopes = new ArrayList<>(grouped(heldAlice).values());
