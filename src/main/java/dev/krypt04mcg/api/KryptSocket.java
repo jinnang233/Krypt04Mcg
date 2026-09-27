@@ -16,7 +16,7 @@ import java.util.UUID;
  * block and therefore must not be made on that thread.
  */
 public final class KryptSocket implements AutoCloseable {
-    static final int CHUNK_BYTES = 16 * 1024;
+    static final int CHUNK_BYTES = 128 * 1024;
     static final int WINDOW_CHUNKS = 4;
     static final int MAX_BUFFERED_BYTES = 1024 * 1024;
 
