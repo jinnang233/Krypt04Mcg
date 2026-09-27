@@ -21,6 +21,7 @@ import java.util.UUID;
  */
 public final class KryptSocket implements AutoCloseable {
     private static final System.Logger LOGGER = System.getLogger(KryptSocket.class.getName());
+    private static final byte[] DISCARDED = new byte[0];
     static final int CHUNK_BYTES = 128 * 1024;
     static final int WINDOW_CHUNKS = 4;
     static final int MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
@@ -41,7 +42,7 @@ public final class KryptSocket implements AutoCloseable {
     private final Output output = new Output();
     private long sendSequence, receiveSequence, nextCompletionSequence;
     private int inFlight, bufferedOutgoing, incomingOffset;
-    private boolean localClosing, localClosed, remoteClosed, failed, pumping;
+    private boolean inputClosed, localClosing, localClosed, remoteClosed, failed, pumping;
 
     KryptSocket(String peer, String channel, UUID streamId, Transport transport) {
         this(peer, channel, streamId, transport, new Krypt04McgConfig());
@@ -87,15 +88,15 @@ public final class KryptSocket implements AutoCloseable {
                     if (distance < window && bufferedIncoming() <= maxBufferedBytes() - bytes.length) {
                         accepted = true;
                         if (distance == 0) {
-                            incoming.addLast(bytes);
+                            if (!inputClosed) incoming.addLast(bytes);
                             receiveSequence++;
                             while ((bytes = reorderedIncoming.remove(receiveSequence)) != null) {
-                                incoming.addLast(bytes);
+                                if (!inputClosed) incoming.addLast(bytes);
                                 receiveSequence++;
                             }
-                            lock.notifyAll();
+                            if (!inputClosed) lock.notifyAll();
                         } else {
-                            reorderedIncoming.put(sequence, bytes);
+                            reorderedIncoming.put(sequence, inputClosed ? DISCARDED : bytes);
                         }
                     }
                 }
@@ -283,10 +284,12 @@ public final class KryptSocket implements AutoCloseable {
             Objects.checkFromIndexSize(offset, length, target.length);
             if (length == 0) return 0;
             synchronized (lock) {
-                while (incoming.isEmpty() && !remoteClosed && !failed) {
+                if (inputClosed) throw new IOException("KryptSocket input is closed");
+                while (incoming.isEmpty() && !inputClosed && !remoteClosed && !failed) {
                     try { lock.wait(); }
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("Interrupted", e); }
                 }
+                if (inputClosed) throw new IOException("KryptSocket input is closed");
                 if (failed) throw new IOException("KryptSocket was reset");
                 if (incoming.isEmpty()) return -1;
                 byte[] head = incoming.peekFirst();
@@ -297,6 +300,15 @@ public final class KryptSocket implements AutoCloseable {
                 return count;
             }
         }
-        @Override public void close() { abort(); }
+        @Override public void close() {
+            synchronized (lock) {
+                if (inputClosed) return;
+                inputClosed = true;
+                incoming.clear();
+                incomingOffset = 0;
+                reorderedIncoming.replaceAll((sequence, bytes) -> DISCARDED);
+                lock.notifyAll();
+            }
+        }
     }
 }

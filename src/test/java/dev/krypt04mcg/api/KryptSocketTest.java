@@ -180,6 +180,21 @@ class KryptSocketTest {
         assertEquals(KryptStreamRegistry.Kind.CLOSE, transport.frames.getLast().kind);
     }
 
+    @Test void closingInputDoesNotResetOrCloseTheOutputDirection() throws Exception {
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport);
+        socket.data(2, new byte[] {2});
+        socket.getInputStream().close();
+        socket.data(0, new byte[] {0});
+        socket.data(1, new byte[] {1});
+        assertThrows(java.io.IOException.class, () -> socket.getInputStream().read());
+        assertDoesNotThrow(() -> socket.getOutputStream().write(7));
+        assertFalse(socket.isClosed());
+        assertEquals(0, socket.state().reorderedIncomingChunks());
+        assertEquals(0, socket.state().bufferedIncomingBytes());
+        assertTrue(transport.frames.stream().noneMatch(frame -> frame.kind == KryptStreamRegistry.Kind.RESET));
+    }
+
     @Test void failureAndResetReleasePendingStateAndDoNotLeakLaterCompletions() throws Exception {
         TestTransport transport = new TestTransport();
         var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport);
