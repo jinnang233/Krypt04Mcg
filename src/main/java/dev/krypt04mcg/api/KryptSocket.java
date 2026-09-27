@@ -78,7 +78,13 @@ public final class KryptSocket implements AutoCloseable {
     void protocolError() { abort(); }
 
     void remoteClose() {
-        synchronized (lock) { remoteClosed = true; lock.notifyAll(); }
+        synchronized (lock) {
+            remoteClosed = true;
+            localClosing = true;
+            localClosed = true;
+            releaseOutgoingState();
+            lock.notifyAll();
+        }
     }
 
     void remoteReset() {
@@ -127,6 +133,7 @@ public final class KryptSocket implements AutoCloseable {
         try { transfer = Objects.requireNonNull(transport.send(frame), "DATA transfer"); }
         catch (RuntimeException e) { deliveryFailed(); return; }
         transfer.completion().whenComplete((result, error) -> {
+            synchronized (lock) { if (failed || localClosed) return; }
             if (error != null || result == null || result.status() != TransferResult.Status.DELIVERED) {
                 deliveryFailed();
                 return;
@@ -169,11 +176,15 @@ public final class KryptSocket implements AutoCloseable {
     }
 
     private void releaseState() {
-        outgoing.clear();
+        releaseOutgoingState();
         incoming.clear();
+        incomingOffset = 0;
+    }
+
+    private void releaseOutgoingState() {
+        outgoing.clear();
         completedSequences.clear();
         bufferedOutgoing = 0;
-        incomingOffset = 0;
         inFlight = 0;
     }
 

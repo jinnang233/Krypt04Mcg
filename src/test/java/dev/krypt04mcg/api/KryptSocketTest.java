@@ -130,6 +130,26 @@ class KryptSocketTest {
         assertEquals(KryptStreamRegistry.Kind.CLOSE, transport.frames.getLast().kind);
     }
 
+    @Test void failureAndResetReleasePendingStateAndDoNotLeakLaterCompletions() throws Exception {
+        TestTransport transport = new TestTransport();
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), transport);
+        socket.getOutputStream().write(new byte[KryptSocket.CHUNK_BYTES * 5]);
+
+        transport.complete(1, TransferResult.Status.DELIVERED);
+        transport.complete(0, TransferResult.Status.TIMEOUT);
+        assertTrue(socket.isClosed());
+        assertEquals(1, transport.frames.stream().filter(frame -> frame.kind == KryptStreamRegistry.Kind.RESET).count());
+        transport.complete(2, TransferResult.Status.DELIVERED);
+        transport.complete(3, TransferResult.Status.REJECTED);
+        assertEquals(1, transport.frames.stream().filter(frame -> frame.kind == KryptStreamRegistry.Kind.RESET).count());
+        assertThrows(java.io.IOException.class, () -> socket.getOutputStream().write(1));
+
+        var remoteReset = new KryptSocket("Bob", "test:stream", UUID.randomUUID(), new TestTransport());
+        remoteReset.data(0, new byte[] {1, 2, 3});
+        remoteReset.remoteReset();
+        assertThrows(java.io.IOException.class, () -> remoteReset.getInputStream().read());
+    }
+
     private static final class TestTransport implements KryptSocket.Transport {
         final Deque<KryptStreamRegistry.Frame> frames = new ArrayDeque<>();
         final Map<Long, CompletableFuture<TransferResult>> dataCompletions = new HashMap<>();
