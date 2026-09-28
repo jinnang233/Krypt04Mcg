@@ -7,7 +7,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 
 /** Ordered full-duplex stream. Blocking I/O belongs on application workers. */
 public final class KryptSocket implements AutoCloseable {
-    static final int CHUNK_BYTES = 128 * 1024;
+    // One frame fits a single CustomPayload, including AEAD and base64 plaintext overhead.
+    static final int CHUNK_BYTES = 8 * 1024;
     private final String peer, channel;
     private final UUID streamId;
     private final Transport transport;
