@@ -25,6 +25,7 @@ class KryptSocketDataTransferIntegrationTest {
     @Test void directFramesNeverEnterReliableDataTransferPipeline() throws Exception {
         try (var pair = new Pair()) {
             var sockets = pair.open("direct");
+            Map<Path, String> before = persistedState();
             byte[] expected = new byte[2 * 1024 * 1024]; new Random(7).nextBytes(expected);
             var read = async(() -> sockets.remote.getInputStream().readNBytes(expected.length));
             sockets.local.getOutputStream().write(expected);
@@ -35,7 +36,19 @@ class KryptSocketDataTransferIntegrationTest {
             assertEquals(0, pair.reliablePayloads.get());
             assertFalse(sockets.local.isClosed());
             assertFalse(sockets.remote.isClosed());
+            assertEquals(before, persistedState(), "DATA must not rewrite session or lease files");
         }
+    }
+
+    private Map<Path, String> persistedState() throws IOException {
+        Map<Path, String> result = new HashMap<>();
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.filter(Files::isRegularFile).toList()) {
+                if (path.toString().contains("sessions") || path.toString().contains("tunnel-counters"))
+                    result.put(path, Files.getLastModifiedTime(path) + ":" + Base64.getEncoder().encodeToString(Files.readAllBytes(path)));
+            }
+        }
+        return result;
     }
 
     @Test void replayOrTamperDoesNotAdvanceCounterOrDeliverDuplicateBytes() throws Exception {
