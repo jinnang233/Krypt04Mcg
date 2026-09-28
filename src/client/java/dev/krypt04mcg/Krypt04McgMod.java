@@ -141,6 +141,11 @@ public final class Krypt04McgMod implements ClientModInitializer {
             if (ClientPlayNetworking.canSend(dev.krypt04mcg.protocol.TunnelPayload.TYPE)) tunnels.connected(handler.getConnection());
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> tunnels.close());
+        // Some plugin relays advertise optional channels after JOIN.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> {
+            if (c.getConnection() != null && ClientPlayNetworking.canSend(dev.krypt04mcg.protocol.TunnelPayload.TYPE))
+                tunnels.connected(c.getConnection().getConnection());
+        });
         PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.DataPayload.TYPE,

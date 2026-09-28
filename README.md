@@ -550,7 +550,7 @@ immediately. connect and listener registration remain client-thread operations.
 The socket listener runs on the tunnel input worker and must hand off the socket
 and return promptly; waiting inside that callback would stop inbound delivery.
 
-java example:
+Example:
 
     Krypt04McgApi.registerSocketReceiver("mymod:test", socket ->
         Thread.ofVirtual().start(() -> {
@@ -710,4 +710,3 @@ durable exactly-once transaction or proof of application persistence.
 Files retain their existing signed KEM transfer
 format; this release adds shared sessions for the Data API without changing file or
 chat message formats.
-

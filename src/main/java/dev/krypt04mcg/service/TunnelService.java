@@ -36,14 +36,16 @@ public final class TunnelService implements AutoCloseable {
 
     /** Called on the client thread; only attaches a worker transport to the existing handshake handle. */
     public KryptSession attach(KryptSession session) {
-        return session.withStreamSender(frame -> {
-            try {
-                session.ready().toCompletableFuture().get();
-                send(session.peer(), session.sessionId(), frame);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); throw new IOException("Interrupted tunnel readiness", e);
-            } catch (ExecutionException e) { throw new IOException("Tunnel session unavailable", e.getCause()); }
-        });
+        return session.withStreamSender(frame -> send(session, frame));
+    }
+
+    public void send(KryptSession session, byte[] frame) throws IOException {
+        try {
+            session.ready().toCompletableFuture().get();
+            send(session.peer(), session.sessionId(), frame);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); throw new IOException("Interrupted tunnel readiness", e);
+        } catch (ExecutionException e) { throw new IOException("Tunnel session unavailable", e.getCause()); }
     }
 
     private void send(String peer, String sessionId, byte[] bytes) throws IOException {
@@ -63,7 +65,14 @@ public final class TunnelService implements AutoCloseable {
             while (!closed) {
                 Send task = outgoing.take();
                 try { transmit(task); task.done.complete(null); }
-                catch (Exception e) { task.done.completeExceptionally(e); }
+                catch (Exception e) {
+                    try {
+                        Frame frame = Frame.decode(task.bytes);
+                        Stream stream = streams.get(frame.streamId);
+                        if (stream != null && stream.peer.equalsIgnoreCase(task.peer)) failStream(frame.streamId, stream);
+                    } catch (RuntimeException ignored) { }
+                    task.done.completeExceptionally(e);
+                }
             }
         } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         finally {
@@ -84,6 +93,7 @@ public final class TunnelService implements AutoCloseable {
         }
         if (stream == null || !stream.peer.equalsIgnoreCase(task.peer)
                 || !stream.session.sessionId().equals(task.sessionId)) throw new IOException("Unknown tunnel stream");
+        if (closed) { streams.remove(frame.streamId, stream); throw new IOException("Tunnel disconnected"); }
         validateLive(stream);
         if (stream.send == Long.MAX_VALUE) throw new IOException("Tunnel counter exhausted");
         byte[] encrypted = codec.encrypt(stream.session, keys.local().kemPublicKey().owner(), stream.peer,
@@ -101,7 +111,8 @@ public final class TunnelService implements AutoCloseable {
         if (stream != null) {
             if (!stream.peer.equalsIgnoreCase(payload.peer()) || stream.lease != header.lease())
                 throw new IOException("Tunnel binding mismatch");
-            validateLive(stream);
+            try { validateLive(stream); }
+            catch (Exception e) { failStream(header.stream(), stream); throw e; }
         }
         byte[] bytes = codec.decrypt(header, session, keys.local().kemPublicKey().owner(), payload.peer());
         Frame frame = Frame.decode(bytes);
@@ -116,12 +127,24 @@ public final class TunnelService implements AutoCloseable {
         } else if (frame.kind == Kind.OPEN) throw new IOException("Duplicate OPEN");
         if (header.packet().sequence() != stream.receive) throw new IOException("Tunnel counter mismatch");
         stream.receive++;
-        Stream accepted = stream;
-        var handle = new KryptSession(stream.peer, CompletableFuture.completedFuture(session.sessionId()),
-                (channel, data) -> { throw new UnsupportedOperationException("Use the Data API for messages"); },
-                () -> {}, () -> !closed).withStreamSender(reply -> send(accepted.peer, session.sessionId(), reply));
-        receiver.accept(handle, bytes);
+        if (closed) { streams.remove(frame.streamId, stream); return; }
+        receiver.accept(handle(stream), bytes);
+        if (closed) {
+            streams.remove(frame.streamId, stream);
+            receiver.accept(handle(stream), Frame.reset(frame.streamId).encode());
+            return;
+        }
         if (frame.kind == Kind.CLOSE || frame.kind == Kind.RESET) streams.remove(frame.streamId, stream);
+    }
+
+    private KryptSession handle(Stream stream) {
+        return new KryptSession(stream.peer, CompletableFuture.completedFuture(stream.session.sessionId()),
+                (channel, data) -> { throw new UnsupportedOperationException("Use the Data API for messages"); },
+                () -> {}, () -> !closed).withStreamSender(reply -> send(stream.peer, stream.session.sessionId(), reply));
+    }
+
+    private void failStream(UUID id, Stream stream) {
+        if (streams.remove(id, stream)) receiver.accept(handle(stream), Frame.reset(id).encode());
     }
 
     private SessionRecord current(String peer, String expected) throws Exception {

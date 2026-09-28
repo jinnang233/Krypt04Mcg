@@ -4,11 +4,9 @@ import dev.krypt04mcg.api.Krypt04McgApi;
 import dev.krypt04mcg.api.KryptSession;
 import dev.krypt04mcg.config.Krypt04McgConfig;
 import dev.krypt04mcg.mixin.ConnectionAccessor;
-import dev.krypt04mcg.protocol.TunnelPayload;
 import io.netty.channel.*;
 import io.netty.handler.flow.FlowControlHandler;
 import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -23,7 +21,9 @@ public final class TunnelNetwork implements AutoCloseable {
     private final TunnelCounters counters;
     private volatile TunnelService service;
     private volatile Channel channel;
-    private volatile Thread reader;
+    private volatile CompletableFuture<TunnelService> ready = CompletableFuture.failedFuture(
+            new IOException("Server must advertise krypt04mcg:tunnel"));
+
 
     public TunnelNetwork(Krypt04McgConfig config, KeyStoreService keys, KeyTrustService trust,
                          SessionService sessions, Path root) {
@@ -32,19 +32,29 @@ public final class TunnelNetwork implements AutoCloseable {
     }
 
     public KryptSession attach(KryptSession session) {
-        TunnelService current = service;
-        if (current == null) throw new IllegalStateException("Server must advertise krypt04mcg:tunnel");
-        return current.attach(session);
+        CompletableFuture<TunnelService> connectionReady = ready;
+        return session.withStreamSender(frame -> {
+            try { connectionReady.get().send(session, frame); }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); throw new IOException("Interrupted tunnel connection", e);
+            } catch (ExecutionException e) { throw new IOException("Tunnel unavailable", e.getCause()); }
+        });
     }
 
     /** Installation is scheduled on Netty; the caller never waits for I/O. */
     public void connected(Connection connection) {
-        close();
         Channel next = ((ConnectionAccessor) connection).krypt04mcgChannel();
+        if (channel == next) return;
+        close();
         channel = next;
+        CompletableFuture<TunnelService> connectionReady = new CompletableFuture<>();
+        ready = connectionReady;
         next.eventLoop().execute(() -> {
-            if (channel != next || !next.isActive()) return;
-            var input = new ArrayBlockingQueue<Runnable>(1);
+            if (channel != next || !next.isActive()) {
+                connectionReady.completeExceptionally(new IOException("Tunnel disconnected during installation"));
+                return;
+            }
+
             TunnelService current = new TunnelService(config, keys, trust, sessions, counters, payload -> {
                 if (!next.isActive()) throw new IOException("Tunnel disconnected");
                 CompletableFuture<Void> written = new CompletableFuture<>();
@@ -55,57 +65,40 @@ public final class TunnelNetwork implements AutoCloseable {
                 written.get();
             }, Krypt04McgApi::receiveTunnel);
             service = current;
-            reader = Thread.ofVirtual().name("krypt-tunnel-decrypt").start(() -> {
-                try { while (!Thread.currentThread().isInterrupted()) input.take().run(); }
-                catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            });
+            if (channel != next) {
+                current.close();
+                if (service == current) service = null;
+                connectionReady.completeExceptionally(new IOException("Tunnel disconnected during installation"));
+                return;
+            }
             ChannelPipeline pipeline = next.pipeline();
-            String connectionName = pipeline.context(connection).name();
-            // FlowControlHandler holds only the already-decoded network read batch. It does not
-            // request another socket read until demand arrives, allowing TCP backpressure.
+            // Intercept before bundle assembly as well as before main-thread packet dispatch.
+            // Otherwise payloads enclosed in a vanilla bundle would bypass this handler.
+            var bundler = pipeline.context(net.minecraft.network.PacketBundlePacker.class);
+            String before = bundler == null ? pipeline.context(connection).name() : bundler.name();
             next.config().setAutoRead(false);
-            pipeline.addBefore(connectionName, "krypt-tunnel-flow", new FlowControlHandler());
-            pipeline.addBefore(connectionName, "krypt-tunnel-input", new ChannelDuplexHandler() {
-                private boolean busy;
-                @Override public void read(ChannelHandlerContext ctx) {
-                    if (!busy) ctx.read();
-                }
-                @Override public void channelRead(ChannelHandlerContext ctx, Object message) {
-                    if (message instanceof ClientboundCustomPayloadPacket packet
-                            && packet.payload() instanceof TunnelPayload payload) {
-                        busy = true;
-                        input.add(() -> {
-                            try { current.receive(payload); }
-                            catch (Exception e) {
-                                System.getLogger(TunnelNetwork.class.getName()).log(System.Logger.Level.DEBUG,
-                                        "Rejected tunnel frame", e);
-                            } finally {
-                                ctx.executor().execute(() -> {
-                                    busy = false;
-                                    if (ctx.channel().isActive()) ctx.read();
-                                });
-                            }
-                        });
-                    } else {
-                        ctx.fireChannelRead(message);
-                        ctx.executor().execute(() -> { if (!busy && ctx.channel().isActive()) ctx.read(); });
-                    }
-                }
-                @Override public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                    if (channel == next) TunnelNetwork.this.close();
-                    super.channelInactive(ctx);
-                }
-            });
+            pipeline.addBefore(before, "krypt-tunnel-flow", new FlowControlHandler());
+            pipeline.addBefore(before, "krypt-tunnel-input", new TunnelInboundHandler(current::receive, () -> {
+                if (channel == next) TunnelNetwork.this.close();
+            }));
+            connectionReady.complete(current);
             next.read();
         });
     }
 
     @Override public void close() {
-        channel = null;
+        ready.completeExceptionally(new IOException("Tunnel disconnected"));
+        ready = CompletableFuture.failedFuture(new IOException("Tunnel disconnected"));
+        Channel previous = channel; channel = null;
         TunnelService old = service; service = null;
         if (old != null) old.close();
-        Thread worker = reader; reader = null;
-        if (worker != null) worker.interrupt();
+
         Krypt04McgApi.clearTunnels();
+        if (previous != null) previous.eventLoop().execute(() -> {
+            var pipeline = previous.pipeline();
+            if (pipeline.get("krypt-tunnel-input") != null) pipeline.remove("krypt-tunnel-input");
+            if (pipeline.get("krypt-tunnel-flow") != null) pipeline.remove("krypt-tunnel-flow");
+            if (previous.isActive()) previous.config().setAutoRead(true);
+        });
     }
 }

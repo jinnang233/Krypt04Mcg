@@ -57,8 +57,8 @@ public final class KryptStreamRegistry {
         if (!socket.peer().equalsIgnoreCase(session.peer())) throw new IllegalArgumentException("Stream peer mismatch");
         switch (frame.kind) {
             case DATA -> socket.data(frame.sequence, frame.data);
-            case CLOSE -> { socket.remoteClose(); sockets.remove(frame.streamId); }
-            case RESET -> { socket.remoteReset(); sockets.remove(frame.streamId); }
+            case CLOSE -> { sockets.remove(frame.streamId); socket.remoteClose(); }
+            case RESET -> { sockets.remove(frame.streamId); socket.remoteReset(); }
             default -> { }
         }
     }
@@ -141,5 +141,3 @@ public final class KryptStreamRegistry {
         }
     }
 }
-
-

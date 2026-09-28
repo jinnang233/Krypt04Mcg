@@ -162,6 +162,10 @@ public final class Krypt04McgMod {
             if (canSend(dev.krypt04mcg.protocol.TunnelPayload.TYPE)) tunnels.connected(event.getConnection());
         });
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> tunnels.close());
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            if (client.getConnection() != null && canSend(dev.krypt04mcg.protocol.TunnelPayload.TYPE))
+                tunnels.connected(client.getConnection().getConnection());
+        });
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> dataApi.tick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> dataApi.clear());
         OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());
@@ -343,4 +347,3 @@ public final class Krypt04McgMod {
     private record ShadowMessage(String player, String message) {
     }
 }
-
