@@ -37,7 +37,7 @@ public class Krypt04McgConfig {
     public int maxDataReceipts = 32;
     public int maxDataAttempts = 3;
     public int maxDataQueuedMiB = 16;
-    public int dataTransferWindow = 4;
+    public int dataTransferWindow = 64;
     public int apiMaxMessagesPerSession = 65536;
     public long apiRotateAfterBytes = 1024L * 1024L * 1024L;
     public int socketMaxBufferedMiB = 4;
@@ -85,7 +85,7 @@ public class Krypt04McgConfig {
     }
 
     public int dataTransferWindow() {
-        return Math.clamp(dataTransferWindow, 1, 64);
+        return Math.clamp(dataTransferWindow, 1, 131072);
     }
 
     public int socketMaxBufferedMiB() {

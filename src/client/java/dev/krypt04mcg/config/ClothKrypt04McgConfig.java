@@ -66,8 +66,8 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     @ConfigEntry.BoundedDiscrete(min = 1, max = 4096)
     public int maxDataQueuedMiB = 16;
 
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 64)
-    public int dataTransferWindow = 4;
+    @ConfigEntry.BoundedDiscrete(min = 1, max = 131072)
+    public int dataTransferWindow = 64;
 
     @ConfigEntry.BoundedDiscrete(min = 1, max = 1000000)
     public int apiMaxMessagesPerSession = 65536;

@@ -78,7 +78,7 @@ not cancel work already queued.
 | `maxDataReceipts` | 32 | 1–8192 |
 | `maxDataAttempts` | 3 | 1–100 |
 | `maxDataQueuedMiB` | 16 | 1–4096 |
-| `dataTransferWindow` | 4 | 1–64 |
+| `dataTransferWindow` | 64 | 1–131072 |
 | `apiMaxMessagesPerSession` | 65536 | 1–1000000 |
 | `apiRotateAfterBytes` | 1073741824 | positive byte count |
 | `socketMaxBufferedMiB` | 4 | 1–1024 |
