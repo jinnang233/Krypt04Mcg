@@ -247,5 +247,8 @@
   "text.krypt04mcg.session_accepted": "[Krypt04Mcg] 已与 %s 建立会话。",
   "text.krypt04mcg.error.session_exchange_unsigned": "会话交换载荷未签名。",
   "text.krypt04mcg.error.session_exchange_invalid": "会话交换载荷无效。",
-  "text.krypt04mcg.error.session_exchange_key_material": "会话交换密钥材料无效。"
+  "text.krypt04mcg.error.session_exchange_key_material": "会话交换密钥材料无效。",
+  "text.autoconfig.krypt04mcg.option.dataTransferWindow": "数据传输窗口",
+  "text.autoconfig.krypt04mcg.option.apiMaxMessagesPerSession": "API 每会话最大消息数",
+  "text.autoconfig.krypt04mcg.option.apiRotateAfterBytes": "API 轮换阈值（字节）"
 }
