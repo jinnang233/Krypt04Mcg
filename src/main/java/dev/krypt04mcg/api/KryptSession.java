@@ -12,8 +12,8 @@ public final class KryptSession implements AutoCloseable {
     private final BiFunction<String, byte[], DataTransfer> sender;
     private final Runnable closer;
     private final BooleanSupplier valid;
-    private boolean closed;
-    private StreamSender streamSender;
+    private volatile boolean closed;
+    private volatile StreamSender streamSender;
 
     @FunctionalInterface
     public interface StreamSender { void send(byte[] frame) throws java.io.IOException; }

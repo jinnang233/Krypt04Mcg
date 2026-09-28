@@ -26,7 +26,8 @@ public final class KryptStreamRegistry {
 
     private KryptSocket create(KryptSession session, String channel, UUID id) {
         KryptSocket socket = new KryptSocket(session.peer(), channel, id, frame -> {
-            session.sendStream(frame.encode());
+            try { session.sendStream(frame.encode()); }
+            catch (IOException | RuntimeException e) { sockets.remove(id); throw e; }
             if (frame.kind == Kind.CLOSE || frame.kind == Kind.RESET) sockets.remove(id);
 
         }, config);

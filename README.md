@@ -82,7 +82,7 @@ not cancel work already queued.
 | `apiMaxMessagesPerSession` | 65536 | 1–1000000 |
 | `apiRotateAfterBytes` | 1073741824 | positive byte count |
 | `socketMaxBufferedMiB` | 4 | 1–1024 |
-| `socketWindowChunks` | 4 | 1–1024 |
+| `socketWindowChunks` (legacy, ignored by tunnel) | 4 | 1–1024 |
 | `dataAckTimeoutSeconds` | 65 | 61–299 |
 | `dataTransferTimeoutSeconds` | 240 | 1–86400 |
 | `dataFragmentsPerTick` | 8 | 1–1024 |
@@ -515,8 +515,8 @@ malformed or expired packets, or while the receiving API is disabled.
 
 ### Compatibility and relay support
 
-This pipeline change does not alter the DataTransfer or stream wire formats and does
-not change the public `KryptSocket`, `KryptSession`, stream, or tunnel entry points.
+The reliable message pipeline does not alter the DataTransfer wire format and does
+not change the message API entry points. See Stream API for the new tunnel protocol.
 New configuration and session-record fields are additive. Older encrypted session
 records load with zero API usage and a conservative replay bitmap that continues to
 reject every sequence below their persisted receive counter.
@@ -544,53 +544,86 @@ to use signed KEM cryptography. The optional Session API below avoids KEM on sub
 
 ## Stream API
 
-`KryptSocket` adds an ordered, full-duplex byte stream on top of the authenticated
-Session API. It uses the existing `krypt04mcg:data` Minecraft Custom Payload and
-therefore requires no Relay update beyond support for that payload.
+KryptSocket keeps its InputStream/OutputStream API, but reads, writes and flush now
+belong on application I/O workers. Calling them on the Minecraft main thread fails
+immediately. connect and listener registration remain client-thread operations.
+The socket listener runs on the tunnel input worker and must hand off the socket
+and return promptly; waiting inside that callback would stop inbound delivery.
 
-```java
-import dev.krypt04mcg.api.Krypt04McgApi;
-import dev.krypt04mcg.api.KryptSocket;
+java example:
 
-// Register during client initialization. The callback runs on the client thread.
-Krypt04McgApi.registerSocketReceiver("mymod:test", socket -> {
-    // Hand the socket to a worker before performing blocking reads.
-});
+    Krypt04McgApi.registerSocketReceiver("mymod:test", socket ->
+        Thread.ofVirtual().start(() -> {
+            try (socket) {
+                consume(socket.getInputStream());
+            } catch (IOException e) {
+                // Handle disconnect or protocol failure.
+            }
+        }));
 
-try (KryptSocket socket = Krypt04McgApi.connect("Alice", "mymod:test")) {
-    socket.getOutputStream().write(bytes); // call writes on the client thread
-    // InputStream.read(...) is blocking; call it from a worker, never the client thread.
-}
-```
+    // On the Minecraft client thread:
+    KryptSocket socket = Krypt04McgApi.connect("Alice", "mymod:test");
+    Thread.ofVirtual().start(() -> {
+        try (socket) {
+            socket.getOutputStream().write(bytes);
+            socket.getOutputStream().flush();
+        } catch (IOException e) {
+            // Handle disconnect or protocol failure.
+        }
+    });
 
-The stream wire format is internal and versioned as `krypt04mcg:stream:v2`. Each frame
-carries a random stream UUID and is one of `OPEN`, `DATA`, `CLOSE`, or `RESET`. DATA
-frames contain a monotonic 64-bit sequence and at most 128 KiB. `socketWindowChunks` controls the number
-of in-flight chunks (default 4). `socketMaxBufferedMiB` limits each socket's queued
-output and unread input separately (default 4 MiB each); in-flight output is separate
-from the queued output limit. Both settings apply to outgoing and accepted sockets.
-Saving in Cloth Config applies the limits to subsequent writes, received DATA, and
-window checks on existing sockets; lowering them does not discard buffered data or
-cancel in-flight chunks. A write exceeding the available buffer limit throws
-`IOException` instead of blocking the client thread. Frames are themselves sent with
-the reliable Session API, so encryption, peer authentication, retries, Relay routing,
-and transport ACK/NACK remain unchanged. v2 adds no second stream ACK: a DATA
-DataTransfer reaching `DELIVERED` confirms that chunk. Completions may arrive out of
-order, but only a bounded contiguous prefix advances the per-stream send window; any
-non-delivery result resets the socket. The receiver accepts DATA within a bounded
-`socketWindowChunks` reorder window, delivers only contiguous sequences, and ignores
-duplicate stream sequences. DATA beyond that window, malformed frames, and receive
-buffer overflow reset the stream. Session sequence and replay checks remain enabled.
+DATA uses 8 KiB chunks. Each OPEN/DATA/CLOSE/RESET frame is encrypted and sent as
+one CustomPayload on the new optional krypt04mcg:tunnel channel. Both endpoints
+and the relay must support this channel; there is no fallback to the old stream:v2
+ACK/retry path. Existing message, session-handshake and file-sharing channels stay
+unchanged.
 
-`close()` drains queued DATA and waits for every submitted DATA completion before sending CLOSE. End-of-stream is
-reported as `-1` after the peer CLOSE. Closing only the returned `InputStream` discards
-future inbound bytes and wakes blocked readers with `IOException`, but leaves the output
-direction usable and does not send RESET. Register at most one socket receiver per
-logical channel; a new registration replaces the previous listener.
+socketMaxBufferedMiB bounds each socket's queued output and unread input. Output
+capacity is fixed when the socket is created. A full queue blocks the corresponding
+I/O worker until capacity is available, the stream closes, or the worker is interrupted.
+There is no stream sliding window, retransmission timer, delivery receipt or per-frame
+DataTransfer. socketWindowChunks is retained as a legacy config field and is ignored
+by tunnel streams. The connection also has a bounded 32-frame send queue. Netty
+demand-based reads propagate receive pressure to TCP without waiting on the main
+thread. A slow stream can therefore delay other streams on the shared TCP connection.
 
-The default protocol-rate calculation and remaining client/Relay bottlenecks are
-documented in [PERFORMANCE.md](PERFORMANCE.md).
+flush waits for preceding frames to complete their local transport writes; it does
+not prove remote consumption. close returns promptly and drains preceding DATA
+before sending CLOSE. CLOSE ends the socket; buffered received bytes remain readable
+before EOF. Closing only InputStream discards subsequent input and wakes readers,
+while leaving output usable. Disconnect/RESET wakes blocked I/O with IOException.
+Applications must use independent reading and writing workers for full-duplex traffic.
 
+### Tunnel relay wire format
+
+Register/advertise krypt04mcg:tunnel in both directions. Each payload contains:
+
+    writeUtf(peer, 16)
+    writeByteArray(envelope) // VarInt length + at most 24576 bytes
+
+For C2S, peer is the recipient. For S2C, the relay must replace it with the authenticated
+Minecraft sender. Forward each envelope opaquely and in order, without application
+ACKs, batching into larger stream chunks, or silently dropping packets. The relay
+must bound its forwarding queues and propagate transport pressure. This repository
+does not contain the server relay; the old krypt04mcg:data relay alone is insufficient.
+
+The envelope contains a 16-byte stream UUID, an 8-byte nonnegative stream lease,
+then an existing binary SESSION_MESSAGE packet. The encrypted plaintext is one
+Base64URL-encoded stream:v3 frame, including its UUID. The AEAD key is HKDF-separated
+from chat and the message API and binds session ID, stream UUID, lease, sender and
+receiver. The existing AEAD, random message-key salt/nonce and authenticated packet
+counter remain in use. Directional counters advance strictly in order.
+
+Before OPEN encryption, a durable lease is reserved under an interprocess file lock.
+The authenticated receiver persists that OPEN lease before accepting the stream.
+Each stream/direction then has its own key and up to Long.MAX_VALUE - 1 ordered
+frame counters in memory. DATA never writes a session/counter file. Restart abandons
+old streams; reopening allocates a fresh lease and UUID. Old OPENs fail the durable
+replay check, and DATA for an unknown stream is rejected. Trust, keys, epoch and
+session TTL are checked by workers before each frame. Tunnel traffic does not consume
+the message API's count/byte rotation budget.
+
+See [PERFORMANCE.md](PERFORMANCE.md) for the regression harness and remaining limits.
 ## Session API (0.19.0)
 
 `connect` reuses a valid authenticated `/exchange` session or starts that same exchange
@@ -674,6 +707,7 @@ the original result. After a restart without the outcome cache, persisted receiv
 counters reject old data instead of calling the receiver again. This still is not a
 durable exactly-once transaction or proof of application persistence.
 
-Stream/socket APIs remain deferred. Files retain their existing signed KEM transfer
+Files retain their existing signed KEM transfer
 format; this release adds shared sessions for the Data API without changing file or
 chat message formats.
+

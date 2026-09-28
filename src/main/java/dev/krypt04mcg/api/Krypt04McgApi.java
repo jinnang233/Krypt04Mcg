@@ -7,7 +7,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-/** Client API. Send on the Minecraft client thread; receivers run on that thread too. */
+/** Message/session APIs use the client thread; socket I/O and socket listeners use workers. */
 public final class Krypt04McgApi {
     private static final ConcurrentHashMap<String, BiConsumer<String, byte[]>> RECEIVERS = new ConcurrentHashMap<>();
     private static volatile Sender sender;
@@ -41,7 +41,8 @@ public final class Krypt04McgApi {
 
     /**
      * Registers the listener for remotely opened streams on this exact application channel.
-     * The listener runs on the Minecraft client thread and must return quickly.
+     * The listener runs on the tunnel input worker and must return quickly: hand the socket
+     * to an application worker before reading, writing, or waiting for application work.
      */
     public static void registerSocketReceiver(String channel, Consumer<KryptSocket> receiver) {
         STREAMS.register(channel, receiver);

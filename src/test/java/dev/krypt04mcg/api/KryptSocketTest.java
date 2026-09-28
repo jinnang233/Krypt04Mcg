@@ -89,4 +89,23 @@ class KryptSocketTest {
             assertFalse(other.isClosed());
         } finally { other.remoteReset(); }
     }
+
+    @Test void flushWaitsForLocalWriteAndPeerClosePreservesUnreadBytes() throws Exception {
+        var gate = new CountDownLatch(1);
+        var socket = new KryptSocket("Bob", "test", UUID.randomUUID(), frame -> {
+            try { gate.await(); } catch (InterruptedException e) { throw new IOException(e); }
+        });
+        try {
+            socket.getOutputStream().write(42);
+            var flush = new FutureTask<Void>(() -> { socket.getOutputStream().flush(); return null; });
+            Thread.ofVirtual().start(flush);
+            assertThrows(TimeoutException.class, () -> flush.get(100, TimeUnit.MILLISECONDS));
+            gate.countDown(); flush.get(2, TimeUnit.SECONDS);
+            socket.data(0, new byte[] {7, 8});
+            socket.remoteClose();
+            assertTrue(socket.isClosed());
+            assertArrayEquals(new byte[] {7, 8}, socket.getInputStream().readAllBytes());
+            assertThrows(IOException.class, () -> socket.getOutputStream().write(1));
+        } finally { gate.countDown(); socket.remoteReset(); }
+    }
 }
