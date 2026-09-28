@@ -60,10 +60,13 @@ public final class KryptSocket implements AutoCloseable {
                 return;
             }
             if (!inputClosed) {
-                if (incomingBytes + bytes.length > config.socketMaxBufferedMiB() * 1024 * 1024) {
-                    protocolError();
-                    return;
+                while (!inputClosed && !failed && !closed
+                        && incomingBytes + bytes.length > config.socketMaxBufferedMiB() * 1024 * 1024) {
+                    try { waitForIo(); }
+                    catch (IOException e) { remoteReset(); return; }
                 }
+                if (failed || closed) return;
+                if (inputClosed) { receiveSequence++; return; }
                 incoming.addLast(bytes);
                 incomingBytes += bytes.length;
             }
@@ -98,8 +101,12 @@ public final class KryptSocket implements AutoCloseable {
     private void pump() {
         try {
             while (true) {
-                KryptStreamRegistry.Frame frame = outgoing.take();
-                synchronized (lock) { lock.notifyAll(); }
+                KryptStreamRegistry.Frame frame = outgoing.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS);
+                synchronized (lock) {
+                    lock.notifyAll();
+                    if (frame == null && closing) frame = KryptStreamRegistry.Frame.close(streamId);
+                }
+                if (frame == null) continue;
                 transport.send(frame);
                 if (frame.kind == KryptStreamRegistry.Kind.CLOSE || frame.kind == KryptStreamRegistry.Kind.RESET) {
                     synchronized (lock) { closed = true; lock.notifyAll(); }
@@ -113,20 +120,20 @@ public final class KryptSocket implements AutoCloseable {
 
     /** Queues CLOSE after preceding writes. No remote acknowledgement is needed. */
     @Override public void close() {
-        synchronized (output) {
-            synchronized (lock) {
-                if (closing || failed) return;
-                closing = true;
-            }
-            try { enqueue(KryptStreamRegistry.Frame.close(streamId)); }
-            catch (IOException e) { remoteReset(); }
+        synchronized (lock) {
+            if (closing || failed) return;
+            closing = true;
+            lock.notifyAll();
         }
     }
 
     private void enqueue(KryptStreamRegistry.Frame frame) throws IOException {
         synchronized (lock) {
-            if (failed || closed) throw new IOException("KryptSocket output is closed");
-            if (!outgoing.offer(frame)) throw new IOException("KryptSocket backpressure");
+            while (true) {
+                if (failed || closed || closing) throw new IOException("KryptSocket output is closed");
+                if (outgoing.offer(frame)) return;
+                waitForIo();
+            }
         }
     }
 
