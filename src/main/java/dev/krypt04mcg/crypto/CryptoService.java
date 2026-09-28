@@ -385,8 +385,12 @@ public final class CryptoService {
     /** Domain separation prevents a Data API ciphertext from authenticating as a chat message. */
     public byte[] deriveTunnelSecret(byte[] secret, String sessionId, java.util.UUID streamId, long lease,
                                      String sender, String receiver) throws CryptoException {
-        if (secret == null || secret.length != AEAD_KEY_BYTES || lease < 0)
+        if (secret == null || secret.length != AEAD_KEY_BYTES || lease < 0 || streamId == null
+                || sender == null || !sender.matches("[A-Za-z0-9_]{1,16}")
+                || receiver == null || !receiver.matches("[A-Za-z0-9_]{1,16}"))
             throw new CryptoException("Invalid tunnel key material");
+        // Keep the newline-delimited domain unambiguous and require a complete epoch.
+        validateSessionMetadata(sessionId, 0);
         String domain = "krypt04mcg tunnel v1\n" + streamId + "\n" + lease + "\n"
                 + sender.toLowerCase(java.util.Locale.ROOT) + "\n" + receiver.toLowerCase(java.util.Locale.ROOT);
         return hkdf(secret, Base64Url.decode(sessionId), domain.getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
@@ -730,7 +734,8 @@ public final class CryptoService {
 
     private static void validateSessionMetadata(String sessionId, long sequence) throws CryptoException {
         try {
-            if (sessionId == null || Base64Url.decode(sessionId).length != 16 || sequence < 0
+            if (sessionId == null || (sessionId.length() != 22 && sessionId.length() != 24)
+                    || Base64Url.decode(sessionId).length != MESSAGE_ID_BYTES || sequence < 0
                     || sequence == Long.MAX_VALUE) {
                 throw new CryptoException("Invalid session ID or sequence");
             }

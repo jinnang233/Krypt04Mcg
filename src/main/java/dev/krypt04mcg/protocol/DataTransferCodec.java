@@ -77,10 +77,14 @@ public final class DataTransferCodec {
         if (encoded.length() > FileTransferCodec.MAX_CHUNKS * OptionalTransferAssembler.CHUNK)
             throw new IllegalArgumentException("Envelope too large");
         var packet = packets.decode(Base64Url.decode(encoded));
-        if (packet.type() != PacketType.SESSION_MESSAGE) return new FileTransferCodec().packet(encoded, sender, now);
-        if (packet.protocolVersion() != EncryptedPacket.VERSION || packet.flags() != 0 || packet.signed()
-                || !sender.equalsIgnoreCase(packet.sender()) || packet.timestampMillis() < now - 300000
-                || packet.timestampMillis() > now + 60000) throw new IllegalArgumentException("Invalid session envelope");
+        if (packet.type() == PacketType.SESSION_MESSAGE) {
+            if (packet.protocolVersion() != EncryptedPacket.VERSION || packet.flags() != 0 || packet.signed())
+                throw new IllegalArgumentException("Invalid session envelope");
+        } else {
+            FileTransferCodec.requireSignedEnvelope(packet);
+        }
+        if (!sender.equalsIgnoreCase(packet.sender()) || packet.timestampMillis() < now - 300000
+                || packet.timestampMillis() > now + 60000) throw new IllegalArgumentException("Invalid API envelope");
         return packet;
     }
 

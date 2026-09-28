@@ -15,10 +15,14 @@ public final class TunnelCodec {
 
     public byte[] encrypt(SessionRecord session, String sender, String receiver, UUID stream, long lease,
                           long counter, byte[] frame, AeadAlgorithm algorithm) throws Exception {
+        if (frame == null || (frame.length * 4L + 2) / 3 + 24 + 16 > TunnelPayload.MAX_BYTES)
+            throw new IllegalArgumentException("Tunnel frame too large");
         byte[] key = key(session, stream, lease, sender, receiver);
         try {
             byte[] packet = packets.encode(crypto.encryptWithSession(receiver, sender, key,
                     session.sessionId(), counter, Base64Url.encode(frame), false, algorithm));
+            if (packet.length > TunnelPayload.MAX_BYTES - 24)
+                throw new IllegalArgumentException("Tunnel envelope too large");
             return ByteBuffer.allocate(24 + packet.length).putLong(stream.getMostSignificantBits())
                     .putLong(stream.getLeastSignificantBits()).putLong(lease).put(packet).array();
         } finally { Arrays.fill(key, (byte) 0); }

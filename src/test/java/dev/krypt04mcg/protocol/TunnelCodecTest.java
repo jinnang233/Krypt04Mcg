@@ -12,6 +12,21 @@ import org.junit.jupiter.api.io.TempDir;
 
 class TunnelCodecTest {
     @TempDir Path root;
+
+    @Test void encryptRejectsFramesWhoseCompleteEnvelopeExceedsTransportLimit() throws Exception {
+        SessionRecord session = new SessionService(root).createLocalSession("Bob", "kem:sig");
+        TunnelCodec codec = new TunnelCodec();
+        for (var algorithm : AeadAlgorithm.values()) {
+            for (byte[] frame : new byte[][] {null, new byte[18400], new byte[TunnelPayload.MAX_BYTES]}) {
+                assertThrows(IllegalArgumentException.class, () -> codec.encrypt(session, "Alice", "Bob",
+                        UUID.randomUUID(), 0, 0, frame, algorithm));
+            }
+            byte[] frame = new byte[18000];
+            byte[] wire = codec.encrypt(session, "Alice", "Bob", UUID.randomUUID(), 0, 0, frame, algorithm);
+            assertTrue(wire.length <= TunnelPayload.MAX_BYTES);
+            assertArrayEquals(frame, codec.decrypt(codec.header(wire), session, "Bob", "Alice"));
+        }
+    }
     @Test void bothAeadsBindPeerEpochStreamLeaseCounterAndCiphertext() throws Exception {
         SessionRecord session = new SessionService(root).createLocalSession("Bob", "kem:sig");
         TunnelCodec codec = new TunnelCodec();
