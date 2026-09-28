@@ -114,7 +114,8 @@ public final class TunnelService implements AutoCloseable {
             stream = new Stream(payload.peer(), session, header.lease());
             if (streams.putIfAbsent(frame.streamId, stream) != null) throw new IOException("Duplicate OPEN");
         } else if (frame.kind == Kind.OPEN) throw new IOException("Duplicate OPEN");
-        if (header.packet().sequence() != stream.receive++) throw new IOException("Tunnel counter mismatch");
+        if (header.packet().sequence() != stream.receive) throw new IOException("Tunnel counter mismatch");
+        stream.receive++;
         Stream accepted = stream;
         var handle = new KryptSession(stream.peer, CompletableFuture.completedFuture(session.sessionId()),
                 (channel, data) -> { throw new UnsupportedOperationException("Use the Data API for messages"); },
@@ -138,12 +139,8 @@ public final class TunnelService implements AutoCloseable {
     }
 
     private void validateLive(Stream stream) throws Exception {
-        if (closed || !config.enableDataApi) throw new IOException("Tunnel unavailable");
-        long now = System.nanoTime();
-        if (now - stream.checked > TimeUnit.SECONDS.toNanos(1)) {
-            current(stream.peer, stream.session.sessionId());
-            stream.checked = now;
-        }
+        // Revalidate revocation, local/peer keys and epoch on the worker before every frame.
+        current(stream.peer, stream.session.sessionId());
     }
 
     public int streamCount() { return streams.size(); }
@@ -156,7 +153,6 @@ public final class TunnelService implements AutoCloseable {
         final SessionRecord session;
         final long lease;
         long send, receive;
-        volatile long checked = System.nanoTime();
         Stream(String peer, SessionRecord session, long lease) {
             this.peer = peer; this.session = session; this.lease = lease;
         }

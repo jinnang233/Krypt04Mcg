@@ -113,7 +113,9 @@ public final class KryptStreamRegistry {
                 if (kind == Kind.OPEN) {
                     int size = in.readUnsignedShort();
                     if (size == 0 || size > 256) throw new IOException("channel");
-                    frame = open(id, new String(in.readNBytes(size), StandardCharsets.UTF_8));
+                    byte[] name = in.readNBytes(size);
+                    if (name.length != size) throw new IOException("truncated channel");
+                    frame = open(id, StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(name)).toString());
                     validateChannel(frame.channel);
                 } else if (kind == Kind.DATA) {
                     long sequence = in.readLong();
