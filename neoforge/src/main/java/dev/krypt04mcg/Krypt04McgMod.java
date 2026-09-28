@@ -155,6 +155,13 @@ public final class Krypt04McgMod {
             if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
             return dataApi.send(player, channel, data);
         }, dataApi::connect, config);
+        var tunnels = new dev.krypt04mcg.service.TunnelNetwork(config, keyStoreService, keyTrustService, sessionService, root);
+        dev.krypt04mcg.api.Krypt04McgApi.initializeTunnel(tunnels::attach);
+        dev.krypt04mcg.api.Krypt04McgApi.setMainThreadCheck(client::isSameThread);
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> {
+            if (canSend(dev.krypt04mcg.protocol.TunnelPayload.TYPE)) tunnels.connected(event.getConnection());
+        });
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> tunnels.close());
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> dataApi.tick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> dataApi.clear());
         OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());
@@ -246,10 +253,12 @@ public final class Krypt04McgMod {
         var registrar = event.registrar("1").optional();
         registrar.playBidirectional(NeoChatPayload.TYPE, NeoChatPayload.CODEC, (payload, context) -> {});
         registrar.playBidirectional(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC, (payload, context) -> {});
+        registrar.playBidirectional(dev.krypt04mcg.protocol.TunnelPayload.TYPE, dev.krypt04mcg.protocol.TunnelPayload.CODEC, (payload, context) -> {});
         dev.krypt04mcg.client.OptionalSharing.registerPayloads(registrar);
     }
 
     private void registerClientPayloads(RegisterClientPayloadHandlersEvent event) {
+        event.register(dev.krypt04mcg.protocol.TunnelPayload.TYPE, (payload, context) -> {});
         event.register(NeoChatPayload.TYPE, (payload, context) -> {
             if (chatReceiveHandler == null) return;
             if (payload.peer().isBlank()) {
@@ -334,5 +343,4 @@ public final class Krypt04McgMod {
     private record ShadowMessage(String player, String message) {
     }
 }
-
 

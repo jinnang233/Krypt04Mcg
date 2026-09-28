@@ -2,6 +2,9 @@ modLoader="javafml"
 loaderVersion="[1,)"
 license="Unlicense"
 
+[[mixins]]
+config="krypt04mcg.mixins.json"
+
 [[mods]]
 modId="krypt04mcg"
 version="${mod_version}"

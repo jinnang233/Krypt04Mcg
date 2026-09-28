@@ -139,7 +139,11 @@ public final class KryptSocket implements AutoCloseable {
 
     private final class Output extends OutputStream {
         @Override public void write(int value) throws IOException { write(new byte[] {(byte) value}); }
-        @Override public synchronized void write(byte[] source, int offset, int length) throws IOException {
+        @Override public void write(byte[] source, int offset, int length) throws IOException {
+            Krypt04McgApi.requireIoWorker();
+            synchronized (this) { writeChunks(source, offset, length); }
+        }
+        private void writeChunks(byte[] source, int offset, int length) throws IOException {
             Objects.checkFromIndexSize(offset, length, source.length);
             synchronized (lock) {
                 if (closing || failed || closed) throw new IOException("KryptSocket output is closed");
@@ -159,6 +163,7 @@ public final class KryptSocket implements AutoCloseable {
             return read(one, 0, 1) < 0 ? -1 : one[0] & 255;
         }
         @Override public int read(byte[] target, int offset, int length) throws IOException {
+            Krypt04McgApi.requireIoWorker();
             Objects.checkFromIndexSize(offset, length, target.length);
             if (length == 0) return 0;
             synchronized (lock) {

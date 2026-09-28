@@ -130,6 +130,17 @@ public final class Krypt04McgMod implements ClientModInitializer {
             if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
             return dataApi.send(player, channel, data);
         }, dataApi::connect, config);
+        var tunnels = new dev.krypt04mcg.service.TunnelNetwork(config, keyStoreService, keyTrustService, sessionService, root);
+        dev.krypt04mcg.api.Krypt04McgApi.initializeTunnel(tunnels::attach);
+        dev.krypt04mcg.api.Krypt04McgApi.setMainThreadCheck(client::isSameThread);
+        PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.TunnelPayload.TYPE, dev.krypt04mcg.protocol.TunnelPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.TunnelPayload.TYPE, dev.krypt04mcg.protocol.TunnelPayload.CODEC);
+        // Actual delivery is intercepted before the main-thread packet handler.
+        ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.TunnelPayload.TYPE, (payload, context) -> {});
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, c) -> {
+            if (ClientPlayNetworking.canSend(dev.krypt04mcg.protocol.TunnelPayload.TYPE)) tunnels.connected(handler.getConnection());
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> tunnels.close());
         PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
         ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.DataPayload.TYPE,

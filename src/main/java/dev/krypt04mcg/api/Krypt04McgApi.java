@@ -14,6 +14,12 @@ public final class Krypt04McgApi {
     private static volatile Function<String, KryptSession> connector;
     private static final KryptStreamRegistry STREAMS = new KryptStreamRegistry();
     private static volatile Function<KryptSession, KryptSession> tunnel = session -> session;
+    private static volatile java.util.function.BooleanSupplier mainThread = () -> false;
+
+    public static void setMainThreadCheck(java.util.function.BooleanSupplier check) { mainThread = check; }
+    static void requireIoWorker() throws java.io.IOException {
+        if (mainThread.getAsBoolean()) throw new java.io.IOException("Use an I/O worker for KryptSocket reads/writes");
+    }
 
     public static void initializeTunnel(Function<KryptSession, KryptSession> transport) { tunnel = transport; }
     public static void receiveTunnel(KryptSession session, byte[] frame) { STREAMS.receive(session, frame); }

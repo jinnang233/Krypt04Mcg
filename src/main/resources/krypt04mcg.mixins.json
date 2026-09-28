@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.krypt04mcg.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["ConnectionAccessor"],
+  "injectors": {"defaultRequire": 1}
+}
