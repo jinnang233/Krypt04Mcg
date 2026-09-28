@@ -13,6 +13,7 @@ final class TunnelInboundHandler extends ChannelDuplexHandler {
     private final ArrayBlockingQueue<TunnelPayload> incoming = new ArrayBlockingQueue<>(1);
     private Thread worker;
     private boolean busy;
+    private boolean readScheduled;
 
     TunnelInboundHandler(Receiver receiver, Runnable disconnected) {
         this.receiver = receiver; this.disconnected = disconnected;
@@ -30,7 +31,7 @@ final class TunnelInboundHandler extends ChannelDuplexHandler {
                     } finally {
                         ctx.executor().execute(() -> {
                             busy = false;
-                            if (ctx.channel().isActive() && !ctx.isRemoved()) ctx.read();
+                            requestRead(ctx);
                         });
                     }
                 }
@@ -45,8 +46,23 @@ final class TunnelInboundHandler extends ChannelDuplexHandler {
             incoming.add(payload); // FlowControlHandler emits only on demand, never while busy.
         } else {
             ctx.fireChannelRead(message);
-            ctx.executor().execute(() -> { if (!busy && ctx.channel().isActive() && !ctx.isRemoved()) ctx.read(); });
+            requestRead(ctx);
         }
+    }
+    @Override public void channelReadComplete(ChannelHandlerContext ctx) {
+        ctx.fireChannelReadComplete();
+        // Netty clears unfulfilled flow-control demand at the end of a read cycle.
+        // A partial TCP frame may produce no packet at all; waiting for channelRead
+        // alone would then leave terrain/keepalive packets queued until disconnect.
+        requestRead(ctx);
+    }
+    private void requestRead(ChannelHandlerContext ctx) {
+        if (busy || readScheduled || !ctx.channel().isActive() || ctx.isRemoved()) return;
+        readScheduled = true;
+        ctx.executor().execute(() -> {
+            readScheduled = false;
+            if (!busy && ctx.channel().isActive() && !ctx.isRemoved()) ctx.read();
+        });
     }
     @Override public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         worker.interrupt(); disconnected.run(); super.channelInactive(ctx);

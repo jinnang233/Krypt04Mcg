@@ -157,6 +157,12 @@ gradle runClient
 
 ## Install
 
+Use client **0.22.1 or newer** with relay 1.7.0's `krypt04mcg:tunnel` channel.
+Client 0.22.0 can stall while loading terrain and then disconnect after the relay
+advertises this channel: a TCP read containing only a partial packet clears pending
+Netty read demand. Version 0.22.1 renews demand after empty read cycles while still
+pausing reads for a busy tunnel consumer. The fix applies to both Fabric and NeoForge.
+
 Build the project, then copy `build/libs/krypt04mcg-<version>.jar` into the client `mods` directory together with Fabric API. Cloth Config is optional and only needed for the ModMenu settings screen.
 
 ## Key Storage
