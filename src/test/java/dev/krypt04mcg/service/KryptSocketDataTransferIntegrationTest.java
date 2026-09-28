@@ -67,6 +67,28 @@ class KryptSocketDataTransferIntegrationTest {
         }
     }
 
+    @Test void reliableMessagesCoexistWithTunnelAndKeepTheirAcknowledgements() throws Exception {
+        String channel = "test:reliable-coexist";
+        var messages = new LinkedBlockingQueue<byte[]>();
+        Krypt04McgApi.registerReceiver(channel, messages::add);
+        try (var pair = new Pair()) {
+            var sockets = pair.open("coexist");
+            byte[] payload = new byte[128 * 1024]; new Random(9).nextBytes(payload);
+            var received = async(() -> sockets.remote.getInputStream().readNBytes(payload.length));
+            sockets.local.getOutputStream().write(payload);
+            var transfer = pair.alice.data.connect("Bob").send(channel, payload);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+            while (!transfer.completion().toCompletableFuture().isDone() && System.nanoTime() < deadline) {
+                pair.alice.data.tick(); pair.bob.data.tick(); Thread.sleep(1);
+            }
+            assertEquals(TransferResult.Status.DELIVERED, transfer.completion().toCompletableFuture().get(1, TimeUnit.SECONDS).status());
+            assertArrayEquals(payload, messages.poll(1, TimeUnit.SECONDS));
+            assertArrayEquals(payload, received.get(5, TimeUnit.SECONDS));
+            assertTrue(pair.reliablePayloads.get() > 0);
+            pair.assertHealthy();
+        } finally { Krypt04McgApi.unregisterReceiver(channel); }
+    }
+
     static <T> FutureTask<T> async(Callable<T> action) {
         var task = new FutureTask<>(action); Thread.ofVirtual().start(task); return task;
     }
@@ -104,6 +126,10 @@ class KryptSocketDataTransferIntegrationTest {
             return new Sockets(local, accepted.get(15, TimeUnit.SECONDS));
         }
         void assertHealthy() { assertNull(error.get(), () -> String.valueOf(error.get())); }
+        void relayData(String sender, DataPayload payload) {
+            reliablePayloads.incrementAndGet();
+            (sender.equals("Alice") ? bob : alice).data.receive(new DataPayload(sender, payload.fragment(), payload.version()));
+        }
         @Override public void close() { alice.close(); bob.close(); }
 
         final class Endpoint implements AutoCloseable {
@@ -128,7 +154,7 @@ class KryptSocketDataTransferIntegrationTest {
                 sessions = new SessionService(directory);
                 handshake = new SessionHandshakeService(crypto, sessions);
                 data = new DataTransferService(config, keys, trust, sessions, handshake, () -> true,
-                        payload -> reliablePayloads.incrementAndGet());
+                        payload -> relayData(name, payload));
                 streams.configure(config);
             }
             void start(Endpoint other) {
