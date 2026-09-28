@@ -13,6 +13,18 @@ public final class KryptSession implements AutoCloseable {
     private final Runnable closer;
     private final BooleanSupplier valid;
     private boolean closed;
+    private StreamSender streamSender;
+
+    @FunctionalInterface
+    public interface StreamSender { void send(byte[] frame) throws java.io.IOException; }
+
+    /** Internal bridge; stream writes are performed by tunnel workers, never the client thread. */
+    public KryptSession withStreamSender(StreamSender transport) { streamSender = transport; return this; }
+
+    void sendStream(byte[] frame) throws java.io.IOException {
+        if (streamSender == null) throw new java.io.IOException("Tunnel transport unavailable");
+        streamSender.send(frame);
+    }
 
     /** Internal transport bridge. */
     public KryptSession(String peer, CompletionStage<String> readiness,

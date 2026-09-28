@@ -383,6 +383,15 @@ public final class CryptoService {
     }
 
     /** Domain separation prevents a Data API ciphertext from authenticating as a chat message. */
+    public byte[] deriveTunnelSecret(byte[] secret, String sessionId, java.util.UUID streamId, long lease,
+                                     String sender, String receiver) throws CryptoException {
+        if (secret == null || secret.length != AEAD_KEY_BYTES || lease < 0)
+            throw new CryptoException("Invalid tunnel key material");
+        String domain = "krypt04mcg tunnel v1\n" + streamId + "\n" + lease + "\n"
+                + sender.toLowerCase(java.util.Locale.ROOT) + "\n" + receiver.toLowerCase(java.util.Locale.ROOT);
+        return hkdf(secret, Base64Url.decode(sessionId), domain.getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
+    }
+
     public byte[] deriveDataSessionSecret(byte[] secret, byte[] sessionId) throws CryptoException {
         if (secret == null || sessionId == null || secret.length != AEAD_KEY_BYTES || sessionId.length != MESSAGE_ID_BYTES)
             throw new CryptoException("Invalid API session key material");

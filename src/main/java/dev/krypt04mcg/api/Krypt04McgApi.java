@@ -13,6 +13,11 @@ public final class Krypt04McgApi {
     private static volatile Sender sender;
     private static volatile Function<String, KryptSession> connector;
     private static final KryptStreamRegistry STREAMS = new KryptStreamRegistry();
+    private static volatile Function<KryptSession, KryptSession> tunnel = session -> session;
+
+    public static void initializeTunnel(Function<KryptSession, KryptSession> transport) { tunnel = transport; }
+    public static void receiveTunnel(KryptSession session, byte[] frame) { STREAMS.receive(session, frame); }
+    public static void clearTunnels() { STREAMS.clear(); }
 
     private Krypt04McgApi() {}
 
@@ -25,7 +30,7 @@ public final class Krypt04McgApi {
 
     /** Opens a reliable, ordered byte stream to one application channel. */
     public static KryptSocket connect(String player, String channel) {
-        return STREAMS.connect(connect(player), channel);
+        return STREAMS.connect(tunnel.apply(connect(player)), channel);
     }
 
     /**
