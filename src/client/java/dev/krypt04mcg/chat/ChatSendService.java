@@ -175,7 +175,11 @@ public final class ChatSendService {
         }
     }
 
-    private void resend(CachedSentMessage cached) {
+    private void resend(CachedSentMessage cached) throws Exception {
+        PublicIdentity identity = keyStoreService.findPublicIdentity(cached.receiver())
+                .orElseThrow(() -> new IllegalStateException(
+                        ClientMessages.tr("text.krypt04mcg.error.no_public_key", cached.receiver())));
+        ensureSendAllowed(cached.receiver(), identity);
         sendFragments(cached.receiver(), cached.fragments());
         system.accept(ClientMessages.tr("text.krypt04mcg.resending", cached.receiver(), cached.messageId()));
     }
