@@ -110,8 +110,10 @@ public final class Krypt04McgMod implements ClientModInitializer {
 
         chatSendService = new ChatSendService(config, keyStoreService, keyTrustService, sessionService,
                 sessionHandshakeService, sentMessageCacheService, cryptoService, packetCodec,
-                fragmentService, this::sendChatLine, this::system);
+                fragmentService, this::sendChatLine, this::system, client::getConnection);
         applyChatSender();
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> chatSendService.tick());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> chatSendService.clearPending());
         OptionalClothConfig.registerSaveListener(updated -> {
             ClientMessages.setMessagePrefix(updated.messagePrefix);
             applyChatSender();
