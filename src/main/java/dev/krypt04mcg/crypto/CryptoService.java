@@ -20,7 +20,9 @@ import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
-import javax.crypto.Mac;
+import org.bouncycastle.crypto.digests.SHA256Digest;
+import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
+import org.bouncycastle.crypto.params.HKDFParameters;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -844,33 +846,14 @@ public final class CryptoService {
     }
 
     private static byte[] hkdf(byte[] ikm, byte[] salt, byte[] info, int length) throws CryptoException {
-        byte[] prk = null;
-        byte[] previous = new byte[0];
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(salt == null || salt.length == 0 ? new byte[32] : salt, "HmacSHA256"));
-            prk = mac.doFinal(ikm);
-            byte[] okm = new byte[length];
-            int offset = 0;
-            int counter = 1;
-            while (offset < length) {
-                mac.init(new SecretKeySpec(prk, "HmacSHA256"));
-                mac.update(previous);
-                mac.update(info);
-                mac.update((byte) counter);
-                Arrays.fill(previous, (byte) 0);
-                previous = mac.doFinal();
-                int copy = Math.min(previous.length, length - offset);
-                System.arraycopy(previous, 0, okm, offset, copy);
-                offset += copy;
-                counter++;
-            }
-            return okm;
-        } catch (GeneralSecurityException e) {
+            var hkdf = new HKDFBytesGenerator(new SHA256Digest());
+            hkdf.init(new HKDFParameters(ikm, salt, info));
+            byte[] key = new byte[length];
+            hkdf.generateBytes(key, 0, key.length);
+            return key;
+        } catch (IllegalArgumentException e) {
             throw new CryptoException("HKDF failed", e);
-        } finally {
-            if (prk != null) Arrays.fill(prk, (byte) 0);
-            Arrays.fill(previous, (byte) 0);
         }
     }
 
