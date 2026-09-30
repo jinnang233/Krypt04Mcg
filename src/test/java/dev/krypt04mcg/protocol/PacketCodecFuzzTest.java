@@ -66,6 +66,7 @@ final class PacketCodecFuzzTest {
         PacketType[] types = PacketType.values();
         byte version = (byte) (1 + random.nextInt(4));
         PacketType type = types[random.nextInt(types.length)];
+        if (version < EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE) type = PacketType.KEM_MESSAGE;
         byte flags = (byte) random.nextInt(256);
         AlgorithmSuite algorithms = randomAlgorithms(random);
         short fragmentIndex = (short) random.nextInt(Short.MAX_VALUE + 1);
@@ -87,7 +88,7 @@ final class PacketCodecFuzzTest {
         }
         return new EncryptedPacket(version, type, flags, randomName(random), randomName(random), random.nextLong(),
                 randomBytes(random, 16), fragmentIndex, fragmentTotal, algorithms,
-                randomBytes(random, random.nextInt(33)), randomBytes(random, random.nextInt(257)),
+                randomBytes(random, random.nextInt(33)), type == PacketType.SESSION_MESSAGE ? new byte[0] : randomBytes(random, random.nextInt(257)),
                 randomBytes(random, random.nextInt(513)), signature,
                 version >= EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE
                         ? dev.krypt04mcg.util.Base64Url.encode(randomBytes(random, 16)) : "",

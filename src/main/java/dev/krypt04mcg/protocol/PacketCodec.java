@@ -31,10 +31,7 @@ public final class PacketCodec {
     }
 
     public byte[] encode(EncryptedPacket packet) {
-        if (isSessionV4(packet.protocolVersion(), packet.type())
-                && (isSigned(packet.flags()) || packet.signed() || !"NONE".equals(packet.algorithms().signature()))) {
-            throw new IllegalArgumentException("Session messages cannot contain signatures");
-        }
+        validateLayout(packet);
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
@@ -111,14 +108,17 @@ public final class PacketCodec {
             if (in.available() != 0) {
                 throw new IOException("Trailing packet bytes: " + in.available());
             }
-            return new EncryptedPacket(version, type, flags, sender, receiver, timestamp, messageId,
+            var packet = new EncryptedPacket(version, type, flags, sender, receiver, timestamp, messageId,
                     aadFragmentIndex, aadFragmentTotal, algorithms, nonce, kemCiphertext, ciphertext, signature, sessionId, sequence);
+            validateLayout(packet);
+            return packet;
         } catch (IOException e) {
             throw new IllegalArgumentException("Invalid Krypt04Mcg packet", e);
         }
     }
 
     public byte[] aadFor(EncryptedPacket packet) {
+        validateLayout(packet);
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
@@ -177,6 +177,30 @@ public final class PacketCodec {
                 packet.receiver(), packet.timestampMillis(), packet.messageId(), packet.aadFragmentIndex(),
                 packet.aadFragmentTotal(), packet.algorithms(), packet.nonce(), packet.kemCiphertext(),
                 packet.ciphertext(), new byte[0], packet.sessionId(), packet.sequence());
+    }
+
+    /** Reject fields that this layout cannot carry or authenticate instead of silently dropping them. */
+    public static void validateLayout(EncryptedPacket packet) {
+        if (packet == null || packet.type() == null || packet.algorithms() == null)
+            throw new IllegalArgumentException("Missing packet layout");
+        byte version = packet.protocolVersion();
+        if (version < EncryptedPacket.LEGACY_VERSION || version > EncryptedPacket.VERSION)
+            throw new IllegalArgumentException("Unsupported packet version");
+        boolean session = packet.type() == PacketType.SESSION_MESSAGE;
+        if (session) {
+            if (version != EncryptedPacket.VERSION || isSigned(packet.flags()) || packet.signed()
+                    || !"NONE".equals(packet.algorithms().signature()) || !"NONE".equals(packet.algorithms().kem())
+                    || packet.kemCiphertext() == null || packet.kemCiphertext().length != 0)
+                throw new IllegalArgumentException("Session packets cannot carry KEM or signature fields");
+        } else if (!"".equals(packet.sessionId()) || packet.sequence() != 0) {
+            throw new IllegalArgumentException("Only session packets carry session metadata");
+        }
+        if (version >= EncryptedPacket.COMPACT_VERSION) {
+            if (packet.aadFragmentIndex() != 0 || packet.aadFragmentTotal() != 1)
+                throw new IllegalArgumentException("Compact packets cannot carry fragment metadata");
+            if (!isSigned(packet.flags()) && (!"NONE".equals(packet.algorithms().signature()) || packet.signed()))
+                throw new IllegalArgumentException("Unsigned packets cannot carry signature fields");
+        }
     }
 
     private static void writeString(DataOutputStream out, String value) throws IOException {

@@ -681,6 +681,11 @@ public final class CryptoService {
         if (packet.algorithms() == null) {
             throw new CryptoException("Packet algorithm suite is missing");
         }
+        try {
+            PacketCodec.validateLayout(packet);
+        } catch (IllegalArgumentException e) {
+            throw new CryptoException("Invalid packet layout", e);
+        }
         // Before v3, only a signature binds the timestamp. Accepting unsigned legacy
         // packets would let a relay refresh old ciphertext's apparent creation time.
         if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION && !packet.signed()) {
@@ -693,13 +698,6 @@ public final class CryptoService {
             throw new CryptoException("Packet identity, message ID, or nonce is invalid");
         }
         if (packet.type() == PacketType.SESSION_MESSAGE) {
-            if (packet.protocolVersion() != EncryptedPacket.VERSION || packet.signed()
-                    || (packet.flags() & FLAG_SIGNED) != 0
-                    || !"NONE".equals(packet.algorithms().signature())
-                    || !"NONE".equals(packet.algorithms().kem())
-                    || packet.kemCiphertext() == null || packet.kemCiphertext().length != 0) {
-                throw new CryptoException("Session messages require v4 AEAD-only authentication");
-            }
             validateSessionMetadata(packet.sessionId(), packet.sequence());
         }
         byte allowedFlags = (byte) (FLAG_SIGNED | FLAG_COMPRESSED | FLAG_SESSION_RESPONSE);
@@ -720,10 +718,7 @@ public final class CryptoService {
         if ((packet.flags() & FLAG_SESSION_RESPONSE) != 0 && packet.type() != PacketType.SESSION_EXCHANGE) {
             throw new CryptoException("Session response flag is set on a non-exchange packet");
         }
-        if (packet.protocolVersion() >= EncryptedPacket.COMPACT_VERSION
-                && (packet.aadFragmentIndex() != 0 || packet.aadFragmentTotal() != 1)) {
-            throw new CryptoException("Protocol v3 does not carry fragment metadata inside encrypted packets");
-        }
+
     }
 
     private static void validateSessionMetadata(String sessionId, long sequence) throws CryptoException {
