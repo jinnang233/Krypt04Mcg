@@ -5,6 +5,33 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class XChaCha20Poly1305Test {
+    @Test void invalidInputsFailThroughTheCryptoContract() throws Exception {
+        byte[] key = new byte[32], nonce = new byte[24], empty = new byte[0];
+        assertThrows(CryptoException.class, () -> XChaCha20Poly1305.encrypt(null, nonce, empty, empty));
+        assertThrows(CryptoException.class, () -> XChaCha20Poly1305.decrypt(key, null, empty, empty));
+        assertThrows(CryptoException.class, () -> XChaCha20Poly1305.encrypt(key, nonce, empty, null));
+        assertThrows(CryptoException.class, () -> XChaCha20Poly1305.decrypt(key, nonce, empty, null));
+        for (int size = 0; size < 16; size++) {
+            byte[] truncated = new byte[size];
+            assertThrows(CryptoException.class, () -> XChaCha20Poly1305.decrypt(key, nonce, empty, truncated));
+        }
+        byte[] ciphertext = XChaCha20Poly1305.encrypt(key, nonce, null, empty);
+        assertEquals(16, ciphertext.length);
+        assertArrayEquals(empty, XChaCha20Poly1305.decrypt(key, nonce, null, ciphertext));
+    }
+
+    @Test void failedStreamingAuthenticationNeverReturnsPlaintextOrMutatesCallerBuffers() throws Exception {
+        byte[] key = new byte[32], nonce = new byte[24], plain = new byte[16384];
+        java.util.Arrays.fill(plain, (byte) 42);
+        byte[] ciphertext = XChaCha20Poly1305.encrypt(key, nonce, null, plain);
+        ciphertext[ciphertext.length - 1] ^= 1;
+        byte[] before = ciphertext.clone();
+        assertThrows(CryptoException.class, () -> XChaCha20Poly1305.decrypt(key, nonce, null, ciphertext));
+        assertArrayEquals(before, ciphertext);
+        assertEquals(42, plain[0]);
+        assertArrayEquals(new byte[32], key);
+    }
+
     private static byte[] hex(String text) { return HexFormat.of().parseHex(text); }
     // Appendix A.3.1: entire ciphertext AND Poly1305 tag, independently published.
     @Test void aeadPublishedVectorAndTamperRejection() throws Exception {
