@@ -149,12 +149,14 @@ public final class Krypt04McgMod {
         var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
                 keyTrustService, cryptoService, root);
         optionalSharing.register();
-        dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService, sessionService, sessionHandshakeService,
-                () -> canSend(dev.krypt04mcg.protocol.DataPayload.TYPE), ClientPacketDistributor::sendToServer);
-        dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
-            if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
-            return dataApi.send(player, channel, data);
-        }, dataApi::connect);
+        var apiSessions = new SessionService(root.resolve("stream-api"));
+        var apiHandshake = new SessionHandshakeService(cryptoService, apiSessions);
+        dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService, apiSessions, apiHandshake,
+                () -> canSend(dev.krypt04mcg.protocol.ControlPayload.TYPE), payload -> {
+                    if (!canSend(payload.type())) throw new IllegalStateException("Raw channel unavailable");
+                    ClientPacketDistributor.sendToServer(payload);
+                });
+        dev.krypt04mcg.api.Krypt04McgApi.initialize(dataApi::send, dataApi::connect, dataApi::open);
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> dataApi.tick());
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> dataApi.clear());
         OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());
@@ -245,7 +247,11 @@ public final class Krypt04McgMod {
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
         var registrar = event.registrar("1").optional();
         registrar.playBidirectional(NeoChatPayload.TYPE, NeoChatPayload.CODEC, (payload, context) -> {});
-        registrar.playBidirectional(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC, (payload, context) -> {});
+        registrar.playBidirectional(dev.krypt04mcg.protocol.ControlPayload.TYPE, dev.krypt04mcg.protocol.ControlPayload.CODEC, (payload, context) -> {});
+        for (var type : dev.krypt04mcg.protocol.RawChannelPayload.types(OptionalClothConfig.loadOrDefault().apiChannelCount)) {
+            int slot = Integer.parseInt(type.id().getPath().substring("data/".length()));
+            registrar.playBidirectional(type, dev.krypt04mcg.protocol.RawChannelPayload.codec(slot), (payload, context) -> {});
+        }
         dev.krypt04mcg.client.OptionalSharing.registerPayloads(registrar);
     }
 
@@ -258,8 +264,12 @@ public final class Krypt04McgMod {
             }
             chatReceiveHandler.handle(payload.peer(), payload.fragment());
         });
-        event.register(dev.krypt04mcg.protocol.DataPayload.TYPE, (payload, context) ->
+        event.register(dev.krypt04mcg.protocol.ControlPayload.TYPE, (payload, context) ->
                 context.enqueueWork(() -> { if (dataApi != null) dataApi.receive(payload); }));
+        for (var type : dev.krypt04mcg.protocol.RawChannelPayload.types(OptionalClothConfig.loadOrDefault().apiChannelCount)) {
+            event.register(type, (payload, context) ->
+                    context.enqueueWork(() -> { if (dataApi != null) dataApi.receive(payload); }));
+        }
         dev.krypt04mcg.client.OptionalSharing.registerClientPayloads(event);
     }
 

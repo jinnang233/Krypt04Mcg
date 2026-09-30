@@ -7,6 +7,8 @@ import me.shedaniel.autoconfig.annotation.ConfigEntry;
 @Config(name = "krypt04mcg")
 public final class ClothKrypt04McgConfig implements ConfigData {
     public boolean enableDataApi = false;
+    /** Pre-registered raw channels, 1..256. Restart required when changed. */
+    public int apiChannelCount = 16;
     public String apiReceiver = "";
     public boolean enableFileSending = false;
     public boolean enableFileReceiving = false;
@@ -63,6 +65,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
 
     void copyTo(Krypt04McgConfig config) {
         config.enableDataApi = enableDataApi;
+        config.apiChannelCount = Math.clamp(apiChannelCount, 1, 256);
         config.apiReceiver = apiReceiver;
         config.enableFileSending = enableFileSending;
         config.enableFileReceiving = enableFileReceiving;

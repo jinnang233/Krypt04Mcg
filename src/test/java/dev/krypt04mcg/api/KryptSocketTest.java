@@ -1,78 +1,55 @@
 package dev.krypt04mcg.api;
 
+import java.io.IOException;
+import java.util.UUID;
+import java.util.concurrent.*;
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.io.ByteArrayOutputStream;
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.UUID;
-import org.junit.jupiter.api.Test;
-
 class KryptSocketTest {
-    @Test void frameCodecRejectsMalformedInputAndRoundTripsBinaryData() {
-        UUID id = UUID.randomUUID();
-        byte[] data = new byte[] {0, -1, 42};
-        var decoded = KryptStreamRegistry.Frame.decode(KryptStreamRegistry.Frame.data(id, 17, data).encode());
-        assertEquals(KryptStreamRegistry.Kind.DATA, decoded.kind);
-        assertEquals(id, decoded.streamId);
-        assertEquals(17, decoded.sequence);
-        assertArrayEquals(data, decoded.data);
-        assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(new byte[] {1}));
-        assertThrows(IllegalArgumentException.class, () -> KryptStreamRegistry.Frame.decode(
-                Arrays.copyOf(KryptStreamRegistry.Frame.close(id).encode(), 20)));
+    @Test void streamBoundariesHalfCloseAndBackpressure() throws Exception {
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
+        byte[] bytes = new byte[33000];
+        socket.getOutputStream().write(bytes); bytes[0] = 99;
+        assertEquals(0, socket.poll(16000)[0]);
+        assertEquals(16000, socket.poll(16000).length);
+        socket.close(); assertFalse(socket.needsEnd());
+        assertEquals(1000, socket.poll(16000).length); assertTrue(socket.needsEnd());
+        socket.endSent(); assertFalse(socket.isClosed());
+        socket.accept(new byte[]{1, 2}); socket.accept(new byte[]{3}); socket.remoteEnd();
+        assertArrayEquals(new byte[]{1, 2, 3}, socket.getInputStream().readAllBytes());
+        assertTrue(socket.isClosed());
+        assertThrows(IOException.class, () -> socket.getOutputStream().write(1));
     }
-
-    @Test void chunksFlowThroughWindowInOrderAndCloseAfterFinalAck() throws Exception {
-        UUID id = UUID.randomUUID();
-        Deque<KryptStreamRegistry.Frame> leftWire = new ArrayDeque<>();
-        Deque<KryptStreamRegistry.Frame> rightWire = new ArrayDeque<>();
-        KryptSocket left = new KryptSocket("Bob", "test:stream", id, leftWire::addLast);
-        KryptSocket right = new KryptSocket("Alice", "test:stream", id, rightWire::addLast);
-        byte[] source = new byte[KryptSocket.CHUNK_BYTES * 6 + 31];
-        for (int i = 0; i < source.length; i++) source[i] = (byte) i;
-
-        left.getOutputStream().write(source);
-        assertEquals(KryptSocket.WINDOW_CHUNKS, leftWire.size());
-        left.close();
-
-        while (!leftWire.isEmpty() || !rightWire.isEmpty()) {
-            while (!leftWire.isEmpty()) deliver(leftWire.removeFirst(), right);
-            while (!rightWire.isEmpty()) deliver(rightWire.removeFirst(), left);
+    @Test void failureWakesBlockedReadAndDoesNotBecomeEof() throws Exception {
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var blocked = executor.submit(() -> socket.getInputStream().read());
+            socket.fail("Disconnected");
+            var error = assertThrows(ExecutionException.class, () -> blocked.get(2, TimeUnit.SECONDS));
+            assertInstanceOf(IOException.class, error.getCause());
         }
-
-        var received = new ByteArrayOutputStream();
-        byte[] buffer = new byte[7000];
-        while (received.size() < source.length) {
-            int count = right.getInputStream().read(buffer);
-            assertTrue(count > 0);
-            received.write(buffer, 0, count);
-        }
-        assertArrayEquals(source, received.toByteArray());
-        assertEquals(-1, right.getInputStream().read());
-        assertTrue(left.isClosed());
     }
-
-    @Test void boundsQueuedWritesAndResetsOnOutOfOrderData() throws Exception {
-        UUID id = UUID.randomUUID();
-        Deque<KryptStreamRegistry.Frame> wire = new ArrayDeque<>();
-        KryptSocket socket = new KryptSocket("Bob", "test:stream", id, wire::addLast);
-        assertThrows(java.io.IOException.class,
-                () -> socket.getOutputStream().write(new byte[KryptSocket.MAX_BUFFERED_BYTES + 1]));
-
-        KryptSocket receiver = new KryptSocket("Alice", "test:stream", id, wire::addLast);
-        receiver.data(1, new byte[] {1});
-        assertTrue(receiver.isClosed());
-        assertEquals(KryptStreamRegistry.Kind.RESET, wire.getLast().kind);
+    @Test void coalescesTinyWritesAndHandlesRingWrap() throws Exception {
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
+        for (int i = 0; i < 5000; i++) socket.getOutputStream().write(i);
+        byte[] first = socket.poll(4000);
+        for (int i = 0; i < first.length; i++) assertEquals((byte) i, first[i]);
+        for (int i = 5000; i < 10000; i++) socket.getOutputStream().write(i);
+        byte[] next = socket.poll(16384); assertEquals(6000, next.length);
+        for (int i = 0; i < next.length; i++) assertEquals((byte) (i + 4000), next[i]);
+        socket.accept(first);
+        byte[] consumed = socket.getInputStream().readNBytes(3000);
+        assertEquals(3000, consumed.length);
+        socket.accept(next); socket.remoteEnd();
+        byte[] rest = socket.getInputStream().readAllBytes(); assertEquals(7000, rest.length);
+        for (int i = 0; i < rest.length; i++) assertEquals((byte) (i + 3000), rest[i]);
     }
-
-    private static void deliver(KryptStreamRegistry.Frame frame, KryptSocket target) {
-        switch (frame.kind) {
-            case DATA -> target.data(frame.sequence, frame.data);
-            case ACK -> target.ack(frame.sequence);
-            case CLOSE -> target.remoteClose();
-            case RESET -> target.remoteReset();
-            default -> { }
-        }
+    @Test void queueLimitsDoNotPartiallyAcceptWrites() throws Exception {
+        var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
+        assertThrows(IOException.class, () -> socket.getOutputStream().write(new byte[KryptSocket.MAX_BUFFERED_BYTES + 1]));
+        assertNull(socket.poll(16384));
+        socket.accept(new byte[KryptSocket.MAX_BUFFERED_BYTES]);
+        assertThrows(IOException.class, () -> socket.accept(new byte[]{1}));
     }
 }

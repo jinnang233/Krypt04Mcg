@@ -123,17 +123,27 @@ public final class Krypt04McgMod implements ClientModInitializer {
         var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
                 keyTrustService, cryptoService, root);
         optionalSharing.register();
-        var dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService, sessionService, sessionHandshakeService,
-                () -> client.getConnection() != null && ClientPlayNetworking.canSend(dev.krypt04mcg.protocol.DataPayload.TYPE),
-                ClientPlayNetworking::send);
-        dev.krypt04mcg.api.Krypt04McgApi.initialize((player, channel, data) -> {
-            if (!client.isSameThread()) throw new IllegalStateException("Call the data API on the client thread");
-            return dataApi.send(player, channel, data);
-        }, dataApi::connect);
-        PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.DataPayload.TYPE, dev.krypt04mcg.protocol.DataPayload.CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.DataPayload.TYPE,
+        var apiSessions = new SessionService(root.resolve("stream-api"));
+        var apiHandshake = new SessionHandshakeService(cryptoService, apiSessions);
+        var dataApi = new dev.krypt04mcg.service.DataTransferService(config, keyStoreService, keyTrustService, apiSessions, apiHandshake,
+                () -> client.getConnection() != null && ClientPlayNetworking.canSend(dev.krypt04mcg.protocol.ControlPayload.TYPE),
+                payload -> {
+                    if (!ClientPlayNetworking.canSend(payload.type())) throw new IllegalStateException("Raw channel unavailable");
+                    ClientPlayNetworking.send(payload);
+                });
+        dev.krypt04mcg.api.Krypt04McgApi.initialize(dataApi::send, dataApi::connect, dataApi::open);
+        PayloadTypeRegistry.serverboundPlay().register(dev.krypt04mcg.protocol.ControlPayload.TYPE, dev.krypt04mcg.protocol.ControlPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(dev.krypt04mcg.protocol.ControlPayload.TYPE, dev.krypt04mcg.protocol.ControlPayload.CODEC);
+        ClientPlayNetworking.registerGlobalReceiver(dev.krypt04mcg.protocol.ControlPayload.TYPE,
                 (payload, context) -> context.client().execute(() -> dataApi.receive(payload)));
+        for (var type : dev.krypt04mcg.protocol.RawChannelPayload.types(config.apiChannelCount)) {
+            int slot = Integer.parseInt(type.id().getPath().substring("data/".length()));
+            var codec = dev.krypt04mcg.protocol.RawChannelPayload.codec(slot);
+            PayloadTypeRegistry.serverboundPlay().register(type, codec);
+            PayloadTypeRegistry.clientboundPlay().register(type, codec);
+            ClientPlayNetworking.registerGlobalReceiver(type,
+                    (payload, context) -> context.client().execute(() -> dataApi.receive(payload)));
+        }
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> dataApi.tick());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> dataApi.clear());
         OptionalClothConfig.registerSaveListener(updated -> dataApi.tick());

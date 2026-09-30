@@ -3,170 +3,122 @@ package dev.krypt04mcg.api;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Deque;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * An ordered, full-duplex stream carried by the authenticated Krypt04Mcg data API.
- * Writes are non-blocking and must be made on the Minecraft client thread. Reads may
- * block and therefore must not be made on that thread.
- */
+/** Bounded duplex byte stream. Reads may block; never read on the Minecraft client thread. */
 public final class KryptSocket implements AutoCloseable {
-    static final int CHUNK_BYTES = 16 * 1024;
-    static final int WINDOW_CHUNKS = 4;
-    static final int MAX_BUFFERED_BYTES = 1024 * 1024;
-
-    interface Transport { void send(KryptStreamRegistry.Frame frame); }
-
+    public static final int MAX_BUFFERED_BYTES = 1024 * 1024;
     private final String peer, channel;
     private final UUID streamId;
-    private final Transport transport;
-    private final Object lock = new Object();
-    private final Deque<byte[]> outgoing = new ArrayDeque<>();
-    private final Deque<byte[]> incoming = new ArrayDeque<>();
-    private final Input input = new Input();
-    private final Output output = new Output();
-    private long sendSequence, receiveSequence, nextAckSequence;
-    private int inFlight, bufferedOutgoing, incomingOffset;
-    private boolean localClosing, localClosed, remoteClosed, failed;
+    private final ByteQueue incoming = new ByteQueue(), outgoing = new ByteQueue();
+    private boolean closing, endSent, remoteEnded;
+    private IOException failure;
+    private final InputStream input = new Input();
+    private final OutputStream output = new Output();
 
-    KryptSocket(String peer, String channel, UUID streamId, Transport transport) {
-        this.peer = Objects.requireNonNull(peer);
-        this.channel = Objects.requireNonNull(channel);
+    /** Internal channel transport bridge. */
+    public KryptSocket(String peer, String channel, UUID streamId) {
+        this.peer = Objects.requireNonNull(peer); this.channel = Objects.requireNonNull(channel);
         this.streamId = Objects.requireNonNull(streamId);
-        this.transport = Objects.requireNonNull(transport);
     }
-
     public String peer() { return peer; }
     public String channel() { return channel; }
     public UUID streamId() { return streamId; }
     public InputStream getInputStream() { return input; }
     public OutputStream getOutputStream() { return output; }
-    public boolean isClosed() { synchronized (lock) { return localClosed || failed; } }
+    public synchronized boolean isClosed() { return failure != null || (endSent && remoteEnded); }
+    public synchronized boolean isFailed() { return failure != null; }
+    public synchronized boolean outputEnded() { return endSent; }
+    public synchronized int writableBytes() { return closing || failure != null ? 0 : MAX_BUFFERED_BYTES - outgoing.size; }
 
-    void opened() { transport.send(KryptStreamRegistry.Frame.open(streamId, channel)); }
-
-    void data(long sequence, byte[] bytes) {
-        boolean accepted;
-        synchronized (lock) {
-            accepted = !failed && !remoteClosed && sequence == receiveSequence
-                    && bytes.length <= CHUNK_BYTES && queuedIncoming() <= MAX_BUFFERED_BYTES - bytes.length;
-            if (accepted) {
-                receiveSequence++;
-                incoming.addLast(bytes);
-                lock.notifyAll();
-            }
-        }
-        if (accepted) transport.send(KryptStreamRegistry.Frame.ack(streamId, sequence));
-        else abort();
+    /** Internal: takes bytes in stream order using Minecraft's record size limit. */
+    public synchronized byte[] poll(int maximum) {
+        if (maximum <= 0) throw new IllegalArgumentException("Positive read size required");
+        if (failure != null || outgoing.isEmpty()) return null;
+        byte[] bytes = new byte[Math.min(maximum, outgoing.size)];
+        outgoing.read(bytes, 0, bytes.length);
+        return bytes;
     }
-
-    void ack(long sequence) {
-        synchronized (lock) {
-            if (failed || sequence != nextAckSequence || inFlight == 0) return;
-            nextAckSequence++;
-            inFlight--;
-        }
-        pump();
+    public synchronized boolean needsEnd() { return closing && !endSent && outgoing.isEmpty() && failure == null; }
+    public synchronized void endSent() { endSent = true; }
+    public synchronized void remoteEnd() { remoteEnded = true; notifyAll(); }
+    public synchronized void accept(byte[] bytes) throws IOException {
+        if (failure != null || remoteEnded || bytes.length > MAX_BUFFERED_BYTES - incoming.size)
+            throw new IOException("Stream receive buffer exhausted or closed");
+        if (bytes.length != 0) { incoming.write(bytes, 0, bytes.length); notifyAll(); }
     }
-
-    void remoteClose() {
-        synchronized (lock) { remoteClosed = true; lock.notifyAll(); }
+    public synchronized void fail(String reason) {
+        if (failure == null) failure = new IOException(reason);
+        incoming.clear(); outgoing.clear(); notifyAll();
     }
-
-    void remoteReset() {
-        synchronized (lock) { failed = true; outgoing.clear(); bufferedOutgoing = 0; lock.notifyAll(); }
-    }
-
-    private int queuedIncoming() {
-        int size = -incomingOffset;
-        for (byte[] bytes : incoming) size += bytes.length;
-        return size;
-    }
-
-    private void pump() {
-        while (true) {
-            KryptStreamRegistry.Frame next;
-            synchronized (lock) {
-                if (failed || inFlight >= WINDOW_CHUNKS) return;
-                byte[] bytes = outgoing.pollFirst();
-                if (bytes != null) {
-                    bufferedOutgoing -= bytes.length;
-                    long sequence = sendSequence++;
-                    inFlight++;
-                    next = KryptStreamRegistry.Frame.data(streamId, sequence, bytes);
-                } else if (localClosing && !localClosed && inFlight == 0) {
-                    localClosed = true;
-                    next = KryptStreamRegistry.Frame.close(streamId);
-                } else return;
-            }
-            transport.send(next);
-        }
-    }
-
-    private void abort() {
-        boolean notify;
-        synchronized (lock) {
-            notify = !failed;
-            failed = true;
-            outgoing.clear();
-            bufferedOutgoing = 0;
-            lock.notifyAll();
-        }
-        if (notify) transport.send(KryptStreamRegistry.Frame.reset(streamId));
-    }
-
-    @Override public void close() {
-        synchronized (lock) { if (localClosing || failed) return; localClosing = true; }
-        pump();
-    }
-
+    /** Half-closes output after queued bytes; input remains readable until authenticated EOF. */
+    @Override public synchronized void close() { closing = true; }
     private final class Output extends OutputStream {
         @Override public void write(int value) throws IOException { write(new byte[]{(byte) value}); }
-        @Override public void write(byte[] source, int offset, int length) throws IOException {
-            Objects.checkFromIndexSize(offset, length, source.length);
-            synchronized (lock) {
-                if (localClosing || failed) throw new IOException("KryptSocket output is closed");
-                if (length > MAX_BUFFERED_BYTES - bufferedOutgoing) throw new IOException("KryptSocket backpressure");
-                int end = offset + length;
-                while (offset < end) {
-                    int count = Math.min(CHUNK_BYTES, end - offset);
-                    outgoing.addLast(Arrays.copyOfRange(source, offset, offset + count));
-                    bufferedOutgoing += count;
-                    offset += count;
-                }
+        @Override public void write(byte[] bytes, int offset, int length) throws IOException {
+            Objects.checkFromIndexSize(offset, length, bytes.length);
+            synchronized (KryptSocket.this) {
+                if (failure != null) throw failure;
+                if (closing) throw new IOException("Stream output closed");
+                if (length > MAX_BUFFERED_BYTES - outgoing.size) throw new IOException("Stream backpressure");
+                if (length != 0) outgoing.write(bytes, offset, length);
             }
-            pump();
         }
         @Override public void close() { KryptSocket.this.close(); }
     }
-
     private final class Input extends InputStream {
         @Override public int read() throws IOException {
-            byte[] one = new byte[1];
-            return read(one, 0, 1) < 0 ? -1 : one[0] & 0xff;
+            byte[] one = new byte[1]; return read(one, 0, 1) < 0 ? -1 : one[0] & 255;
         }
-        @Override public int read(byte[] target, int offset, int length) throws IOException {
-            Objects.checkFromIndexSize(offset, length, target.length);
+        @Override public int read(byte[] bytes, int offset, int length) throws IOException {
+            Objects.checkFromIndexSize(offset, length, bytes.length);
             if (length == 0) return 0;
-            synchronized (lock) {
-                while (incoming.isEmpty() && !remoteClosed && !failed) {
-                    try { lock.wait(); }
+            synchronized (KryptSocket.this) {
+                while (incoming.isEmpty() && !remoteEnded && failure == null) {
+                    try { KryptSocket.this.wait(); }
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("Interrupted", e); }
                 }
-                if (failed) throw new IOException("KryptSocket was reset");
+                if (failure != null) throw failure;
                 if (incoming.isEmpty()) return -1;
-                byte[] head = incoming.peekFirst();
-                int count = Math.min(length, head.length - incomingOffset);
-                System.arraycopy(head, incomingOffset, target, offset, count);
-                incomingOffset += count;
-                if (incomingOffset == head.length) { incoming.removeFirst(); incomingOffset = 0; }
+                int count = Math.min(length, incoming.size);
+                incoming.read(bytes, offset, count);
                 return count;
             }
         }
-        @Override public void close() { abort(); }
+        @Override public void close() { fail("Stream input closed"); }
     }
+    /** Byte-bounded ring queues coalesce tiny writes without retaining a million array objects. */
+    private static final class ByteQueue {
+        private byte[] bytes = new byte[0];
+        private int head, size;
+        boolean isEmpty() { return size == 0; }
+        void write(byte[] source, int offset, int length) {
+            if (length == 0) return;
+            if (size + length > bytes.length) {
+                byte[] grown = new byte[Math.min(MAX_BUFFERED_BYTES, Math.max(4096, Math.max(size + length, bytes.length * 2)))];
+                int first = Math.min(size, bytes.length - head);
+                System.arraycopy(bytes, head, grown, 0, first);
+                System.arraycopy(bytes, 0, grown, first, size - first);
+                Arrays.fill(bytes, (byte) 0); bytes = grown; head = 0;
+            }
+            int tail = (head + size) % bytes.length;
+            int first = Math.min(length, bytes.length - tail);
+            System.arraycopy(source, offset, bytes, tail, first);
+            System.arraycopy(source, offset + first, bytes, 0, length - first);
+            size += length;
+        }
+        void read(byte[] target, int offset, int length) {
+            int first = Math.min(length, bytes.length - head);
+            System.arraycopy(bytes, head, target, offset, first);
+            System.arraycopy(bytes, 0, target, offset + first, length - first);
+            Arrays.fill(bytes, head, head + first, (byte) 0);
+            Arrays.fill(bytes, 0, length - first, (byte) 0);
+            head = (head + length) % bytes.length; size -= length;
+            if (size == 0) head = 0;
+        }
+        void clear() { Arrays.fill(bytes, (byte) 0); bytes = new byte[0]; head = size = 0; }
+    }
+
 }

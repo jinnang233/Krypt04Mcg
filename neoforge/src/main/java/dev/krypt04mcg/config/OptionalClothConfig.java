@@ -15,14 +15,20 @@ public final class OptionalClothConfig {
     public static Krypt04McgConfig loadOrDefault() {
         if (!ModList.get().isLoaded(CLOTH_CONFIG_MOD_ID)) {
             Krypt04McgMod.LOGGER.info("Cloth Config is not installed; using default Krypt04Mcg settings");
-            return new Krypt04McgConfig();
+            return defaults();
         }
         try {
             return ClothConfigBridge.load();
         } catch (LinkageError e) {
             Krypt04McgMod.LOGGER.warn("Unable to load Krypt04Mcg settings from Cloth Config; using defaults", e);
         }
-        return new Krypt04McgConfig();
+        return defaults();
+    }
+
+    private static Krypt04McgConfig defaults() {
+        var config = new Krypt04McgConfig();
+        config.apiChannelCount = dev.krypt04mcg.channel.ChannelPoolConfig.load(net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get());
+        return config;
     }
 
     public static void registerSaveListener(Consumer<Krypt04McgConfig> listener) {

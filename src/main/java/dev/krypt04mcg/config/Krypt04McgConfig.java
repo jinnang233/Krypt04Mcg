@@ -2,6 +2,8 @@ package dev.krypt04mcg.config;
 
 public class Krypt04McgConfig {
     public boolean enableDataApi = false;
+    /** Pre-registered raw channels, 1..256. Restart required when changed. */
+    public int apiChannelCount = 16;
     public String apiReceiver = "";
     public boolean enableFileSending = false;
     public boolean enableFileReceiving = false;
