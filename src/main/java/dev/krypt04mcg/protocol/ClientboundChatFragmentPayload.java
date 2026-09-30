@@ -9,11 +9,11 @@ public record ClientboundChatFragmentPayload(String sender, String fragment, int
     public static final Type<ClientboundChatFragmentPayload> TYPE = new Type<>(ChatFragmentPayload.CHANNEL);
     public static final StreamCodec<FriendlyByteBuf, ClientboundChatFragmentPayload> CODEC = StreamCodec.of(
             (buf, payload) -> {
-                buf.writeUtf(payload.sender());
-                buf.writeUtf(payload.fragment());
+                buf.writeUtf(payload.sender(), 16);
+                buf.writeUtf(payload.fragment(), dev.krypt04mcg.fragment.FragmentService.MAX_CHAT_MESSAGE_LENGTH);
                 buf.writeVarInt(payload.version());
             },
-            buf -> new ClientboundChatFragmentPayload(buf.readUtf(), buf.readUtf(), buf.readVarInt()));
+            buf -> new ClientboundChatFragmentPayload(buf.readUtf(16), buf.readUtf(dev.krypt04mcg.fragment.FragmentService.MAX_CHAT_MESSAGE_LENGTH), buf.readVarInt()));
 
     @Override
     public Type<? extends CustomPacketPayload> type() {
