@@ -330,6 +330,12 @@ The mod remains client-only and can join vanilla servers. Basic chat operations 
 existing behavior. Payload sharing is optional: a server without the corresponding plugin
 simply has no API/file channel transport. No server mod is required or included.
 
+`CHAT` and `SERVER_COMMAND` send fragments on the client thread at intervals of at least
+1 second (`max(sendDelayMs, 1000)`), matching vanilla's normal 20 TPS spam budget.
+`CUSTOM_PAYLOAD` uses `sendDelayMs` directly. Disconnecting or changing servers cancels
+queued chat fragments. On vanilla, import the other player's public keys locally and use
+`CHAT` for encrypted messages; API streams and optional payload sharing need a relay.
+
 Public-key sharing is unchanged and uses `krypt04mcg:public_key` in `CUSTOM_PAYLOAD` mode.
 `/k04m-share key [player]` sends a public-key offer, which is imported only after acceptance.
 
@@ -425,6 +431,7 @@ session, stream ID, channel slot, application channel, direction and purpose. Th
 nonce contains the stream ID and implicit direction-local record counter; only ciphertext
 and the tag are transmitted. Authentication is checked before plaintext is released.
 Replay, reordering, reflection and cross-channel substitution fail authentication.
+Self-connections are rejected because the endpoints must have distinct directional keys.
 
 Exchange reuses the existing signed KEM exchange machinery on the control channel, with
 separate storage under `stream-api` to keep chat sessions independent. Exchange packets

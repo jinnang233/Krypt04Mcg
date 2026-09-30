@@ -1,3 +1,42 @@
+# Crypto/channel follow-up review (2026-09-30)
+
+This follow-up examined shared crypto, raw API channels, loader registration, and vanilla
+chat transport. Fixes were committed separately:
+
+- `16d3415`: reject encryption/decryption after channel keys have been erased; serialize
+  crypto operations with closure and counter updates.
+- `e2c12dc`: replace handwritten HKDF with the existing Bouncy Castle implementation.
+  Fixed expected outputs check compatibility for both existing session KDF domains.
+- `24fa2f1`: replace Fabric's detached sender threads with the existing NeoForge bounded,
+  connection-bound queue, now shared by both loaders. Disconnects discard pending fragments.
+- `1854fc9`: recheck current recipient identity/trust before Fabric cached resends.
+- `cd42eef`: enforce at least 1 second between chat/command fragments, including successive
+  messages separated by an empty queue. Minecraft 26.3's local server bytecode confirms
+  each chat/command adds 20 spam ticks; one drains per server tick. Custom payload pacing
+  remains configurable. This assumes normal 20 TPS and does not account for manual chat
+  or stricter server policies.
+- `6762d6f`: reject case-insensitive self-connections before exchange and at the crypto
+  constructor, preventing identical directional keys/nonces and reflected data acceptance.
+
+Data-channel encoding remains exactly ciphertext plus the 16-byte XChaCha20-Poly1305 tag.
+The existing wire-byte test verifies there is no inner header, length, sequence, nonce,
+JSON, Base64, retransmission or receipt envelope. Allocation, key exchange and authenticated
+EOF remain on the separate control channel; the payload format was not changed.
+
+Vanilla compatibility was checked through both client entry points, optional NeoForge
+payload registration, channel-availability guards, chat fragment processing, and the
+unsupported-server transport test. Default CHAT mode uses vanilla chat; both peers need
+this client mod and locally imported public keys. Raw API/file transport requires a relay
+because a vanilla server does not forward arbitrary custom payloads between players.
+No live graphical client login or two-player vanilla session was performed in this review.
+
+Validation: Fabric `build --offline` passed with 266 tests, zero failures/errors/skips;
+NeoForge `build --offline` passed with its 2 loader-specific tests. Shared queue tests
+now run in the root suite. A further direct cached-resend trust regression accompanies
+this report. These checks do not establish absence of all vulnerabilities.
+
+---
+
 # Security Code Review (2026-09-12)
 
 This review focused on `CryptoService`, `PacketCodec`, fragment reception, session handshakes, and sequence handling. It also examined the main paths for key import, trust bindings, and local sensitive-file storage. The issues below were fixed without changing the wire format of normal messages.
