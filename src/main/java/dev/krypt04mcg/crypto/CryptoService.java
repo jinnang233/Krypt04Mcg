@@ -681,6 +681,11 @@ public final class CryptoService {
         if (packet.algorithms() == null) {
             throw new CryptoException("Packet algorithm suite is missing");
         }
+        // Before v3, only a signature binds the timestamp. Accepting unsigned legacy
+        // packets would let a relay refresh old ciphertext's apparent creation time.
+        if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION && !packet.signed()) {
+            throw new CryptoException("Unsigned legacy packets do not authenticate their timestamp");
+        }
         if (packet.sender() == null || packet.sender().isBlank()
                 || packet.receiver() == null || packet.receiver().isBlank()
                 || packet.messageId() == null || packet.messageId().length != MESSAGE_ID_BYTES
