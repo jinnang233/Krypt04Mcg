@@ -18,6 +18,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class DataTransferServiceTest {
     @TempDir Path root;
     static final String CHANNEL = "test:stream";
+    @Test void selfConnectionsAreRejectedBeforeExchange() throws Exception {
+        try (var pair = new Pair()) {
+            assertThrows(IllegalArgumentException.class, () -> pair.alice.connect("aLiCe"));
+            assertThrows(IllegalArgumentException.class, () -> pair.alice.open("Alice", CHANNEL));
+            pair.alice.tick();
+            assertTrue(pair.controls.isEmpty());
+        }
+    }
     @Test void exchangeAllocationRawDuplexAndAuthenticatedEofWithoutReceipts() throws Exception {
         try (var pair = new Pair()) {
             var left = pair.alice.open("Bob", CHANNEL);

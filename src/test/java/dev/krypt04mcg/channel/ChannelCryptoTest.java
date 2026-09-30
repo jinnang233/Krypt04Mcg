@@ -14,6 +14,22 @@ class ChannelCryptoTest {
                 Instant.now(), Instant.now(), Base64Url.encode(new byte[32]), 0, 0);
     }
 
+    @Test void identicalEndpointsCannotReuseDirectionalKeysAndNonces() {
+        assertThrows(IllegalArgumentException.class, () ->
+                new ChannelCrypto(session(), UUID.randomUUID(), 0, "test:stream", "Alice", "aLiCe"));
+    }
+
+    @Test void reflectionFailsButPeerCanDecrypt() throws Exception {
+        UUID id = UUID.randomUUID();
+        try (var alice = new ChannelCrypto(session(), id, 0, "test:stream", "Alice", "Bob");
+             var bob = new ChannelCrypto(session(), id, 0, "test:stream", "Bob", "Alice")) {
+            byte[] ciphertext = alice.encrypt(new byte[]{42});
+            assertThrows(CryptoException.class, () -> alice.decrypt(ciphertext));
+            assertEquals(0, alice.received());
+            assertArrayEquals(new byte[]{42}, bob.decrypt(ciphertext));
+        }
+    }
+
     @Test void closedCryptoCannotUseErasedKeys() throws Exception {
         UUID id = UUID.randomUUID();
         var alice = new ChannelCrypto(session(), id, 0, "test:stream", "Alice", "Bob");

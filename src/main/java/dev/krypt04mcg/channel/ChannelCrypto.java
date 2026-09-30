@@ -24,6 +24,8 @@ public final class ChannelCrypto implements AutoCloseable {
     private long sent, received;
     private boolean closed;
     public ChannelCrypto(SessionRecord session, UUID id, int slot, String channel, String local, String peer) {
+        if (name(local).equals(name(peer)))
+            throw new IllegalArgumentException("Stream endpoints must have distinct identities");
         this.id = id;
         String context = session.sessionId() + "/" + id + "/" + slot + "/" + channel;
         sendKey = derive(session, "data/" + context + "/" + name(local) + "/" + name(peer));

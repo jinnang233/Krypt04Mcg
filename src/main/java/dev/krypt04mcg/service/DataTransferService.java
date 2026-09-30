@@ -69,6 +69,7 @@ public final class DataTransferService implements AutoCloseable {
     }
     public KryptSession connect(String peer) {
         checkThread(); Objects.requireNonNull(peer);
+        if (peer.equalsIgnoreCase(own())) throw new IllegalArgumentException("Cannot open a stream to yourself");
         if (!active() || !(config.enableDataApi || config.enableFileSending || config.enableFileReceiving))
             throw new IllegalStateException("API channel unavailable or disabled");
         String name = peer.toLowerCase(Locale.ROOT);
