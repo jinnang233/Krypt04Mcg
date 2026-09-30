@@ -22,6 +22,7 @@ public final class ChannelCrypto implements AutoCloseable {
     private final byte[] sendKey, receiveKey, aad;
     private final UUID id;
     private long sent, received;
+    private boolean closed;
     public ChannelCrypto(SessionRecord session, UUID id, int slot, String channel, String local, String peer) {
         this.id = id;
         String context = session.sessionId() + "/" + id + "/" + slot + "/" + channel;
@@ -29,13 +30,15 @@ public final class ChannelCrypto implements AutoCloseable {
         receiveKey = derive(session, "data/" + context + "/" + name(peer) + "/" + name(local));
         aad = ("krypt04mcg_stream/v1/" + context).getBytes(StandardCharsets.UTF_8);
     }
-    public long sent() { return sent; }
-    public long received() { return received; }
-    public byte[] encrypt(byte[] bytes) throws CryptoException {
+    public synchronized long sent() { return sent; }
+    public synchronized long received() { return received; }
+    public synchronized byte[] encrypt(byte[] bytes) throws CryptoException {
+        if (closed) throw new CryptoException("Stream crypto closed");
         byte[] encrypted = XChaCha20Poly1305.encrypt(sendKey, nonce(sent), aad, bytes);
         sent++; return encrypted;
     }
-    public byte[] decrypt(byte[] bytes) throws CryptoException {
+    public synchronized byte[] decrypt(byte[] bytes) throws CryptoException {
+        if (closed) throw new CryptoException("Stream crypto closed");
         byte[] plain = XChaCha20Poly1305.decrypt(receiveKey, nonce(received), aad, bytes);
         received++; return plain;
     }
@@ -67,5 +70,8 @@ public final class ChannelCrypto implements AutoCloseable {
         } finally { Arrays.fill(secret, (byte) 0); }
     }
     private static String name(String name) { return name.toLowerCase(Locale.ROOT); }
-    @Override public void close() { Arrays.fill(sendKey, (byte) 0); Arrays.fill(receiveKey, (byte) 0); }
+    @Override public synchronized void close() {
+        closed = true;
+        Arrays.fill(sendKey, (byte) 0); Arrays.fill(receiveKey, (byte) 0);
+    }
 }
