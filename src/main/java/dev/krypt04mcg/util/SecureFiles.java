@@ -34,38 +34,18 @@ public final class SecureFiles {
     }
 
     public static void atomicWrite(Path path, byte[] data) throws IOException {
-        atomicWrite(path, data, false);
-    }
-
-    public static void atomicWrite(Path path, byte[] data, boolean durable) throws IOException {
         rejectLinks(path);
         createPrivateDirectories(path.getParent());
         Path temporary = Files.createTempFile(path.getParent(), path.getFileName().toString(), ".tmp");
         try {
             restrictToOwner(temporary, false);
             Files.write(temporary, data);
-            if (durable) {
-                try (var file = java.nio.channels.FileChannel.open(temporary, java.nio.file.StandardOpenOption.WRITE)) {
-                    file.force(true);
-                }
-            }
             try {
                 Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {
-                if (durable) throw e; // Never publish a lease using a non-atomic replacement.
                 Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
             }
             restrictToOwner(path, false);
-            if (durable) {
-                try (var file = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)) {
-                    file.force(true);
-                }
-                if (Files.getFileAttributeView(path, PosixFileAttributeView.class) != null) {
-                    try (var directory = java.nio.channels.FileChannel.open(path.getParent(), java.nio.file.StandardOpenOption.READ)) {
-                        directory.force(true);
-                    }
-                }
-            }
         } finally {
             Files.deleteIfExists(temporary);
         }

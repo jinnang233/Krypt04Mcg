@@ -63,6 +63,27 @@ final class FragmentSendQueueTest {
         assertEquals(List.of("one", "two"), sent);
     }
 
+    @Test void vanillaPacingSurvivesEmptyQueueBetweenMessages() {
+        for (var mode : List.of(dev.krypt04mcg.config.ChatSendMode.CHAT,
+                dev.krypt04mcg.config.ChatSendMode.SERVER_COMMAND)) {
+            queue.clear();
+            enqueue("one");
+            assertTrue(queue.tick(mode, 250));
+            enqueue("two");
+            now.addAndGet(250_000_000L);
+            assertFalse(queue.tick(mode, 250));
+            now.addAndGet(750_000_000L);
+            assertTrue(queue.tick(mode, 250));
+        }
+    }
+
+    @Test void customPayloadRetainsConfiguredPacing() {
+        enqueue("one", "two");
+        assertTrue(queue.tick(dev.krypt04mcg.config.ChatSendMode.CUSTOM_PAYLOAD, 250));
+        now.set(250_000_000L);
+        assertTrue(queue.tick(dev.krypt04mcg.config.ChatSendMode.CUSTOM_PAYLOAD, 250));
+    }
+
     @Test void clearingOrTransportFailureCancelsRemainingWork() {
         enqueue("cancelled");
         queue.clear();

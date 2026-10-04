@@ -229,8 +229,5 @@
   "text.krypt04mcg.session_accepted": "[Krypt04Mcg] %s とのセッションを確立しました。",
   "text.krypt04mcg.error.session_exchange_unsigned": "セッション交換ペイロードが署名されていません。",
   "text.krypt04mcg.error.session_exchange_invalid": "セッション交換ペイロードが無効です。",
-  "text.krypt04mcg.error.session_exchange_key_material": "セッション交換の鍵素材が無効です。",
-  "text.autoconfig.krypt04mcg.option.dataTransferWindow": "データ転送ウィンドウ",
-  "text.autoconfig.krypt04mcg.option.apiMaxMessagesPerSession": "API セッションあたりの最大メッセージ数",
-  "text.autoconfig.krypt04mcg.option.apiRotateAfterBytes": "API ローテーションしきい値（バイト）"
+  "text.krypt04mcg.error.session_exchange_key_material": "セッション交換の鍵素材が無効です。"
 }

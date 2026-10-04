@@ -20,7 +20,9 @@ import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
-import javax.crypto.Mac;
+import org.bouncycastle.crypto.digests.SHA256Digest;
+import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
+import org.bouncycastle.crypto.params.HKDFParameters;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -383,19 +385,6 @@ public final class CryptoService {
     }
 
     /** Domain separation prevents a Data API ciphertext from authenticating as a chat message. */
-    public byte[] deriveTunnelSecret(byte[] secret, String sessionId, java.util.UUID streamId, long lease,
-                                     String sender, String receiver) throws CryptoException {
-        if (secret == null || secret.length != AEAD_KEY_BYTES || lease < 0 || streamId == null
-                || sender == null || !sender.matches("[A-Za-z0-9_]{1,16}")
-                || receiver == null || !receiver.matches("[A-Za-z0-9_]{1,16}"))
-            throw new CryptoException("Invalid tunnel key material");
-        // Keep the newline-delimited domain unambiguous and require a complete epoch.
-        validateSessionMetadata(sessionId, 0);
-        String domain = "krypt04mcg tunnel v1\n" + streamId + "\n" + lease + "\n"
-                + sender.toLowerCase(java.util.Locale.ROOT) + "\n" + receiver.toLowerCase(java.util.Locale.ROOT);
-        return hkdf(secret, Base64Url.decode(sessionId), domain.getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
-    }
-
     public byte[] deriveDataSessionSecret(byte[] secret, byte[] sessionId) throws CryptoException {
         if (secret == null || sessionId == null || secret.length != AEAD_KEY_BYTES || sessionId.length != MESSAGE_ID_BYTES)
             throw new CryptoException("Invalid API session key material");
@@ -692,6 +681,16 @@ public final class CryptoService {
         if (packet.algorithms() == null) {
             throw new CryptoException("Packet algorithm suite is missing");
         }
+        try {
+            PacketCodec.validateLayout(packet);
+        } catch (IllegalArgumentException e) {
+            throw new CryptoException("Invalid packet layout", e);
+        }
+        // Before v3, only a signature binds the timestamp. Accepting unsigned legacy
+        // packets would let a relay refresh old ciphertext's apparent creation time.
+        if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION && !packet.signed()) {
+            throw new CryptoException("Unsigned legacy packets do not authenticate their timestamp");
+        }
         if (packet.sender() == null || packet.sender().isBlank()
                 || packet.receiver() == null || packet.receiver().isBlank()
                 || packet.messageId() == null || packet.messageId().length != MESSAGE_ID_BYTES
@@ -699,13 +698,6 @@ public final class CryptoService {
             throw new CryptoException("Packet identity, message ID, or nonce is invalid");
         }
         if (packet.type() == PacketType.SESSION_MESSAGE) {
-            if (packet.protocolVersion() != EncryptedPacket.VERSION || packet.signed()
-                    || (packet.flags() & FLAG_SIGNED) != 0
-                    || !"NONE".equals(packet.algorithms().signature())
-                    || !"NONE".equals(packet.algorithms().kem())
-                    || packet.kemCiphertext() == null || packet.kemCiphertext().length != 0) {
-                throw new CryptoException("Session messages require v4 AEAD-only authentication");
-            }
             validateSessionMetadata(packet.sessionId(), packet.sequence());
         }
         byte allowedFlags = (byte) (FLAG_SIGNED | FLAG_COMPRESSED | FLAG_SESSION_RESPONSE);
@@ -726,16 +718,12 @@ public final class CryptoService {
         if ((packet.flags() & FLAG_SESSION_RESPONSE) != 0 && packet.type() != PacketType.SESSION_EXCHANGE) {
             throw new CryptoException("Session response flag is set on a non-exchange packet");
         }
-        if (packet.protocolVersion() >= EncryptedPacket.COMPACT_VERSION
-                && (packet.aadFragmentIndex() != 0 || packet.aadFragmentTotal() != 1)) {
-            throw new CryptoException("Protocol v3 does not carry fragment metadata inside encrypted packets");
-        }
+
     }
 
     private static void validateSessionMetadata(String sessionId, long sequence) throws CryptoException {
         try {
-            if (sessionId == null || (sessionId.length() != 22 && sessionId.length() != 24)
-                    || Base64Url.decode(sessionId).length != MESSAGE_ID_BYTES || sequence < 0
+            if (sessionId == null || Base64Url.decode(sessionId).length != 16 || sequence < 0
                     || sequence == Long.MAX_VALUE) {
                 throw new CryptoException("Invalid session ID or sequence");
             }
@@ -858,33 +846,14 @@ public final class CryptoService {
     }
 
     private static byte[] hkdf(byte[] ikm, byte[] salt, byte[] info, int length) throws CryptoException {
-        byte[] prk = null;
-        byte[] previous = new byte[0];
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(salt == null || salt.length == 0 ? new byte[32] : salt, "HmacSHA256"));
-            prk = mac.doFinal(ikm);
-            byte[] okm = new byte[length];
-            int offset = 0;
-            int counter = 1;
-            while (offset < length) {
-                mac.init(new SecretKeySpec(prk, "HmacSHA256"));
-                mac.update(previous);
-                mac.update(info);
-                mac.update((byte) counter);
-                Arrays.fill(previous, (byte) 0);
-                previous = mac.doFinal();
-                int copy = Math.min(previous.length, length - offset);
-                System.arraycopy(previous, 0, okm, offset, copy);
-                offset += copy;
-                counter++;
-            }
-            return okm;
-        } catch (GeneralSecurityException e) {
+            var hkdf = new HKDFBytesGenerator(new SHA256Digest());
+            hkdf.init(new HKDFParameters(ikm, salt, info));
+            byte[] key = new byte[length];
+            hkdf.generateBytes(key, 0, key.length);
+            return key;
+        } catch (IllegalArgumentException e) {
             throw new CryptoException("HKDF failed", e);
-        } finally {
-            if (prk != null) Arrays.fill(prk, (byte) 0);
-            Arrays.fill(previous, (byte) 0);
         }
     }
 

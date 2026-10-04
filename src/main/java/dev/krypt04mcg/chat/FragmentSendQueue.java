@@ -2,6 +2,7 @@ package dev.krypt04mcg.chat;
 
 import dev.krypt04mcg.model.ChatSendFragment;
 import dev.krypt04mcg.model.EncryptedPacket;
+import dev.krypt04mcg.config.ChatSendMode;
 
 import java.util.ArrayDeque;
 import java.util.List;
@@ -20,6 +21,7 @@ final class FragmentSendQueue {
     FragmentSendQueue(Supplier<?> connection, LongSupplier clock) {
         this.connection = connection;
         this.clock = clock;
+        this.nextSend = clock.getAsLong();
     }
 
     void enqueue(String receiver, List<String> fragments, Consumer<ChatSendFragment> sender) {
@@ -33,6 +35,11 @@ final class FragmentSendQueue {
             pending.addLast(new Delivery(current, sender,
                     new ChatSendFragment(receiver, fragment, EncryptedPacket.VERSION)));
         }
+    }
+
+    boolean tick(ChatSendMode mode, int delayMillis) {
+        // Vanilla chat and commands add 20 spam ticks per message, draining one per tick.
+        return tick(mode == ChatSendMode.CUSTOM_PAYLOAD ? delayMillis : Math.max(1000, delayMillis));
     }
 
     boolean tick(int delayMillis) {
@@ -57,7 +64,6 @@ final class FragmentSendQueue {
 
     private void discardStale(Object current) {
         if (!pending.isEmpty() && pending.peekFirst().connection != current) clear();
-        if (pending.isEmpty()) nextSend = clock.getAsLong();
     }
 
     private record Delivery(Object connection, Consumer<ChatSendFragment> sender, ChatSendFragment fragment) {}

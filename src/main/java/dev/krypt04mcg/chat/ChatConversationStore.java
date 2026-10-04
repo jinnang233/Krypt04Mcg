@@ -19,7 +19,7 @@ import java.util.Set;
 import java.util.function.BooleanSupplier;
 
 public final class ChatConversationStore {
-    private final java.util.function.IntSupplier maxMessages;
+    private static final int MAX_MESSAGES = 300;
     private static final Type ENTRIES_TYPE = new TypeToken<List<Entry>>() {
     }.getType();
 
@@ -31,7 +31,6 @@ public final class ChatConversationStore {
     private boolean loaded;
 
     public ChatConversationStore() {
-        this.maxMessages = () -> 300;
         this.historyFile = null;
         this.enabled = () -> true;
         this.sensitiveFiles = null;
@@ -46,11 +45,6 @@ public final class ChatConversationStore {
     }
 
     public ChatConversationStore(Path root, BooleanSupplier enabled) {
-        this(root, enabled, () -> 300);
-    }
-
-    public ChatConversationStore(Path root, BooleanSupplier enabled, java.util.function.IntSupplier maxMessages) {
-        this.maxMessages = maxMessages;
         this.historyFile = root.resolve("cache").resolve("conversations.json");
         this.enabled = enabled;
         this.sensitiveFiles = new SensitiveFileStore(root);
@@ -157,7 +151,7 @@ public final class ChatConversationStore {
     }
 
     private void trim() {
-        while (entries.size() > Math.clamp(maxMessages.getAsInt(), 1, 100000)) {
+        while (entries.size() > MAX_MESSAGES) {
             entries.removeFirst();
         }
     }

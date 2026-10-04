@@ -24,7 +24,9 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.*;
 import java.nio.file.*;
 import java.util.*;
-import dev.krypt04mcg.protocol.FileTransferCodec.FileData;
+import dev.krypt04mcg.protocol.FileStreamCodec.FileData;
+import dev.krypt04mcg.api.Krypt04McgApi;
+import dev.krypt04mcg.api.KryptSocket;
 
 import static dev.krypt04mcg.client.ClientMessages.tr;
 
@@ -37,13 +39,12 @@ public final class OptionalSharing {
     private final CryptoService crypto;
     private final Path root;
     private final Gson gson = JsonSupport.prettyGson();
-    private final FileTransferCodec files = new FileTransferCodec();
     private final OptionalTransferAssembler keyParts = new OptionalTransferAssembler(OptionalTransferAssembler.MAX_KEY_CHUNKS, 4);
-    private final OptionalTransferAssembler fileParts = new OptionalTransferAssembler(FileTransferCodec.MAX_CHUNKS, 1);
-    private final Deque<FileSharePayload> outgoing = new ArrayDeque<>();
+    private static final String FILE_CHANNEL = "krypt04mcg_file:stream";
+    private FileSend outgoing;
+    private KryptSocket receiving;
     private final Deque<PublicKeyPayload> outgoingKeys = new ArrayDeque<>();
     private final Map<String, Pending> pending = new HashMap<>();
-    private final Set<String> seenFiles = new HashSet<>();
     private final FileSharingLock fileLock;
     private final SharingWorker worker = new SharingWorker();
     private long generation;
@@ -55,6 +56,7 @@ public final class OptionalSharing {
         active = this;
         this.config = config; this.keys = keys; this.trust = trust; this.crypto = crypto; this.root = root;
         fileLock = new FileSharingLock(root);
+        Krypt04McgApi.registerSocketReceiver(FILE_CHANNEL, this::receiveFile);
         applySettings();
     }
 
@@ -68,27 +70,27 @@ public final class OptionalSharing {
             catch (Exception e) { dev.krypt04mcg.Krypt04McgMod.LOGGER.warn("Unable to persist file-sharing lock", e); message(tr("text.krypt04mcg.share.lock_failed")); }
         }
         if (fileLock.locked() || !config.enableFileReceiving) {
-            fileParts.clear();
+            cancelReceiving();
             pending.values().removeIf(p -> p.file != null);
         }
-        if (fileLock.locked() || !config.enableFileSending || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) outgoing.clear();
+        if (fileLock.locked() || !config.enableFileSending || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) cancelOutgoing();
         if (config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) {
-            pending.clear(); keyParts.clear(); fileParts.clear(); outgoingKeys.clear();
+            pending.clear(); keyParts.clear(); cancelReceiving(); outgoingKeys.clear();
         }
     }
 
     public void register() {
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> {
             generation++;
-            keyParts.clear(); fileParts.clear(); pending.clear(); seenFiles.clear(); outgoing.clear(); outgoingKeys.clear();
+            keyParts.clear(); cancelReceiving(); pending.clear(); cancelOutgoing(); outgoingKeys.clear();
         });
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
             Minecraft client = Minecraft.getInstance();
             applySettings();
             expire();
             long now = System.currentTimeMillis();
-            keyParts.expire(now); fileParts.expire(now);
-            if (client.getConnection() == null) { outgoing.clear(); outgoingKeys.clear(); return; }
+            keyParts.expire(now);
+            if (client.getConnection() == null) { cancelOutgoing(); outgoingKeys.clear(); return; }
             if (!canSend(PublicKeyPayload.TYPE)) outgoingKeys.clear();
             for (int i = 0; i < 4 && !outgoingKeys.isEmpty(); i++) {
                 PublicKeyPayload payload = outgoingKeys.removeFirst();
@@ -96,13 +98,7 @@ public final class OptionalSharing {
                 if (outgoingKeys.isEmpty()) message(tr("text.krypt04mcg.share.key_sent",
                         payload.peer().equals("*") ? tr("text.krypt04mcg.share.everyone") : payload.peer()));
             }
-            if (!canSend(FileSharePayload.TYPE)) outgoing.clear();
-            // Pace large transfers instead of sending thousands of packets in one tick.
-            for (int i = 0; i < 4 && !outgoing.isEmpty(); i++) {
-                FileSharePayload payload = outgoing.removeFirst();
-                ClientPacketDistributor.sendToServer(payload);
-                if (outgoing.isEmpty()) message(tr("text.krypt04mcg.share.file_sent", payload.peer()));
-            }
+            pumpFile();
         });
         NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent event) -> event.getDispatcher().register(
             Commands.literal("k04m-share")
@@ -129,15 +125,11 @@ public final class OptionalSharing {
 
     public static void registerPayloads(PayloadRegistrar registrar) {
         registrar.playBidirectional(PublicKeyPayload.TYPE, PublicKeyPayload.CODEC, (payload, context) -> {});
-        registrar.playBidirectional(FileSharePayload.TYPE, FileSharePayload.CODEC, (payload, context) -> {});
     }
 
     public static void registerClientPayloads(RegisterClientPayloadHandlersEvent event) {
         event.register(PublicKeyPayload.TYPE, (payload, context) -> {
             if (active != null) active.receive(payload.peer(), payload.fragment(), payload.version(), false);
-        });
-        event.register(FileSharePayload.TYPE, (payload, context) -> {
-            if (active != null) active.receive(payload.peer(), payload.fragment(), payload.version(), true);
         });
     }
 
@@ -166,80 +158,87 @@ public final class OptionalSharing {
     private void sendFile(String player, String path) throws Exception {
         requireMode(); applySettings();
         if (fileLock.locked() || !config.enableFileSending) throw problem("sending_off");
-        if (!canSend(FileSharePayload.TYPE)) throw problem("file_channel");
-        PublicIdentity receiver = trusted(player);
+        trusted(player);
         if (path.startsWith("\"") && path.endsWith("\"")) path = path.substring(1, path.length() - 1);
         Path input = Path.of(path);
-        if (!outgoing.isEmpty()) throw problem("busy");
-        var local = keys.local();
-        var algorithm = config.aeadAlgorithm;
-        submit(true, true, () -> {
-            // Reject devices and pipes before opening a potentially blocking stream.
-            if (!Files.isRegularFile(input)) throw new java.io.IOException("Not a regular file");
-            byte[] bytes;
-            try (var stream = Files.newInputStream(input)) { bytes = stream.readNBytes(FileTransferCodec.MAX_FILE_BYTES + 1); }
-            if (bytes.length > FileTransferCodec.MAX_FILE_BYTES) throw new FileTooLarge();
-            String envelope = files.encrypt(input.getFileName().toString(), bytes, receiver, local, algorithm);
-            return OptionalTransferAssembler.split(envelope, FileTransferCodec.MAX_CHUNKS);
-        }, parts -> {
-            if (!KeyTrustService.fingerprintPair(receiver).equals(KeyTrustService.fingerprintPair(trusted(player))))
-                throw problem("distrusted");
-            for (String part : parts) outgoing.addLast(new FileSharePayload(player, part, 1));
+        if (outgoing != null) throw problem("busy");
+        String fingerprint = KeyTrustService.fingerprintPair(trusted(player));
+        submit(true, true, () -> FileStreamCodec.encode(input), bytes -> {
+            if (!fingerprint.equals(KeyTrustService.fingerprintPair(trusted(player)))) throw problem("distrusted");
+            outgoing = new FileSend(Krypt04McgApi.connect(player, FILE_CHANNEL), bytes);
             message(tr("text.krypt04mcg.share.file_queued", player));
         });
     }
 
+    private void pumpFile() {
+        if (outgoing == null) return;
+        FileSend current = outgoing;
+        try {
+            if (current.socket.isFailed()) throw new java.io.IOException("File stream failed");
+            for (int i = 0; i < 4 && current.offset < current.bytes.length; i++) {
+                int count = Math.min(current.socket.writableBytes(),
+                        Math.min(RawChannelPayload.MAX_PLAINTEXT, current.bytes.length - current.offset));
+                if (count == 0) break;
+                current.socket.getOutputStream().write(current.bytes, current.offset, count);
+                current.offset += count;
+            }
+            if (current.offset == current.bytes.length) current.socket.close();
+            if (current.socket.outputEnded()) {
+                outgoing = null; message(tr("text.krypt04mcg.share.file_sent", current.socket.peer()));
+            }
+        } catch (Exception e) { cancelOutgoing(); message(tr("text.krypt04mcg.share.failed")); }
+    }
+    private void cancelOutgoing() { if (outgoing != null) { outgoing.socket.fail("File send cancelled"); outgoing = null; } }
+    private void cancelReceiving() { if (receiving != null) { receiving.fail("File receive cancelled"); receiving = null; } }
+    private String fileIdentity(String peer) throws Exception {
+        var local = keys.local();
+        return KeyTrustService.fingerprintPair(trusted(peer)) + "/" + local.kemPublicKey().fingerprint()
+                + ":" + local.signaturePublicKey().fingerprint();
+    }
+    private void receiveFile(KryptSocket socket) {
+        applySettings(); expire();
+        if (fileLock.locked() || !config.enableFileReceiving || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD
+                || worker.busy() || receiving != null || pending.size() >= 4 || pending.values().stream().anyMatch(p -> p.file != null)) {
+            socket.fail("File receive unavailable"); return;
+        }
+        try {
+            String fingerprint = fileIdentity(socket.peer());
+            receiving = socket; socket.close();
+            submit(true, false, () -> {
+                try { return FileStreamCodec.read(socket.getInputStream()); }
+                catch (java.io.IOException e) { socket.fail("Invalid file stream"); throw e; }
+                finally { Minecraft.getInstance().execute(() -> { if (receiving == socket) receiving = null; }); }
+            }, data -> {
+                if (!fingerprint.equals(fileIdentity(socket.peer()))) return;
+                offer(new Pending(socket.peer(), fingerprint, data, System.currentTimeMillis()),
+                        tr("text.krypt04mcg.share.file_offer", socket.peer(), data.name().replaceAll("[\\p{Cntrl}§]", "_"), data.data().length));
+            }, false);
+        } catch (Exception e) { receiving = null; socket.fail("File receive rejected"); }
+    }
+    private static final class FileSend {
+        final KryptSocket socket; final byte[] bytes; int offset;
+        FileSend(KryptSocket socket, byte[] bytes) { this.socket = socket; this.bytes = bytes; }
+    }
+
     private void receive(String sender, String fragment, int version, boolean file) {
-        if (config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD || version != 1 || !sender.matches("[A-Za-z0-9_]{1,16}")) return;
+        if (file || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD || version != 1 || !sender.matches("[A-Za-z0-9_]{1,16}")) return;
         applySettings();
-        if (file && (fileLock.locked() || !config.enableFileReceiving)) return;
         if (worker.busy()) return;
         try {
             expire();
-            if (pending.size() >= config.maxPendingSharingOffers() || (file && seenFiles.size() >= 1024)) return;
-            if (file && pending.values().stream().anyMatch(p -> p.file != null)) return;
-            if (!file && pending.values().stream().anyMatch(p -> p.file == null && p.sender.equalsIgnoreCase(sender))) return;
-            Optional<String> assembled = (file ? fileParts : keyParts).accept(sender, fragment, System.currentTimeMillis(), () -> {
-                if (!file) return true;
-                try { trusted(sender); return true; }
-                catch (Exception ignored) { return false; }
-            });
+            if (pending.size() >= 4 || pending.values().stream().anyMatch(p -> p.file == null && p.sender.equalsIgnoreCase(sender))) return;
+            var assembled = keyParts.accept(sender, fragment, System.currentTimeMillis(), () -> true);
             if (assembled.isEmpty()) return;
-            expire();
-            if (pending.size() >= config.maxPendingSharingOffers()) return;
             String json = assembled.get();
-            if (!file) {
-                if (pending.values().stream().anyMatch(p -> p.file == null && p.sender.equalsIgnoreCase(sender))) return;
-                submit(false, false, () -> crypto.validatePublicIdentity(gson.fromJson(json, PublicIdentity.class)), identity -> {
-                    if (!sender.equalsIgnoreCase(identity.owner())) throw problem("owner_mismatch");
-                    offer(new Pending(sender, gson.toJson(identity), null, System.currentTimeMillis()),
+            submit(false, false, () -> crypto.validatePublicIdentity(gson.fromJson(json, PublicIdentity.class)), identity -> {
+                if (!sender.equalsIgnoreCase(identity.owner())) throw problem("owner_mismatch");
+                offer(new Pending(sender, gson.toJson(identity), null, System.currentTimeMillis()),
                         tr("text.krypt04mcg.share.key_offer", sender, KeyTrustService.fingerprintPair(identity)));
-                }, false);
-            } else {
-                if (seenFiles.size() >= 1024) return;
-                var identity = trusted(sender);
-                var local = keys.local();
-                Set<String> replay = Set.copyOf(seenFiles);
-                submit(true, false, () -> {
-                    var packet = files.packet(json, sender, System.currentTimeMillis());
-                    String id = sender.toLowerCase(Locale.ROOT) + ":" + Base64Url.encode(packet.messageId());
-                    if (replay.contains(id)) return null;
-                    FileData data = files.decrypt(packet, local, identity);
-                    return new VerifiedFile(id, data);
-                }, verified -> {
-                    if (verified == null) return;
-                    if (!seenFiles.add(verified.id)) return;
-                    FileData data = verified.data;
-                    offer(new Pending(sender, json, data, System.currentTimeMillis()), tr("text.krypt04mcg.share.file_offer", sender,
-                        data.name().replaceAll("[\\p{Cntrl}§]", "_"), Base64Url.decode(data.data()).length));
-                }, false);
-            }
-        } catch (Exception ignored) {
-            // Unsolicited network input must not amplify into chat messages or stack traces.
-        }
+            }, false);
+        } catch (Exception ignored) { }
     }
 
-    private void expire() { pending.values().removeIf(p -> System.currentTimeMillis() - p.created > config.sharingOfferTimeoutSeconds() * 1000L); }
+    private void expire() { pending.values().removeIf(p -> System.currentTimeMillis() - p.created > 60000); }
 
     private void offer(Pending request, String text) {
         String token = UUID.randomUUID().toString(); pending.put(token, request);
@@ -264,17 +263,14 @@ public final class OptionalSharing {
             message(tr("text.krypt04mcg.share.key_accepted", request.sender));
         } else {
             if (fileLock.locked() || !config.enableFileReceiving) throw problem("receiving_off");
-            // Recheck trust and signature at consent time, since the user may have changed trust.
-            var identity = trusted(request.sender);
-            var local = keys.local();
-            submit(true, false, () -> files.decrypt(files.packet(request.json, request.sender, System.currentTimeMillis()), local, identity), data -> {
-                // Recheck trust after background work before committing the accepted file.
-                if (!KeyTrustService.fingerprintPair(identity).equals(KeyTrustService.fingerprintPair(trusted(request.sender))))
-                    throw problem("distrusted");
+            // Revalidate both identities after consent and immediately before the atomic save.
+            if (!request.json.equals(fileIdentity(request.sender))) throw problem("distrusted");
+            submit(true, false, () -> request.file, data -> {
+                if (!request.json.equals(fileIdentity(request.sender))) throw problem("distrusted");
                 String name = data.name().replaceAll("[^A-Za-z0-9._-]", "_");
                 if (name.length() > 180) name = name.substring(name.length() - 180);
                 Path output = root.resolve("received-files").resolve(UUID.randomUUID() + "-" + name);
-                SecureFiles.atomicWrite(output, Base64Url.decode(data.data()));
+                SecureFiles.atomicWrite(output, data.data());
                 message(tr("text.krypt04mcg.share.saved", output.toAbsolutePath()));
             });
         }
@@ -313,14 +309,11 @@ public final class OptionalSharing {
                 return;
             }
             run(() -> {
-                if (error instanceof FileTooLarge) throw problem("too_large", 10);
                 if (error != null) throw error;
                 completed.accept(value);
             });
         })) throw problem("busy");
     }
-    private static final class FileTooLarge extends Exception {}
-    private record VerifiedFile(String id, FileData data) {}
     private static SharingProblem problem(String key, Object... args) {
         return new SharingProblem(tr("text.krypt04mcg.share." + key, args));
     }

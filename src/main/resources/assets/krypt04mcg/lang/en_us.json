@@ -1,20 +1,4 @@
 {
-  "text.autoconfig.krypt04mcg.option.socketMaxBufferedMiB": "Socket buffer limit (MiB) (1–1024)",
-  "text.autoconfig.krypt04mcg.option.socketWindowChunks": "Socket in-flight chunk limit (1–1024)",
-  "text.autoconfig.krypt04mcg.option.reassemblyTimeoutSeconds": "Fragment reassembly timeout (seconds) (1–86400)",
-  "text.autoconfig.krypt04mcg.option.maxReassemblyMessages": "Maximum pending chat assemblies (1–16384)",
-  "text.autoconfig.krypt04mcg.option.maxFragmentsPerMessage": "Maximum fragments per chat message (1–65536)",
-  "text.autoconfig.krypt04mcg.option.maxConversationMessages": "Conversation history entries (1–100000)",
-  "text.autoconfig.krypt04mcg.option.maxCachedSentMessages": "Cached sent messages for resending (1–4096)",
-  "text.autoconfig.krypt04mcg.option.maxDataTransfers": "Maximum queued data transfers / connections (1–4096)",
-  "text.autoconfig.krypt04mcg.option.maxDataReceipts": "Maximum queued data receipts (1–8192)",
-  "text.autoconfig.krypt04mcg.option.maxDataAttempts": "Data send attempts (including initial send) (1–100)",
-  "text.autoconfig.krypt04mcg.option.maxDataQueuedMiB": "Data send queue size (MiB) (1–4096)",
-  "text.autoconfig.krypt04mcg.option.dataAckTimeoutSeconds": "Data acknowledgement timeout (seconds) (61–299)",
-  "text.autoconfig.krypt04mcg.option.dataTransferTimeoutSeconds": "Overall data transfer timeout (seconds) (1–86400)",
-  "text.autoconfig.krypt04mcg.option.dataFragmentsPerTick": "Data fragments sent per tick (1–1024)",
-  "text.autoconfig.krypt04mcg.option.sharingOfferTimeoutSeconds": "Sharing confirmation timeout (seconds) (1–300)",
-  "text.autoconfig.krypt04mcg.option.maxPendingSharingOffers": "Maximum pending sharing confirmations (1–1024)",
   "text.autoconfig.krypt04mcg.option.enableDataApi": "Enable binary data API (default: off)",
   "text.autoconfig.krypt04mcg.option.apiReceiver": "Default API receiver player",
   "text.krypt04mcg.share.lock_failed": "Could not save the permanent file-sharing lock. Check the log.",
@@ -243,8 +227,5 @@
   "text.krypt04mcg.session_accepted": "[Krypt04Mcg] Session established with %s.",
   "text.krypt04mcg.error.session_exchange_unsigned": "Session exchange payload is not signed.",
   "text.krypt04mcg.error.session_exchange_invalid": "Session exchange payload is invalid.",
-  "text.krypt04mcg.error.session_exchange_key_material": "Session exchange key material is invalid.",
-  "text.autoconfig.krypt04mcg.option.dataTransferWindow": "Data Transfer Window",
-  "text.autoconfig.krypt04mcg.option.apiMaxMessagesPerSession": "API Max Messages Per Session",
-  "text.autoconfig.krypt04mcg.option.apiRotateAfterBytes": "API Rotation Threshold (Bytes)"
+  "text.krypt04mcg.error.session_exchange_key_material": "Session exchange key material is invalid."
 }

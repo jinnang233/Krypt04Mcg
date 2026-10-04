@@ -23,29 +23,6 @@ final class CryptoInputValidationTest {
     private static final String SESSION_ID = "AAAAAAAAAAAAAAAAAAAAAA";
     private static final byte[] SECRET = new byte[32];
 
-    @Test
-    void tunnelDerivationRejectsAmbiguousOrMissingContext() throws Exception {
-        CryptoService crypto = new CryptoService();
-        var stream = java.util.UUID.randomUUID();
-        for (String peer : new String[] {"Alice\nBob", "Alice\ud800", null, ""}) {
-            assertThrows(CryptoException.class, () -> crypto.deriveTunnelSecret(
-                    SECRET, SESSION_ID, stream, 0, peer, "Carol"));
-            assertThrows(CryptoException.class, () -> crypto.deriveTunnelSecret(
-                    SECRET, SESSION_ID, stream, 0, "Alice", peer));
-        }
-        for (String session : new String[] {null, "", "AA", "!", "A".repeat(4096)}) {
-            assertThrows(CryptoException.class, () -> crypto.deriveTunnelSecret(
-                    SECRET, session, stream, 0, "Alice", "Bob"));
-        }
-        assertThrows(CryptoException.class, () -> crypto.deriveTunnelSecret(
-                SECRET, SESSION_ID, null, 0, "Alice", "Bob"));
-        assertArrayEquals(crypto.deriveTunnelSecret(SECRET, SESSION_ID, stream, 0, "Alice", "Bob"),
-                crypto.deriveTunnelSecret(SECRET, SESSION_ID, stream, 0, "ALICE", "BOB"));
-        assertFalse(java.util.Arrays.equals(
-                crypto.deriveTunnelSecret(SECRET, SESSION_ID, stream, 0, "Alice", "Bob"),
-                crypto.deriveTunnelSecret(SECRET, SESSION_ID, stream, 0, "Bob", "Alice")));
-    }
-
     @ParameterizedTest
     @EnumSource(AeadAlgorithm.class)
     void authenticatedMalformedUtf8IsRejected(AeadAlgorithm algorithm) throws Exception {

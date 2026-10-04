@@ -51,61 +51,7 @@ This implementation targets:
 
 The NeoForge build shares the protocol, cryptography, and storage code with Fabric. It requires no server installation for chat transport. Custom payload and public-key sharing still require a server relay that advertises the corresponding channels.
 
-NeoForge's optional Cloth Config integration uses `26.3.158` for Minecraft 26.3 and detects its NeoForge mod ID, `cloth_config`. Install Cloth Config separately to enable the config screen. JSON settings are available with or without Cloth Config.
-
-## User-configurable runtime limits
-
-Settings are stored in `config/krypt04mcg.json` on both Fabric and NeoForge.
-The file is created with defaults on first startup even without Cloth Config.
-Edit it while the game is closed, then restart the client. Existing files may omit
-new fields; omitted fields retain their defaults. Invalid JSON is logged, defaults
-are used for that launch, and the invalid file is preserved for correction.
-
-With Cloth Config installed, the same settings are available in the mod settings
-screen. Saving updates the running configuration. New queue limits apply when
-admitting work; history/cache limits apply on the next write; already scheduled
-acknowledgement deadlines keep their original value. Reducing a queue limit does
-not cancel work already queued.
-
-| JSON field | Default | Allowed range |
-| --- | ---: | ---: |
-| `reassemblyTimeoutSeconds` | 120 | 1–86400 |
-| `maxReassemblyMessages` | 128 | 1–16384 |
-| `maxFragmentsPerMessage` | 512 | 1–65536 |
-| `maxConversationMessages` | 300 | 1–100000 |
-| `maxCachedSentMessages` | 12 | 1–4096 |
-| `maxDataTransfers` | 16 | 1–4096 |
-| `maxDataReceipts` | 32 | 1–8192 |
-| `maxDataAttempts` | 3 | 1–100 |
-| `maxDataQueuedMiB` | 16 | 1–4096 |
-| `dataTransferWindow` | 64 | 1–131072 |
-| `apiMaxMessagesPerSession` | 65536 | 1–1000000 |
-| `apiRotateAfterBytes` | 1073741824 | positive byte count |
-| `socketMaxBufferedMiB` | 4 | 1–1024 |
-| `socketWindowChunks` (legacy, ignored by tunnel) | 4 | 1–1024 |
-| `dataAckTimeoutSeconds` | 65 | 61–299 |
-| `dataTransferTimeoutSeconds` | 240 | 1–86400 |
-| `dataFragmentsPerTick` | 8 | 1–1024 |
-| `sharingOfferTimeoutSeconds` | 60 | 1–300 |
-| `maxPendingSharingOffers` | 4 | 1–1024 |
-
-Time fields use seconds; `maxDataQueuedMiB` and `socketMaxBufferedMiB` use MiB. `maxDataAttempts`
-includes the initial send. The overall transfer timeout includes queueing and may
-end a transfer before all attempts are used. The ACK timeout stays above the
-60-second optional-transfer assembly lifetime. Out-of-range values from JSON are
-clamped when used, matching the settings screen bounds.
-
-The overall transfer timeout can be extended to one day to allow longer queue
-waits. Already encrypted data packets still expire after 300 seconds, so this does
-not extend their validity or guarantee delivery after long retry delays. ACK waits
-are capped at 299 seconds and sharing confirmations at 300 seconds to stay within
-that packet lifetime. Larger queue/cache limits permit higher memory and disk use;
-defaults remain unchanged.
-
-Peers should choose compatible `maxFragmentsPerMessage` values for larger chat
-messages. These settings adjust local resource limits and timing; cryptographic
-sizes, protocol versions, Minecraft's chat length limit, and fixed wire-format
-limits remain protocol constants.
+NeoForge's optional Cloth Config integration uses `26.3.158` for Minecraft 26.3 and detects its NeoForge mod ID, `cloth_config`. Install Cloth Config separately to enable saved settings and the config screen. The mod starts with default settings when Cloth Config is absent.
 
 ## Build
 
@@ -156,12 +102,6 @@ gradle runClient
 ```
 
 ## Install
-
-Use client **0.22.1 or newer** with relay 1.7.0's `krypt04mcg:tunnel` channel.
-Client 0.22.0 can stall while loading terrain and then disconnect after the relay
-advertises this channel: a TCP read containing only a partial packet clears pending
-Netty read demand. Version 0.22.1 renews demand after empty read cycles while still
-pausing reads for a busy tunnel consumer. The fix applies to both Fabric and NeoForge.
 
 Build the project, then copy `build/libs/krypt04mcg-<version>.jar` into the client `mods` directory together with Fabric API. Cloth Config is optional and only needed for the ModMenu settings screen.
 
@@ -350,7 +290,7 @@ Recent plaintext conversation history is cached locally under:
 config/krypt04mcg/accounts/<minecraft-uuid>/cache/conversations.json
 ```
 
-The encrypted cache is bounded by `maxConversationMessages` (300 entries by default) and is disabled by default. It can be enabled with the `enableConversationHistory` config option. With this option disabled, the GUI still displays up to `maxConversationMessages` live conversation entries in memory, without loading or saving conversation history on disk.
+The encrypted cache is bounded to the most recent 300 entries and is disabled by default. It can be enabled with the `enableConversationHistory` config option. With this option disabled, the GUI still displays up to 300 live conversation entries in memory, without loading or saving conversation history on disk.
 
 ## Known Limitations
 
@@ -386,333 +326,154 @@ Implemented test coverage:
 
 ## Public-key and file sharing over optional payload channels
 
-These features require `CUSTOM_PAYLOAD` mode and an updated Krypt04McgRelay plugin.
-The three independent optional channels are `krypt04mcg:chat_fragment`, `krypt04mcg:public_key`,
-and `krypt04mcg:file_share`. Sharing does not fall back to ordinary chat when a channel is unavailable.
+The mod remains client-only and can join vanilla servers. Basic chat operations keep their
+existing behavior. Payload sharing is optional: a server without the corresponding plugin
+simply has no API/file channel transport. No server mod is required or included.
 
-- `/k04m-share key` announces your public key to all online clients subscribed to the channel.
-- `/k04m-share key <player>` sends your public key to a specific player.
-- Recipients see the key fingerprints and clickable `[√]` and `[×]` buttons in chat.
-  Keys are imported only after acceptance; rejection leaves the key store unchanged.
-  Requests expire after 60 seconds or upon disconnect. Different existing keys are never overwritten.
-  Acceptance establishes TOFU trust, not out-of-band verification.
-- `/k04m-share file <player> <path>` sends an encrypted file with a mandatory signature. Paths may be double-quoted.
-  Both players must first accept each other's public keys. The limit is **10 MiB** (10,485,760 bytes) per file.
-  Both the filename and contents are encrypted and signed. Both clients must support this limit.
-  File encryption uses separate limits; ordinary chat retains its 64 KiB plaintext limit.
-- `enableFileSending` and `enableFileReceiving` control sending and receiving independently; **both default to false**.
-  Enable them through the Cloth Config screen or `config/krypt04mcg.json`. Both are disabled by default.
-- Received files are saved to `received-files` within the current account's storage directory only after
-  signature verification and explicit acceptance. Saved names include a random identifier and have path
-  characters filtered out. Files are never opened or executed automatically.
-- Set `permanentlyDisableFileSharing=true` or run `/k04m-share disable-files` to permanently disable file
-  sending and receiving for the current account. This writes `file-sharing.disabled` to the account directory.
-  Restarting or toggling the sending and receiving settings does not remove the lock. Anyone with write access
-  to the configuration directory can still remove this local marker manually.
+`CHAT` and `SERVER_COMMAND` send fragments on the client thread at intervals of at least
+1 second (`max(sendDelayMs, 1000)`), matching vanilla's normal 20 TPS spam budget.
+`CUSTOM_PAYLOAD` uses `sendDelayMs` directly. Disconnecting or changing servers cancels
+queued chat fragments. On vanilla, import the other player's public keys locally and use
+`CHAT` for encrypted messages; API streams and optional payload sharing need a relay.
 
-Transfers use chunks of 12,000 characters. Public keys allow up to four concurrent assemblies with 128 chunks each;
-files allow one assembly with up to 2048 chunks. File sending is limited to four chunks per client tick and one
-outgoing file at a time. Disconnecting or disabling sending clears the outgoing queue.
-Assembly expires after 60 seconds. Up to four requests may await confirmation, including at most one file.
-The file replay cache holds up to 1024 entries per connection; reconnect after reaching this limit to receive
-more files. The relay obtains the authenticated sender name from the server connection.
+Public-key sharing is unchanged and uses `krypt04mcg:public_key` in `CUSTOM_PAYLOAD` mode.
+`/k04m-share key [player]` sends a public-key offer, which is imported only after acceptance.
 
-Sharing messages, confirmation buttons, and settings support Simplified Chinese, Traditional Chinese, English,
-German, Spanish, French, Japanese, and Korean. They follow the client language and use the configured message prefix.
+File sharing now uses the encrypted stream API described below. `/k04m-share file <player> <path>`
+requires both players' imported public keys and `CUSTOM_PAYLOAD` mode. Sending and receiving
+are independently disabled by default (`enableFileSending`, `enableFileReceiving`). The file
+limit remains **10 MiB**. Filename and content are encrypted and authenticated. A file offer
+appears only after the complete stream and authenticated EOF have been received. Files are
+saved only after explicit acceptance and a fresh identity/trust check, under `received-files`
+with sanitized names and a random prefix. Files are never opened or executed automatically.
+Up to four offers, including at most one file, may await consent for 60 seconds.
 
-Optional-sharing validation and file cryptography run on a single background worker with no queued operations.
-Incoming chunks received while that worker is busy are dropped; retry a transfer if the recipient does not receive a prompt.
-Disconnecting, disabling sharing, or changing transport mode invalidates pending background results.
-Expired assemblies and confirmation requests are cleaned up on client ticks, including on idle connections.
+`/k04m-share disable-files` or `permanentlyDisableFileSharing=true` persists the existing
+account-level file-sharing lock. Disabling sharing, disconnecting, or switching transport
+mode cancels active file work. File sending queues at most four 16 KiB portions per tick;
+these are byte-stream writes, with no fragment IDs, reassembly or data acknowledgements.
+The existing key-offer UI, file-offer consent UI, and translations remain in use.
 
-## Reliable Data API for other client mods (0.18.0)
+## Raw encrypted channel API
 
-Enable `enableDataApi` in Cloth Config or `config/krypt04mcg.json` on both clients (default: `false`). Set
-`apiReceiver` to the default recipient's Minecraft player name. Each player must import the other's public key;
-the existing Krypt04Mcg trust checks apply. This API always uses payload transport,
-independently of `chatSendMode` and the file-sharing settings.
+This is a breaking replacement of the old reliable transfer API. `DataTransfer`,
+`TransferResult`, DATA/ACK/NACK envelopes, completion receipts, retransmissions and the old
+`krypt04mcg:data` / `krypt04mcg:file_share` payloads have been removed.
+
+Enable `enableDataApi` to use the public API. `apiReceiver` remains the default peer for
+convenience sends. File sharing uses its own enable switches and does not require enabling
+the public data API. A compatible Spigot relay plugin will be implemented separately;
+the client transport will remain unavailable until the server advertises its channels.
+Unavailable transport fails a requested API operation without preventing login or chat.
+
+`apiChannelCount` pre-registers **1..256** Minecraft data channels, default **16**. Set it
+in the Cloth Config configuration file; without Cloth Config, set the same field in
+`config/krypt04mcg-stream.json`. Changing the count requires restarting the client.
+The channel namespace is dedicated to this transport:
+
+| Minecraft channel | Payload |
+| --- | --- |
+| `krypt04mcg_stream:control` | Allocation, signed exchange, ready, authenticated EOF/reset, relay abort |
+| `krypt04mcg_stream:data/0` … `data/(n-1)` | Exactly XChaCha20-Poly1305 ciphertext plus its 16-byte authentication tag |
+
+Data channels have no application protocol header, sender/recipient, stream ID, sequence,
+nonce, fragment metadata, inner length field, Base64, JSON or algorithm selector. Minecraft
+supplies ordered reliable delivery and the record boundaries. Each record protects up to
+16 KiB of plaintext; the application sees an InputStream/OutputStream regardless of record
+boundaries. Buffer exhaustion fails the stream instead of dropping authenticated bytes.
 
 ```java
 import dev.krypt04mcg.api.Krypt04McgApi;
-import dev.krypt04mcg.api.DataTransfer;
+import dev.krypt04mcg.api.KryptSocket;
 
-// Registration is allowed during client mod initialization.
-Krypt04McgApi.registerReceiver("example:sync", (sender, bytes) -> {
-    // sender is the verified player's name. Your mod interprets the opaque bytes.
-    // Empty byte arrays are supported. Return normally to acknowledge delivery.
-});
-
-// Call send on the Minecraft client thread after joining a compatible server.
-DataTransfer transfer = Krypt04McgApi.send("Alice", "example:sync", new byte[] {0, (byte) 0xff});
-System.out.println(transfer.transferId()); // Stable UUID, also present in the result.
-transfer.whenComplete(result -> {
-    switch (result.status()) {
-        case DELIVERED -> System.out.println("Remote receiver returned normally");
-        case REJECTED -> System.out.println("Remote receiver missing, failed, or at capacity");
-        case TIMEOUT -> System.out.println("No confirmation; delivery is uncertain");
-        default -> System.out.println("Local failure: " + result.status());
-    }
-});
-
-// Two-argument send uses apiReceiver and returns the same kind of handle.
-Krypt04McgApi.send("example:sync", new byte[0]);
-Krypt04McgApi.unregisterReceiver("example:sync");
-```
-
-The original `registerReceiver(channel, Consumer<byte[]>)` overload remains supported.
-Registering either overload replaces the receiver for that exact channel. The sender
-name comes from the verified signed envelope and must match the relay peer, ignoring
-case. Application byte arrays are not parsed or validated by Krypt04Mcg.
-
-`send` copies the input bytes before returning. Encryption, signatures, decryption,
-verification and splitting run on one background worker. Receiver callbacks and
-transfer completion run on the client thread. A `whenComplete` observer registered
-after completion runs immediately on its caller; keep all callbacks short and never
-block waiting for a transfer on the client thread. Observer exceptions do not alter
-the transfer result. `completion()` exposes a read-only `CompletionStage<TransferResult>`
-for standard Java chaining; completing or cancelling its converted future does not
-complete or cancel the underlying transfer.
-
-| Result | Meaning |
-| --- | --- |
-| `DELIVERED` | Authenticated ACK from the intended peer, after its receiver returned normally. |
-| `REJECTED` | Authenticated NACK: unknown channel, receiver exception, or full deduplication cache. |
-| `TIMEOUT` | Confirmation did not arrive within the retry/deadline budget. The peer may have processed the data. |
-| `BACKPRESSURE` | Local queue count/byte budget or per-message size limit exceeded. Nothing was queued. |
-| `DISABLED` | Local API is disabled or was disabled while a transfer was pending. |
-| `DISCONNECTED` | Relay unavailable, disconnected, or transport closed. |
-| `FAILED` | Key missing/changed/distrusted, encryption failure, or local payload send failure. |
-
-Null arguments, calling before mod initialization, or sending off the client thread
-remain programming errors that throw. Queue saturation returns a completed handle
-instead of throwing `already sending`. No acknowledgements are sent for unauthenticated,
-malformed or expired packets, or while the receiving API is disabled.
-
-### Limits, retries and delivery semantics
-
-- Up to 16 pending transfers and 16 MiB of queued input (bytes plus channel string
-  accounting). One message may contain at most 10 MiB; the existing 16 MiB plaintext
-  envelope and 2048-fragment transport bounds also apply. These are resource limits,
-  not application data-format restrictions.
-- Complete envelopes are emitted in order, but up to `dataTransferWindow` transfers
-  may concurrently wait for ACK. At most eight 12,000-character fragments are sent
-  per client tick. Receipts have priority between complete envelopes; fragments of
-  different envelopes are not interleaved. ACK/NACK completion is matched by UUID
-  and may arrive out of order.
-- Wait 65 seconds for an ACK after the final fragment, then retry the whole signed
-  packet with a fresh assembly ID. The UUID and encrypted packet stay unchanged.
-  There are at most three attempts and a four-minute deadline from enqueue, including
-  queue time and encryption. The wait exceeds the assembler's 60-second expiry so a
-  missing fragment cannot permanently block a retry.
-- Receive assembly, the verification queue and receipt queue are bounded. Excess
-  incoming work is dropped and may be retried by the sender. ACK and NACK use the
-  same encrypted, signed KEM envelope as data and are bound to the intended peer
-  and transfer UUID. Receipts never acknowledge other receipts.
-- Up to 1024 received outcomes are retained until the signed packet expires. A
-  duplicate transfer resends its original ACK/NACK without running the callback
-  again. Full outcome storage rejects new messages rather than evicting unexpired
-  outcomes. Disabling clears pending work but keeps outcomes; disconnecting clears
-  connection state, and stale background results cannot send or deliver afterward.
-- This is bounded retry with deduplication within a connection, not durable exactly-once
-  delivery across reconnects or restarts. `DELIVERED` does not mean saved to disk.
-  A throwing receiver may already have partial side effects; it gets NACK and is not
-  called again for that transfer. Applications needing durable transactions should
-  implement their own IDs and storage. Do not blindly treat `TIMEOUT` as non-delivery.
-
-### Compatibility and relay support
-
-The reliable message pipeline does not alter the DataTransfer wire format and does
-not change the message API entry points. See Stream API for the new tunnel protocol.
-New configuration and session-record fields are additive. Older encrypted session
-records load with zero API usage and a conservative replay bitmap that continues to
-reject every sequence below their persisted receive counter.
-
-Both endpoints need 0.18.0 or newer for reliable sending. New clients still receive
-legacy v1 fire-and-forget data without receipts; new v2 messages sent to older clients
-time out. Changing `send` from `void` to `DataTransfer` preserves source calls that
-ignore the result, but changes the JVM method signature: **recompile dependent mods**
-and require Krypt04Mcg >= 0.18.0. No separate API JAR is required.
-
-The server relay still forwards the optional `krypt04mcg:data` channel. No relay
-protocol change is needed if it already forwards this channel opaquely. Wire fields
-remain `writeUtf(peer, 16)`, `writeUtf(fragment, 12100)`, `writeVarInt(1)`, using
-Minecraft UTF-8/VarInt encoding. Client-to-server `peer` is the recipient; the relay
-must replace it with the authenticated sender's name on server-to-client packets.
-Only forward to the named online recipient subscribed to the channel.
-
-The encrypted envelope domain is `krypt04mcg:data:v2`, with `transferId` (canonical
-UUID), `kind` (`DATA`, `ACK`, `NACK`), and DATA-only `channel` and Base64 `data` fields.
-The relay does not parse these fields or decrypt contents. Application channel names
-are independent of the Minecraft payload channel. There is no chat fallback.
-
-The static `send` API continues
-to use signed KEM cryptography. The optional Session API below avoids KEM on subsequent data messages.
-
-## Stream API
-
-KryptSocket keeps its InputStream/OutputStream API, but reads, writes and flush now
-belong on application I/O workers. Calling them on the Minecraft main thread fails
-immediately. connect and listener registration remain client-thread operations.
-The socket listener runs on the tunnel input worker and must hand off the socket
-and return promptly; waiting inside that callback would stop inbound delivery.
-
-Example:
-
-    Krypt04McgApi.registerSocketReceiver("mymod:test", socket ->
-        Thread.ofVirtual().start(() -> {
-            try (socket) {
-                consume(socket.getInputStream());
-            } catch (IOException e) {
-                // Handle disconnect or protocol failure.
-            }
-        }));
-
-    // On the Minecraft client thread:
-    KryptSocket socket = Krypt04McgApi.connect("Alice", "mymod:test");
-    Thread.ofVirtual().start(() -> {
-        try (socket) {
-            socket.getOutputStream().write(bytes);
-            socket.getOutputStream().flush();
-        } catch (IOException e) {
-            // Handle disconnect or protocol failure.
+// Registration and opening run on the Minecraft client thread.
+Krypt04McgApi.registerSocketReceiver("example:stream", socket -> {
+    // Read on your background executor; never block the Minecraft client thread.
+    executor.execute(() -> {
+        try {
+            byte[] bytes = socket.getInputStream().readAllBytes();
+            // Process authenticated bytes; impose your application's own size limit.
+        } catch (java.io.IOException failure) {
+            // Reset, authentication error, truncated stream, timeout or disconnect.
         }
     });
-
-DATA uses 8 KiB chunks. Each OPEN/DATA/CLOSE/RESET frame is encrypted and sent as
-one CustomPayload on the new optional krypt04mcg:tunnel channel. Both endpoints
-and the relay must support this channel; there is no fallback to the old stream:v2
-ACK/retry path. Existing message, session-handshake and file-sharing channels stay
-unchanged.
-
-socketMaxBufferedMiB bounds each socket's queued output and unread input. Output
-capacity is fixed when the socket is created. A full queue blocks the corresponding
-I/O worker until capacity is available, the stream closes, or the worker is interrupted.
-There is no stream sliding window, retransmission timer, delivery receipt or per-frame
-DataTransfer. socketWindowChunks is retained as a legacy config field and is ignored
-by tunnel streams. The connection also has a bounded 32-frame send queue. Netty
-demand-based reads propagate receive pressure to TCP without waiting on the main
-thread. A slow stream can therefore delay other streams on the shared TCP connection.
-
-flush waits for preceding frames to complete their local transport writes; it does
-not prove remote consumption. close returns promptly and drains preceding DATA
-before sending CLOSE. CLOSE ends the socket; buffered received bytes remain readable
-before EOF. Closing only InputStream discards subsequent input and wakes readers,
-while leaving output usable. Disconnect/RESET wakes blocked I/O with IOException.
-Applications must use independent reading and writing workers for full-duplex traffic.
-
-### Tunnel relay wire format
-
-Register/advertise krypt04mcg:tunnel in both directions. Each payload contains:
-
-    writeUtf(peer, 16)
-    writeByteArray(envelope) // VarInt length + at most 24576 bytes
-
-For C2S, peer is the recipient. For S2C, the relay must replace it with the authenticated
-Minecraft sender. Forward each envelope opaquely and in order, without application
-ACKs, batching into larger stream chunks, or silently dropping packets. The relay
-must bound its forwarding queues and propagate transport pressure. This repository
-does not contain the server relay; the old krypt04mcg:data relay alone is insufficient.
-
-The envelope contains a 16-byte stream UUID, an 8-byte nonnegative stream lease,
-then an existing binary SESSION_MESSAGE packet. The encrypted plaintext is one
-Base64URL-encoded stream:v3 frame, including its UUID. The AEAD key is HKDF-separated
-from chat and the message API and binds session ID, stream UUID, lease, sender and
-receiver. The existing AEAD, random message-key salt/nonce and authenticated packet
-counter remain in use. Directional counters advance strictly in order.
-
-Before OPEN encryption, a durable lease is reserved under an interprocess file lock.
-The authenticated receiver persists that OPEN lease before accepting the stream.
-Each stream/direction then has its own key and up to Long.MAX_VALUE - 1 ordered
-frame counters in memory. DATA never writes a session/counter file. Restart abandons
-old streams; reopening allocates a fresh lease and UUID. Old OPENs fail the durable
-replay check, and DATA for an unknown stream is rejected. Trust, keys, epoch and
-session TTL are checked by workers before each frame. Tunnel traffic does not consume
-the message API's count/byte rotation budget.
-
-See [PERFORMANCE.md](PERFORMANCE.md) for the regression harness and remaining limits.
-## Session API (0.19.0)
-
-`connect` reuses a valid authenticated `/exchange` session or starts that same exchange
-automatically over the reliable `krypt04mcg:data` transport. Both endpoints must run
-0.19.0 or newer and enable `enableDataApi`. The relay wire format is unchanged: an
-existing transparent relay does not need new channels or knowledge of session secrets.
-
-```java
-import dev.krypt04mcg.api.KryptSession;
-import dev.krypt04mcg.api.Krypt04McgApi;
-
-KryptSession session = Krypt04McgApi.connect("Alice");
-// This is safe before readiness; it uses the existing bounded transfer queue.
-session.send("mymod:data", bytes).whenComplete(result -> {
-    System.out.println(result.status()); // Same reliable transfer results as static send.
+    socket.close(); // Half-close output; input remains readable.
 });
 
-session.ready().whenComplete((connected, error) -> {
-    if (error != null) {
-        System.err.println("Session establishment failed: " + error.getMessage());
-    } else {
-        System.out.println(connected.peer() + ": " + connected.sessionId());
-    }
-});
-// Later, when this integration no longer needs the handle:
-// session.close();
+KryptSocket socket = Krypt04McgApi.connect("Bob", "example:stream");
+int offset = 0; // Keep socket, bytes and offset as sender state across ticks.
+
+// Run this step on each client tick, with a single producer for this socket.
+// Handle IOException or socket.isFailed() by stopping this sender.
+int count = Math.min(socket.writableBytes(), bytes.length - offset);
+if (count > 0) {
+    socket.getOutputStream().write(bytes, offset, count);
+    offset += count;
+}
+if (offset == bytes.length) socket.close(); // Queued bytes precede authenticated EOF.
+// Otherwise return to the client loop and resume next tick; never spin on capacity.
 ```
 
-- Call `connect`, `session.send` and `session.close` on the client thread. Connection
-  establishment returns immediately with a handle. `ready()` is a read-only
-  `CompletionStage<KryptSession>` and fails on handshake failure, timeout, disable
-  or disconnect. Do not block the client thread waiting for it.
-- Existing `registerReceiver(channel, (sender, bytes) -> ...)` handlers receive both
-  signed KEM and session messages. For session messages, the sender is authenticated
-  by AEAD under the identity-bound handshake secret, not by a new signature per message.
-- `peer()`, `isReady()` and `sessionId()` expose no secret. Readiness describes successful
-  local setup, not a live connection check; every send rechecks trust, key identity,
-  expiry and session epoch. Both peers retain the same master session ID and secret.
-- At most 16 peer handles are retained. Repeated `connect` for the same valid peer
-  returns its current handle. Establishment and data share the 16-transfer/16-MiB
-  queue and four-minute deadlines; handshake responses have priority to prevent
-  queued data from blocking establishment. Failures never fall back to unsigned data.
-- `close()` invalidates the local handle and fails its queued sends. It does not erase
-  the stored chat session or send a stream-close frame. Closing immediately after
-  calling `send` can cancel it, so retain the handle until its transfers finish.
-- Session TTL remains shared, while API DATA uses independent
-  `apiMaxMessagesPerSession` and `apiRotateAfterBytes` counters. Bulk streams therefore
-  do not consume the ordinary chat `maxMessagesPerSession`/`rotateAfterBytes` budget;
-  receipts consume neither budget, so a final message can still be acknowledged. An exhausted,
-  replaced or mismatched epoch fails closed. Call `connect` again to obtain a fresh
-  epoch; existing handles never silently switch keys for queued/retried data.
-- Disable/disconnect invalidates handles and pending work. A subsequent connection
-  may reuse an unexpired persisted session. Sessions written by versions before
-  0.19.0 lack local-key binding, so the first `connect` refreshes them through exchange.
-  The static v0.18 reliable send API remains compatible and independent.
+Streams may be written before exchange/allocation completes. Each direction buffers at
+most 1 MiB; `writableBytes()` lets producers pace writes, and writes beyond capacity throw
+IOException without partially accepting the write. Reads may block; writes only enqueue
+copied bytes and are thread-safe. Capacity checks do not reserve space: multiple producers
+must serialize the check and write together on the socket monitor. Opening connections and
+control/listener callbacks run on the Minecraft client thread. `close()` half-closes output. Closing input cancels the
+stream. Idle/allocation/exchange timeout is 60 seconds. Concurrent streams cannot exceed
+the configured channel pool. Scheduling rotates between active streams.
 
-### Session authentication and sequence handling
+The convenience `send(player, channel, bytes)` returns void and writes one stream followed
+by EOF (at most 1 MiB). `registerReceiver(channel, (sender, bytes) -> ...)` receives stream
+portions on the client thread; each callback is **not** a complete application message.
+Applications needing their own messages should use socket streams and define their own
+content format. No API result claims remote delivery or persistence.
 
-Handshake control messages use reliable signed KEM envelopes (`EXCHANGE` in the
-existing v2 Data API envelope), containing the existing signed `SESSION_EXCHANGE`
-packet. Ephemeral key generation and outer envelope encryption run on the background
-worker; completing the small handshake and committing session state use the client
-thread. Retries resend the same handshake packet and do not regenerate the session
-secret. Simultaneous connections use the existing deterministic exchange tie-break.
+`connect(player)` returns a KryptSession handle with `ready()` for exchange readiness,
+`isReady()` and `sessionId()`. This readiness is local session establishment, not a data
+completion receipt. Its `send(channel, bytes)` has the same convenience-send semantics.
+Session secrets are never exposed by these public handles.
 
-After setup, data and ACK/NACK use protocol-v4 `SESSION_MESSAGE` packets with session
-ID and authenticated sequence metadata. The API derives a separate 32-byte key with
-HKDF-SHA256, using the master secret, session ID as salt, and the label
-`krypt04mcg data session v1`. Chat continues using its original key derivation.
-A data ciphertext cannot be replayed into chat or vice versa. The encrypted API
-plaintext domain is `krypt04mcg:data:session:v1`.
+All stream data encryption calls BouncyCastle's
+[`org.bouncycastle.crypto.modes.XChaCha20Poly1305`](https://downloads.bouncycastle.org/java/docs/bcprov-jdk18on-javadoc/org/bouncycastle/crypto/modes/XChaCha20Poly1305.html) directly; no cipher or HChaCha implementation
+is maintained in the mod. Keys are derived with BouncyCastle HKDF-SHA256 and separated by
+session, stream ID, channel slot, application channel, direction and purpose. The 24-byte
+nonce contains the stream ID and implicit direction-local record counter; only ciphertext
+and the tag are transmitted. Authentication is checked before plaintext is released.
+Replay, reordering, reflection and cross-channel substitution fail authentication.
+Self-connections are rejected because the endpoints must have distinct directional keys.
 
-API counters are stored atomically alongside the encrypted session record, separately
-from chat counters. DATA uses even wire sequences; receipts use odd sequences, with
-independent persisted 64-entry replay/reorder windows. Gaps and bounded reordering are
-accepted because encryption failure, pipelining, delayed ACKs, and retry may reorder
-arrival; duplicates and packets older than the window remain rejected. Receipts can
-overtake queued data without blocking it. Counters are reserved before encryption and never reused; retrying a transfer
-reuses its original authenticated packet and sequence. Cached duplicates only resend
-the original result. After a restart without the outcome cache, persisted receive
-counters reject old data instead of calling the receiver again. This still is not a
-durable exactly-once transaction or proof of application persistence.
+Exchange reuses the existing signed KEM exchange machinery on the control channel, with
+separate storage under `stream-api` to keep chat sessions independent. Exchange packets
+must fit in one control payload (30,000-byte body); unsupported oversized exchange material
+fails rather than introducing fragmentation. Exchange's envelope cipher belongs to that
+existing handshake format; data channels always use XChaCha20-Poly1305, independently of
+the chat AEAD setting. Authenticated OPEN counters persist in the separate session store
+for replay protection. Session TTL and rotation limits are checked; active streams validate
+their identity and session epoch. Stream keys are erased when their slot is released.
 
-Files retain their existing signed KEM transfer
-format; this release adds shared sessions for the Data API without changing file or
-chat message formats.
+EOF is an authenticated control message containing the final record count. A dropped
+record, unauthenticated close, connection loss or failed tag cannot become successful EOF.
+READY is allocation readiness only; there are no per-data ACKs or completion receipts.
+
+## Contract for the future Spigot relay
+
+Only the control channel is decoded by the relay. The client control codec defines
+`EXCHANGE`, `OPEN`, `ASSIGNED`, `READY`, `END`, `RESET`, and `ABORT`. The control payload contains
+kind, peer, stream UUID, slot, application channel, session ID, sequence and bounded body.
+The relay obtains the source player from the authenticated Minecraft connection, never
+from a claimed source field. It rewrites `peer` to the authenticated source when forwarding
+control messages. Exchange bodies are signed encrypted packets; other client controls
+carry a 32-byte authentication tag. ASSIGNED and ABORT are relay lifecycle notifications.
+ABORT is always a failure, never EOF.
+
+OPEN requests slot -1. The relay picks a free slot supported by both clients, sends
+ASSIGNED with the chosen slot to the opener, then forwards OPEN on that slot to the peer.
+The peer verifies OPEN, reserves its persisted anti-replay counter, installs the stream,
+and sends authenticated READY binding the chosen slot. Both ends then map that slot to
+one stream in an array. The relay should likewise maintain an array of source/target pairs
+and forward the exact raw payload on the same data channel without inspecting or wrapping
+its bytes. Refuse data from anyone outside the assigned pair, before READY, or after that
+sender's END. Release a slot after both directional ENDs, RESET, disconnect or timeout.
+Keep control and data forwarding ordered. Bound allocations and traffic per source.
+No server implementation is shipped in this mod.

@@ -137,8 +137,7 @@ public final class SessionService {
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
                 expectedSequence + 1, session.nextReceiveSequence(), session.localFingerprint(),
                 session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
-                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed(),
-                session.apiReceiveWindow(), session.apiControlReceiveWindow()));
+                session.nextApiControlReceiveSequence()));
     }
 
     public synchronized void recordReceivedMessage(String peer, String sessionId, long sequence, long bytes)
@@ -152,8 +151,7 @@ public final class SessionService {
                 Instant.now(), session.secret(), session.messageCount() + 1, session.bytesUsed() + Math.max(0, bytes),
                 session.nextSendSequence(), sequence + 1, session.localFingerprint(),
                 session.nextApiSendSequence(), session.nextApiReceiveSequence(), session.nextApiControlSendSequence(),
-                session.nextApiControlReceiveSequence(), session.apiMessageCount(), session.apiBytesUsed(),
-                session.apiReceiveWindow(), session.apiControlReceiveWindow()));
+                session.nextApiControlReceiveSequence()));
     }
 
     /** Reserve and persist before encryption. Gaps are safe; a failed send never reuses its sequence. */
@@ -170,27 +168,10 @@ public final class SessionService {
     public synchronized void recordApiReceived(String peer, String sessionId, long sequence, boolean control, long bytes) throws IOException {
         SessionRecord session = requireEpoch(peer, sessionId);
         long next = control ? session.nextApiControlReceiveSequence() : session.nextApiReceiveSequence();
-        if (sequence < 0 || sequence == Long.MAX_VALUE || (sequence & 1) != (control ? 1 : 0))
+        if (sequence < 0 || sequence == Long.MAX_VALUE || (sequence & 1) != (control ? 1 : 0) || sequence / 2 < next)
             throw new IOException("Repeated or invalid API sequence");
-        Long storedWindow = control ? session.apiControlReceiveWindow() : session.apiReceiveWindow();
-        long window = storedWindow == null ? legacyWindow(next) : storedWindow;
-        long index = sequence / 2;
-        long updatedNext = next;
-        if (index >= next) {
-            long shift = index - next + 1;
-            window = shift >= Long.SIZE ? 1L : (window << shift) | 1L;
-            updatedNext = index + 1;
-        } else {
-            long distance = next - 1 - index;
-            if (distance >= Long.SIZE || (window & (1L << distance)) != 0)
-                throw new IOException("Repeated or invalid API sequence");
-            window |= 1L << distance;
-        }
-        Long receiveWindow = control ? session.apiReceiveWindow() : Long.valueOf(window);
-        Long controlReceiveWindow = control ? Long.valueOf(window) : session.apiControlReceiveWindow();
-        saveApiCounters(session, session.nextApiSendSequence(), control ? session.nextApiReceiveSequence() : updatedNext,
-                session.nextApiControlSendSequence(), control ? updatedNext : session.nextApiControlReceiveSequence(),
-                receiveWindow, controlReceiveWindow, control, bytes);
+        saveApiCounters(session, session.nextApiSendSequence(), control ? session.nextApiReceiveSequence() : sequence / 2 + 1,
+                session.nextApiControlSendSequence(), control ? sequence / 2 + 1 : session.nextApiControlReceiveSequence(), control, bytes);
     }
 
     private SessionRecord requireEpoch(String peer, String id) throws IOException {
@@ -201,23 +182,10 @@ public final class SessionService {
 
     private void saveApiCounters(SessionRecord s, long send, long receive, long controlSend, long controlReceive,
                                   boolean control, long bytes) throws IOException {
-        saveApiCounters(s, send, receive, controlSend, controlReceive, s.apiReceiveWindow(),
-                s.apiControlReceiveWindow(), control, bytes);
-    }
-
-    private void saveApiCounters(SessionRecord s, long send, long receive, long controlSend, long controlReceive,
-                                 Long receiveWindow, Long controlReceiveWindow, boolean control, long bytes) throws IOException {
         save(new SessionRecord(s.peer(), s.peerFingerprint(), s.sessionId(), s.createdAt(), Instant.now(), s.secret(),
-                s.messageCount(), s.bytesUsed(),
-                s.nextSendSequence(), s.nextReceiveSequence(), s.localFingerprint(), send, receive, controlSend, controlReceive,
-                control ? s.apiMessageCount() : Math.addExact(s.apiMessageCount(), 1),
-                control ? s.apiBytesUsed() : Math.addExact(s.apiBytesUsed(), Math.max(0, bytes)),
-                receiveWindow, controlReceiveWindow));
-    }
-
-    private static long legacyWindow(long next) {
-        if (next <= 0) return 0;
-        return next >= Long.SIZE ? -1L : (1L << next) - 1;
+                control ? s.messageCount() : Math.addExact(s.messageCount(), 1),
+                control ? s.bytesUsed() : Math.addExact(s.bytesUsed(), Math.max(0, bytes)),
+                s.nextSendSequence(), s.nextReceiveSequence(), s.localFingerprint(), send, receive, controlSend, controlReceive));
     }
 
     public boolean isExpired(SessionRecord session, int ttlMinutes, int maxMessages, long rotateAfterBytes) {
@@ -225,13 +193,6 @@ public final class SessionService {
         return Instant.now().isAfter(expiresAt)
                 || session.messageCount() >= maxMessages
                 || session.bytesUsed() >= rotateAfterBytes;
-    }
-
-    public boolean isApiExpired(SessionRecord session, int ttlMinutes, int maxMessages, long rotateAfterBytes) {
-        Instant expiresAt = session.createdAt().plus(Duration.ofMinutes(ttlMinutes));
-        return Instant.now().isAfter(expiresAt)
-                || session.apiMessageCount() >= maxMessages
-                || session.apiBytesUsed() >= rotateAfterBytes;
     }
 
     private Path pathFor(String peer) {
@@ -252,8 +213,7 @@ public final class SessionService {
                     || record.messageCount() < 0 || record.bytesUsed() < 0
                     || record.nextSendSequence() < 0 || record.nextReceiveSequence() < 0
                     || record.nextApiSendSequence() < 0 || record.nextApiReceiveSequence() < 0
-                    || record.nextApiControlSendSequence() < 0 || record.nextApiControlReceiveSequence() < 0
-                    || record.apiMessageCount() < 0 || record.apiBytesUsed() < 0) {
+                    || record.nextApiControlSendSequence() < 0 || record.nextApiControlReceiveSequence() < 0) {
                 throw new IOException("Session record is invalid");
             }
         } catch (IllegalArgumentException e) {

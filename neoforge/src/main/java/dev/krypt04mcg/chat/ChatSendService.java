@@ -72,7 +72,7 @@ public final class ChatSendService {
 
     public void tick() {
         try {
-            if (sendQueue.tick(config.sendDelayMs) && config.showProgress) {
+            if (sendQueue.tick(config.chatSendMode, config.sendDelayMs) && config.showProgress) {
                 system.accept(ClientMessages.tr("text.krypt04mcg.fragment_sent"));
             }
         } catch (Exception e) {

@@ -2,6 +2,8 @@ package dev.krypt04mcg.config;
 
 public class Krypt04McgConfig {
     public boolean enableDataApi = false;
+    /** Pre-registered raw channels, 1..256. Restart required when changed. */
+    public int apiChannelCount = 16;
     public String apiReceiver = "";
     public boolean enableFileSending = false;
     public boolean enableFileReceiving = false;
@@ -27,94 +29,6 @@ public class Krypt04McgConfig {
     public int maxMessagesPerSession = 100;
 
     public long rotateAfterBytes = 1024L * 1024L;
-
-    public int reassemblyTimeoutSeconds = 120;
-    public int maxReassemblyMessages = 128;
-    public int maxFragmentsPerMessage = 512;
-    public int maxConversationMessages = 300;
-    public int maxCachedSentMessages = 12;
-    public int maxDataTransfers = 16;
-    public int maxDataReceipts = 32;
-    public int maxDataAttempts = 3;
-    public int maxDataQueuedMiB = 16;
-    public int dataTransferWindow = 64;
-    public int apiMaxMessagesPerSession = 65536;
-    public long apiRotateAfterBytes = 1024L * 1024L * 1024L;
-    public int socketMaxBufferedMiB = 4;
-    public int socketWindowChunks = 4;
-    public int dataAckTimeoutSeconds = 65;
-    public int dataTransferTimeoutSeconds = 240;
-    public int dataFragmentsPerTick = 8;
-    public int sharingOfferTimeoutSeconds = 60;
-    public int maxPendingSharingOffers = 4;
-
-    public int reassemblyTimeoutSeconds() {
-        return Math.clamp(reassemblyTimeoutSeconds, 1, 86400);
-    }
-
-    public int maxReassemblyMessages() {
-        return Math.clamp(maxReassemblyMessages, 1, 16384);
-    }
-
-    public int maxFragmentsPerMessage() {
-        return Math.clamp(maxFragmentsPerMessage, 1, 65536);
-    }
-
-    public int maxConversationMessages() {
-        return Math.clamp(maxConversationMessages, 1, 100000);
-    }
-
-    public int maxCachedSentMessages() {
-        return Math.clamp(maxCachedSentMessages, 1, 4096);
-    }
-
-    public int maxDataTransfers() {
-        return Math.clamp(maxDataTransfers, 1, 4096);
-    }
-
-    public int maxDataReceipts() {
-        return Math.clamp(maxDataReceipts, 1, 8192);
-    }
-
-    public int maxDataAttempts() {
-        return Math.clamp(maxDataAttempts, 1, 100);
-    }
-
-    public int maxDataQueuedMiB() {
-        return Math.clamp(maxDataQueuedMiB, 1, 4096);
-    }
-
-    public int dataTransferWindow() {
-        return Math.clamp(dataTransferWindow, 1, 131072);
-    }
-
-    public int socketMaxBufferedMiB() {
-        return Math.clamp(socketMaxBufferedMiB, 1, 1024);
-    }
-
-    public int socketWindowChunks() {
-        return Math.clamp(socketWindowChunks, 1, 1024);
-    }
-
-    public int dataAckTimeoutSeconds() {
-        return Math.clamp(dataAckTimeoutSeconds, 61, 299);
-    }
-
-    public int dataTransferTimeoutSeconds() {
-        return Math.clamp(dataTransferTimeoutSeconds, 1, 86400);
-    }
-
-    public int dataFragmentsPerTick() {
-        return Math.clamp(dataFragmentsPerTick, 1, 1024);
-    }
-
-    public int sharingOfferTimeoutSeconds() {
-        return Math.clamp(sharingOfferTimeoutSeconds, 1, 300);
-    }
-
-    public int maxPendingSharingOffers() {
-        return Math.clamp(maxPendingSharingOffers, 1, 1024);
-    }
 
     public ChatSendMode chatSendMode = ChatSendMode.CHAT;
     public String serverCommandTemplate = "/msg <receiver> <fragment>";

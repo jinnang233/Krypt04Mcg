@@ -7,6 +7,8 @@ import me.shedaniel.autoconfig.annotation.ConfigEntry;
 @Config(name = "krypt04mcg")
 public final class ClothKrypt04McgConfig implements ConfigData {
     public boolean enableDataApi = false;
+    /** Pre-registered raw channels, 1..256. Restart required when changed. */
+    public int apiChannelCount = 16;
     public String apiReceiver = "";
     public boolean enableFileSending = false;
     public boolean enableFileReceiving = false;
@@ -39,62 +41,6 @@ public final class ClothKrypt04McgConfig implements ConfigData {
 
     public long rotateAfterBytes = 1024L * 1024L;
 
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 86400)
-    public int reassemblyTimeoutSeconds = 120;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 16384)
-    public int maxReassemblyMessages = 128;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 65536)
-    public int maxFragmentsPerMessage = 512;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 100000)
-    public int maxConversationMessages = 300;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 4096)
-    public int maxCachedSentMessages = 12;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 4096)
-    public int maxDataTransfers = 16;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 8192)
-    public int maxDataReceipts = 32;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 100)
-    public int maxDataAttempts = 3;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 4096)
-    public int maxDataQueuedMiB = 16;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 131072)
-    public int dataTransferWindow = 64;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 1000000)
-    public int apiMaxMessagesPerSession = 65536;
-
-    public long apiRotateAfterBytes = 1024L * 1024L * 1024L;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
-    public int socketMaxBufferedMiB = 4;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
-    public int socketWindowChunks = 4;
-
-    @ConfigEntry.BoundedDiscrete(min = 61, max = 299)
-    public int dataAckTimeoutSeconds = 65;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 86400)
-    public int dataTransferTimeoutSeconds = 240;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
-    public int dataFragmentsPerTick = 8;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 300)
-    public int sharingOfferTimeoutSeconds = 60;
-
-    @ConfigEntry.BoundedDiscrete(min = 1, max = 1024)
-    public int maxPendingSharingOffers = 4;
-
     public ChatSendMode chatSendMode = ChatSendMode.CHAT;
     public String serverCommandTemplate = "/msg <receiver> <fragment>";
     public String messagePrefix = "[Krypt04Mcg]";
@@ -119,6 +65,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
 
     void copyTo(Krypt04McgConfig config) {
         config.enableDataApi = enableDataApi;
+        config.apiChannelCount = Math.clamp(apiChannelCount, 1, 256);
         config.apiReceiver = apiReceiver;
         config.enableFileSending = enableFileSending;
         config.enableFileReceiving = enableFileReceiving;
@@ -137,25 +84,6 @@ public final class ClothKrypt04McgConfig implements ConfigData {
         config.maxFutureSkewSeconds = maxFutureSkewSeconds;
         config.maxMessagesPerSession = maxMessagesPerSession;
         config.rotateAfterBytes = rotateAfterBytes;
-        config.reassemblyTimeoutSeconds = reassemblyTimeoutSeconds;
-        config.maxReassemblyMessages = maxReassemblyMessages;
-        config.maxFragmentsPerMessage = maxFragmentsPerMessage;
-        config.maxConversationMessages = maxConversationMessages;
-        config.maxCachedSentMessages = maxCachedSentMessages;
-        config.maxDataTransfers = maxDataTransfers;
-        config.maxDataReceipts = maxDataReceipts;
-        config.maxDataAttempts = maxDataAttempts;
-        config.maxDataQueuedMiB = maxDataQueuedMiB;
-        config.dataTransferWindow = dataTransferWindow;
-        config.apiMaxMessagesPerSession = apiMaxMessagesPerSession;
-        config.apiRotateAfterBytes = apiRotateAfterBytes;
-        config.socketMaxBufferedMiB = socketMaxBufferedMiB;
-        config.socketWindowChunks = socketWindowChunks;
-        config.dataAckTimeoutSeconds = dataAckTimeoutSeconds;
-        config.dataTransferTimeoutSeconds = dataTransferTimeoutSeconds;
-        config.dataFragmentsPerTick = dataFragmentsPerTick;
-        config.sharingOfferTimeoutSeconds = sharingOfferTimeoutSeconds;
-        config.maxPendingSharingOffers = maxPendingSharingOffers;
         config.chatSendMode = chatSendMode;
         config.serverCommandTemplate = serverCommandTemplate;
         config.messagePrefix = messagePrefix;

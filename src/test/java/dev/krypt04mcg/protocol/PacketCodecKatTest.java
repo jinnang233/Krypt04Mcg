@@ -58,7 +58,7 @@ final class PacketCodecKatTest {
         EncryptedPacket legacy = knownPacket();
         EncryptedPacket current = new EncryptedPacket(EncryptedPacket.COMPACT_VERSION, legacy.type(), legacy.flags(),
                 legacy.sender(), legacy.receiver(), legacy.timestampMillis(), legacy.messageId(),
-                legacy.aadFragmentIndex(), legacy.aadFragmentTotal(), legacy.algorithms(), legacy.nonce(),
+                (short) 0, (short) 1, legacy.algorithms(), legacy.nonce(),
                 legacy.kemCiphertext(), legacy.ciphertext(), legacy.signature());
 
         assertArrayEquals(manualAad(legacy), codec.aadFor(legacy));

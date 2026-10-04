@@ -10,11 +10,11 @@ public record NeoChatPayload(String peer, String fragment, int version) implemen
     public static final Type<NeoChatPayload> TYPE = new Type<>(ChatFragmentPayload.CHANNEL);
     public static final StreamCodec<FriendlyByteBuf, NeoChatPayload> CODEC = StreamCodec.of(
             (buf, payload) -> {
-                buf.writeUtf(payload.peer());
-                buf.writeUtf(payload.fragment());
+                buf.writeUtf(payload.peer(), 16);
+                buf.writeUtf(payload.fragment(), dev.krypt04mcg.fragment.FragmentService.MAX_CHAT_MESSAGE_LENGTH);
                 buf.writeVarInt(payload.version());
             },
-            buf -> new NeoChatPayload(buf.readUtf(), buf.readUtf(), buf.readVarInt()));
+            buf -> new NeoChatPayload(buf.readUtf(16), buf.readUtf(dev.krypt04mcg.fragment.FragmentService.MAX_CHAT_MESSAGE_LENGTH), buf.readVarInt()));
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 }

@@ -11,7 +11,6 @@
   },
   "license": "Unlicense",
   "environment": "client",
-  "mixins": ["krypt04mcg.mixins.json"],
   "entrypoints": {
     "client": [
       "dev.krypt04mcg.Krypt04McgMod"
