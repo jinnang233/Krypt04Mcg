@@ -1,4 +1,7 @@
 {
+  "text.autoconfig.krypt04mcg.option.enableDataApi": "バイナリデータ API を有効化（既定では無効）",
+  "text.autoconfig.krypt04mcg.option.apiReceiver": "API の既定の受信プレイヤー",
+  "text.autoconfig.krypt04mcg.option.apiChannelCount": "事前登録するバイナリ API チャネル数（再起動が必要）",
   "text.krypt04mcg.share.lock_failed": "ファイル共有の永久無効化設定を保存できませんでした。ログを確認してください。",
   "text.krypt04mcg.share.disabled": "このアカウントのファイル共有を永久に無効化しました。",
   "text.krypt04mcg.share.mode": "CUSTOM_PAYLOAD モードが必要です。",

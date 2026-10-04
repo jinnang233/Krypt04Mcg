@@ -1,4 +1,7 @@
 {
+  "text.autoconfig.krypt04mcg.option.enableDataApi": "Binäre Daten-API aktivieren (standardmäßig aus)",
+  "text.autoconfig.krypt04mcg.option.apiReceiver": "Standardmäßiger API-Empfänger",
+  "text.autoconfig.krypt04mcg.option.apiChannelCount": "Vorregistrierte binäre API-Kanäle (Neustart erforderlich)",
   "text.krypt04mcg.share.lock_failed": "Die dauerhafte Dateifreigabesperre konnte nicht gespeichert werden. Siehe Protokoll.",
   "text.krypt04mcg.share.disabled": "Die Dateifreigabe ist für dieses Konto dauerhaft deaktiviert.",
   "text.krypt04mcg.share.mode": "Der Modus CUSTOM_PAYLOAD ist erforderlich.",

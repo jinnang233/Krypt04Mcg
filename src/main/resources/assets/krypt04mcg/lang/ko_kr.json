@@ -1,4 +1,7 @@
 {
+  "text.autoconfig.krypt04mcg.option.enableDataApi": "바이너리 데이터 API 활성화 (기본값: 비활성화)",
+  "text.autoconfig.krypt04mcg.option.apiReceiver": "API 기본 수신 플레이어",
+  "text.autoconfig.krypt04mcg.option.apiChannelCount": "사전 등록할 바이너리 API 채널 수 (재시작 필요)",
   "text.krypt04mcg.share.lock_failed": "파일 공유 영구 비활성화 설정을 저장할 수 없습니다. 로그를 확인하세요.",
   "text.krypt04mcg.share.disabled": "이 계정의 파일 공유가 영구적으로 비활성화되었습니다.",
   "text.krypt04mcg.share.mode": "CUSTOM_PAYLOAD 모드가 필요합니다.",
