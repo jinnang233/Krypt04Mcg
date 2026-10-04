@@ -106,6 +106,34 @@ class DataTransferServiceTest {
             assertArrayEquals(bytes, received.toByteArray());
         }
     }
+    @Test void pacedDataResumesAfterOutputBufferFills() throws Exception {
+        try (var pair = new Pair()) {
+            Krypt04McgApi.unregisterSocketReceiver(CHANNEL);
+            var received = new ByteArrayOutputStream();
+            Krypt04McgApi.registerReceiver(CHANNEL, (peer, bytes) -> received.writeBytes(bytes));
+            var left = pair.alice.open("Bob", CHANNEL);
+            byte[] bytes = new byte[2 * KryptSocket.MAX_BUFFERED_BYTES + 123];
+            new Random(19).nextBytes(bytes);
+            int offset = 0;
+            while (offset < bytes.length) {
+                int count = Math.min(left.writableBytes(), bytes.length - offset);
+                if (count == 0) {
+                    assertFalse(left.isFailed());
+                    pair.until(() -> left.writableBytes() > 0 || left.isFailed());
+                    assertFalse(left.isFailed());
+                    continue;
+                }
+                left.getOutputStream().write(bytes, offset, count);
+                offset += count;
+                if (offset < bytes.length) assertEquals(0, left.writableBytes());
+            }
+            left.close();
+            assertEquals(0, left.writableBytes());
+            pair.until(left::isClosed);
+            assertFalse(left.isFailed());
+            assertArrayEquals(bytes, received.toByteArray());
+        }
+    }
     @Test void unsupportedServerLeavesTransportDormantAndFailsOnlyRequestedApiWork() throws Exception {
         try (var pair = new Pair()) {
             pair.unavailable = true;
@@ -144,7 +172,9 @@ class DataTransferServiceTest {
             incoming.close();
             var received = reader.submit(() -> FileStreamCodec.read(incoming.getInputStream()));
             for (int offset = 0; offset < encoded.length;) {
-                int count = Math.min(64 * 1024, encoded.length - offset);
+                pair.until(() -> left.writableBytes() > 0 || left.isFailed());
+                assertFalse(left.isFailed());
+                int count = Math.min(left.writableBytes(), Math.min(64 * 1024, encoded.length - offset));
                 left.getOutputStream().write(encoded, offset, count); offset += count;
                 int expected = (offset + RawChannelPayload.MAX_PLAINTEXT - 1) / RawChannelPayload.MAX_PLAINTEXT;
                 pair.until(() -> pair.raw.size() >= expected);

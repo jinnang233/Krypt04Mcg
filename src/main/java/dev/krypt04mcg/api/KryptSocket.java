@@ -31,6 +31,7 @@ public final class KryptSocket implements AutoCloseable {
     public synchronized boolean isClosed() { return failure != null || (endSent && remoteEnded); }
     public synchronized boolean isFailed() { return failure != null; }
     public synchronized boolean outputEnded() { return endSent; }
+    /** Current output capacity; producers must serialize capacity checks and writes with other writers. */
     public synchronized int writableBytes() { return closing || failure != null ? 0 : MAX_BUFFERED_BYTES - outgoing.size; }
 
     /** Internal: takes bytes in stream order using Minecraft's record size limit. */

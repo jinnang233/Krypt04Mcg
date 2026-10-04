@@ -401,15 +401,25 @@ Krypt04McgApi.registerSocketReceiver("example:stream", socket -> {
 });
 
 KryptSocket socket = Krypt04McgApi.connect("Bob", "example:stream");
-socket.getOutputStream().write(bytes);
-socket.close(); // Queued bytes are sent before authenticated EOF on control.
+int offset = 0; // Keep socket, bytes and offset as sender state across ticks.
+
+// Run this step on each client tick, with a single producer for this socket.
+// Handle IOException or socket.isFailed() by stopping this sender.
+int count = Math.min(socket.writableBytes(), bytes.length - offset);
+if (count > 0) {
+    socket.getOutputStream().write(bytes, offset, count);
+    offset += count;
+}
+if (offset == bytes.length) socket.close(); // Queued bytes precede authenticated EOF.
+// Otherwise return to the client loop and resume next tick; never spin on capacity.
 ```
 
 Streams may be written before exchange/allocation completes. Each direction buffers at
 most 1 MiB; `writableBytes()` lets producers pace writes, and writes beyond capacity throw
 IOException without partially accepting the write. Reads may block; writes only enqueue
-copied bytes and are thread-safe. Opening connections and control/listener callbacks run
-on the Minecraft client thread. `close()` half-closes output. Closing input cancels the
+copied bytes and are thread-safe. Capacity checks do not reserve space: multiple producers
+must serialize the check and write together on the socket monitor. Opening connections and
+control/listener callbacks run on the Minecraft client thread. `close()` half-closes output. Closing input cancels the
 stream. Idle/allocation/exchange timeout is 60 seconds. Concurrent streams cannot exceed
 the configured channel pool. Scheduling rotates between active streams.
 

@@ -176,8 +176,9 @@ public final class OptionalSharing {
         try {
             if (current.socket.isFailed()) throw new java.io.IOException("File stream failed");
             for (int i = 0; i < 4 && current.offset < current.bytes.length; i++) {
-                int count = Math.min(RawChannelPayload.MAX_PLAINTEXT, current.bytes.length - current.offset);
-                if (current.socket.writableBytes() < count) break;
+                int count = Math.min(current.socket.writableBytes(),
+                        Math.min(RawChannelPayload.MAX_PLAINTEXT, current.bytes.length - current.offset));
+                if (count == 0) break;
                 current.socket.getOutputStream().write(current.bytes, current.offset, count);
                 current.offset += count;
             }
