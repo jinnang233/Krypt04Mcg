@@ -30,8 +30,14 @@ public final class SentMessageCacheService {
     }
 
     public synchronized void remember(String messageId, String receiver, List<String> fragments) throws IOException {
+        remember(messageId, receiver, fragments, null);
+    }
+
+    public synchronized void remember(String messageId, String receiver, List<String> fragments,
+                                      String recipientFingerprint) throws IOException {
         Map<String, CachedSentMessage> cache = readCache();
-        cache.put(messageId, new CachedSentMessage(messageId, receiver, Instant.now(), List.copyOf(fragments)));
+        cache.put(messageId, new CachedSentMessage(messageId, receiver, Instant.now(), List.copyOf(fragments),
+                recipientFingerprint));
         trim(cache);
         Files.createDirectories(cacheFile.getParent());
         Files.writeString(cacheFile, gson.toJson(cache, CACHE_TYPE), StandardCharsets.UTF_8);

@@ -184,6 +184,69 @@ class DataTransferServiceTest {
             assertEquals("large-file.bin", result.name()); assertArrayEquals(bytes, result.data());
         }
     }
+
+    @Test void emptyAuthenticatedRecordCannotKeepIncompleteFileWorkerBusy() throws Exception {
+        try (var pair = new Pair(); var worker = new SharingWorker()) {
+            pair.keepOpen = true;
+            var left = pair.alice.open("Bob", CHANNEL);
+            pair.until(() -> pair.right != null);
+            var incoming = pair.right;
+            incoming.close();
+            Path file = root.resolve("empty.bin");
+            java.nio.file.Files.write(file, new byte[0]);
+            left.getOutputStream().write(FileStreamCodec.encode(file));
+            pair.until(() -> pair.raw.size() == 1);
+            var completed = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+            var failure = new java.util.concurrent.atomic.AtomicReference<Exception>();
+            assertTrue(worker.submit(() -> FileStreamCodec.read(incoming.getInputStream()), completed::add,
+                    (result, error) -> failure.set(error)));
+            assertTrue(worker.busy());
+            assertFalse(worker.submit(() -> null, completed::add, (result, error) -> {}));
+
+            Object receiving = stream(pair.bob, left.streamId());
+            var activity = receiving.getClass().getDeclaredField("lastActivity");
+            activity.setAccessible(true);
+            long expired = System.currentTimeMillis() - 60001;
+            activity.setLong(receiving, expired);
+            Object sending = stream(pair.alice, left.streamId());
+            var crypto = sending.getClass().getDeclaredField("crypto");
+            crypto.setAccessible(true);
+            pair.bob.receive(new RawChannelPayload(0, ((ChannelCrypto) crypto.get(sending)).encrypt(new byte[0])));
+            assertFalse(incoming.isFailed(), "Valid empty records remain protocol-compatible");
+            assertEquals(expired, activity.getLong(receiving));
+            pair.bob.tick();
+            assertTrue(incoming.isFailed());
+            pair.until(() -> !completed.isEmpty());
+            completed.remove().run();
+            assertInstanceOf(IOException.class, failure.get());
+            assertFalse(worker.busy(), "Timeout must release the file reader's worker");
+            assertTrue(worker.submit(() -> null, completed::add, (result, error) -> {}));
+        }
+    }
+
+    @Test void nonemptyAuthenticatedRecordRefreshesStreamActivity() throws Exception {
+        try (var pair = new Pair()) {
+            pair.keepOpen = true;
+            var left = pair.alice.open("Bob", CHANNEL);
+            pair.until(() -> pair.right != null);
+            Object receiving = stream(pair.bob, left.streamId());
+            var activity = receiving.getClass().getDeclaredField("lastActivity");
+            activity.setAccessible(true);
+            activity.setLong(receiving, System.currentTimeMillis() - 60001);
+            left.getOutputStream().write(7);
+            pair.alice.tick();
+            while (!pair.delivery.isEmpty()) pair.delivery.removeFirst().run();
+            pair.bob.tick();
+            assertFalse(pair.right.isFailed());
+            assertEquals(7, pair.right.getInputStream().read());
+        }
+    }
+
+    private static Object stream(DataTransferService service, UUID id) throws Exception {
+        var streams = DataTransferService.class.getDeclaredField("streams");
+        streams.setAccessible(true);
+        return ((Map<?, ?>) streams.get(service)).get(id);
+    }
     /** In-memory test fixture for the future plugin contract; no server code is shipped. */
     private static final class TestChannels {
         private final Route[] slots = new Route[2];

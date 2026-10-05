@@ -180,19 +180,48 @@ public final class ChatSendService {
                 .orElseThrow(() -> new IllegalStateException(
                         ClientMessages.tr("text.krypt04mcg.error.no_public_key", cached.receiver())));
         ensureSendAllowed(cached.receiver(), identity);
-        sendFragments(cached.receiver(), cached.fragments());
+        ensureRecipientMatches(cached.receiver(), identity, cached.recipientFingerprint());
+        sendFragments(cached.receiver(), cached.fragments(), cached.recipientFingerprint());
         system.accept(ClientMessages.tr("text.krypt04mcg.resending", cached.receiver(), cached.messageId()));
     }
 
     public void sendPacket(EncryptedPacket packet, String receiver) throws Exception {
+        PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
+                .orElseThrow(() -> new IllegalStateException(
+                        ClientMessages.tr("text.krypt04mcg.error.no_public_key", receiver)));
+        if (keyTrustService.trustState(receiver, identity) == TrustState.DISTRUSTED) {
+            throw new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.distrusted_key", receiver));
+        }
+        String recipientFingerprint = KeyTrustService.fingerprintPair(identity);
         byte[] encoded = packetCodec.encode(packet);
         List<String> fragments = fragmentService.fragment(encoded, packet.messageId(), config.fragmentSize, config.packetPrefix);
-        sentMessageCacheService.remember(Hex.encode(packet.messageId()), receiver, fragments);
-        sendFragments(receiver, fragments);
+        sentMessageCacheService.remember(Hex.encode(packet.messageId()), receiver, fragments, recipientFingerprint);
+        sendFragments(receiver, fragments, recipientFingerprint);
     }
 
-    private void sendFragments(String receiver, List<String> fragments) {
-        sendQueue.enqueue(receiver, fragments, chatSender);
+    private void sendFragments(String receiver, List<String> fragments, String recipientFingerprint) {
+        Consumer<ChatSendFragment> sender = chatSender;
+        sendQueue.enqueue(receiver, fragments, fragment -> {
+            try {
+                PublicIdentity current = keyStoreService.findPublicIdentity(receiver).orElse(null);
+                ensureRecipientMatches(receiver, current, recipientFingerprint);
+                if (keyTrustService.trustState(receiver, current) == TrustState.DISTRUSTED) {
+                    throw new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.distrusted_key", receiver));
+                }
+            } catch (Exception e) {
+                // Queue transport failure cancels the remaining fragments, rather than retrying stale ciphertext.
+                throw new IllegalStateException(e.getMessage(), e);
+            }
+            sender.accept(fragment);
+        });
+    }
+
+    private void ensureRecipientMatches(String receiver, PublicIdentity identity, String fingerprint) {
+        // Legacy cache entries have no identity binding and cannot be safely resent.
+        if (!keyTrustService.fingerprintMatches(identity, fingerprint)) {
+            throw new IllegalStateException("Cached message recipient identity no longer matches " + receiver
+                    + "; send a new message");
+        }
     }
 
     private void ensureSendAllowed(String receiver, PublicIdentity identity) throws Exception {

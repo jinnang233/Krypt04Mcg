@@ -202,7 +202,9 @@ public final class DataTransferService implements AutoCloseable {
         try {
             if (!s.ready || s.remoteEnd || s.socket.isFailed() || !enabled(s.socket.channel())) throw new IllegalStateException("Channel not ready");
             session(s.socket.peer(), s.sessionId);
-            byte[] bytes = s.crypto.decrypt(p.ciphertext()); s.bytes += bytes.length; s.lastActivity = System.currentTimeMillis();
+            byte[] bytes = s.crypto.decrypt(p.ciphertext()); s.bytes += bytes.length;
+            // Authenticated empty records advance the counter, but make no stream progress.
+            if (bytes.length > 0) s.lastActivity = System.currentTimeMillis();
             if (s.callbacks) {
                 if (!Krypt04McgApi.dispatch(s.socket.channel(), s.socket.peer(), bytes)) throw new IllegalStateException("Listener removed");
             } else s.socket.accept(bytes);
