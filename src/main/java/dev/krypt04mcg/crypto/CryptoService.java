@@ -29,17 +29,12 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Security;
-import java.security.Signature;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.zip.DataFormatException;
@@ -97,10 +92,7 @@ public final class CryptoService {
         try {
             KeyPair kem = KemCrypto.generate(selectedKem, secureRandom);
 
-            KeyPairGenerator sigGenerator = KeyPairGenerator.getInstance(
-                    selectedSignature.jcaName(), selectedSignature.provider());
-            sigGenerator.initialize(selectedSignature.parameterSpec(), secureRandom);
-            KeyPair sig = sigGenerator.generateKeyPair();
+            KeyPair sig = SignatureCrypto.generate(selectedSignature, secureRandom);
 
             Instant now = Instant.now();
             return new LocalKeyMaterial(
@@ -338,13 +330,9 @@ public final class CryptoService {
     private byte[] sign(SignatureAlgorithm algorithm, KeyRecord privateKeyRecord, byte[] input)
             throws CryptoException {
         try {
-            Signature signature = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
             requireRole(privateKeyRecord.algorithm(), "/private");
-            PrivateKey key = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), privateKeyRecord.keyData());
-            requireSignatureKeyParameters(key, algorithm);
-            signature.initSign(key, secureRandom);
-            signature.update(input);
-            return signature.sign();
+            PrivateKey key = decodeSignaturePrivateKey(algorithm, privateKeyRecord.keyData());
+            return SignatureCrypto.sign(algorithm, key, input, secureRandom);
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to sign packet", e);
         }
@@ -357,13 +345,9 @@ public final class CryptoService {
     private boolean verify(SignatureAlgorithm algorithm, KeyRecord publicKeyRecord, byte[] input,
                            byte[] signatureBytes) throws CryptoException {
         try {
-            Signature signature = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
             requireRole(publicKeyRecord.algorithm(), "/public");
-            PublicKey key = decodePublicKey(algorithm.jcaName(), algorithm.provider(), publicKeyRecord.keyData());
-            requireSignatureKeyParameters(key, algorithm);
-            signature.initVerify(key);
-            signature.update(input);
-            return signature.verify(signatureBytes);
+            PublicKey key = SignatureCrypto.decodePublic(algorithm, Base64Url.decode(publicKeyRecord.keyData()));
+            return SignatureCrypto.verify(algorithm, key, input, signatureBytes);
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to verify packet signature", e);
         }
@@ -460,8 +444,7 @@ public final class CryptoService {
             } else {
                 SignatureAlgorithm algorithm = SignatureAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
-                decoded = decodePublicKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
-                requireSignatureKeyParameters(decoded, algorithm);
+                decoded = SignatureCrypto.decodePublic(algorithm, Base64Url.decode(record.keyData()));
             }
             return keyRecord(identifier + "/public", owner, uuid, record.createdAt(), decoded.getEncoded());
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
@@ -483,8 +466,7 @@ public final class CryptoService {
             } else {
                 SignatureAlgorithm algorithm = SignatureAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
-                decoded = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
-                requireSignatureKeyParameters(decoded, algorithm);
+                decoded = decodeSignaturePrivateKey(algorithm, record.keyData());
             }
             return keyRecord(identifier + "/private", owner, uuid, record.createdAt(), decoded.getEncoded());
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
@@ -492,9 +474,9 @@ public final class CryptoService {
         }
     }
 
-    private static void requireSignatureKeyParameters(java.security.Key key, SignatureAlgorithm algorithm)
+    static void requireSignatureKeyParameters(java.security.Key key, SignatureAlgorithm algorithm)
             throws CryptoException {
-        if (!algorithm.hybrid()) {
+        if (!algorithm.nativeHybrid()) {
             requireKeyParameters(key, algorithm.parameterSpec());
             return;
         }
@@ -520,6 +502,14 @@ public final class CryptoService {
             case org.bouncycastle.pqc.jcajce.interfaces.HQCKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.NTRULPRimeKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.SNTRUPrimeKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.MayoKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.HaetaeKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.UOVKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.QRUOVKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.AIMerKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.FaestKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.MQOMKey k -> k.getParameterSpec();
+            case org.bouncycastle.pqc.jcajce.interfaces.SDitHKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.FalconKey k -> k.getParameterSpec();
             case org.bouncycastle.jcajce.interfaces.MLDSAKey k -> k.getParameterSpec();
             case org.bouncycastle.jcajce.interfaces.SLHDSAKey k -> k.getParameterSpec();
@@ -540,6 +530,14 @@ public final class CryptoService {
             case org.bouncycastle.pqc.jcajce.spec.HQCParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.NTRULPRimeParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.SNTRUPrimeParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.MayoParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.HaetaeParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.UOVParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.QRUOVParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.AIMerParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.FaestParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.MQOMParameterSpec p -> p.getName();
+            case org.bouncycastle.pqc.jcajce.spec.SDitHParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.FalconParameterSpec p -> p.getName();
             case org.bouncycastle.jcajce.spec.MLDSAParameterSpec p -> p.getName();
             case org.bouncycastle.jcajce.spec.SLHDSAParameterSpec p -> p.getName();
@@ -787,18 +785,11 @@ public final class CryptoService {
         }
     }
 
-    private static PublicKey decodePublicKey(String algorithm, String provider, String base64)
-            throws GeneralSecurityException {
-        return KeyFactory.getInstance(algorithm, provider)
-                .generatePublic(new X509EncodedKeySpec(Base64Url.decode(base64)));
-    }
-
-    private static PrivateKey decodePrivateKey(String algorithm, String provider, String base64)
-            throws GeneralSecurityException {
+    private static PrivateKey decodeSignaturePrivateKey(SignatureAlgorithm algorithm, String base64)
+            throws GeneralSecurityException, CryptoException {
         byte[] encoded = Base64Url.decode(base64);
         try {
-            return KeyFactory.getInstance(algorithm, provider)
-                    .generatePrivate(new PKCS8EncodedKeySpec(encoded));
+            return SignatureCrypto.decodePrivate(algorithm, encoded);
         } finally {
             Arrays.fill(encoded, (byte) 0);
         }

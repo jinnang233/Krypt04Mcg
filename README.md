@@ -157,6 +157,36 @@ RSA choices include the PKCS#1 v1.5 and PSS variants exposed by BC (ML-DSA-87 us
 Signing, combination, key encoding and verification are delegated to BC; verification requires both signatures.
 Example selections are `MLDSA44-Ed25519-SHA512` and `MLDSA87-Ed448-SHAKE256`.
 
+Version 0.26.0 adds all 97 parameter selections exposed by BC 1.86 for these additional signatures:
+
+| Family | Parameter selections |
+| --- | ---: |
+| MAYO | 4 (`MAYO-1/2/3/5`) |
+| HAETAE | 3 (`HAETAE-2/3/5`) |
+| UOV | 12 (IS/IP/III/V, each in base, PKC and PKC-SKC forms) |
+| QR-UOV | 12 |
+| AIMer | 6 (128/192/256, each with f/s variants) |
+| FAEST | 12 (128/192/256, f/s, ordinary and EM variants) |
+| MQOM | 36 (MQOM2 CAT1/3/5, GF2/GF16/GF256, FAST/SHORT, R3/R5) |
+| SDitH | 12 (HYPERCUBE/THRESHOLD, CAT1/3/5, GF256/P251) |
+
+Each selection also has `+Ed25519` and `+Ed448` hybrid variants, adding 194 hybrid choices.
+Examples include `MAYO-1+Ed25519`, `HAETAE-3+Ed448`, `QR-UOV/qruov1q127L3v156m54+Ed25519`
+and `SDITH-THRESHOLD-CAT5-P251+Ed448`. BC provides the PQ and classical key generation,
+key decoding, signing and verification. These new pairings use a mod-specific versioned format;
+they are not BC's native ML-DSA composite suites and are not a standardized composite signature format.
+Both components sign the same length-framed transcript containing a versioned domain label,
+the exact suite identifier, the SHA-512 hash of both public keys and the SHA-512 hash of the message.
+Hashing is performed by BC. Verification requires both signatures; incomplete signatures,
+malformed framing and trailing bytes are rejected, with no fallback to a single component.
+The existing BC native ML-DSA composite signatures and the hybrid defaults remain unchanged.
+
+The new signature families are experimental, non-standardized selections. Large UOV public keys
+are supported by local import/export and the optional public-key sharing channel, whose bounded
+maximum is now 512 chunks (about 6 MB of JSON). This accommodates the largest UOV public key
+alongside the largest supported CMCE public key. Chat packet and fragment limits remain in force.
+Both peers need version 0.26.0 or newer for the new signature suites and larger public-key transfers.
+
 Existing keys and explicit saved selections stay unchanged; new and missing selections default to the hybrid suites above. To use a long-term hybrid KEM or hybrid signature,
 select it in the configuration, explicitly regenerate your keys and exchange the new public keys
 with your contacts. An ephemeral hybrid selection takes effect on the next exchange without

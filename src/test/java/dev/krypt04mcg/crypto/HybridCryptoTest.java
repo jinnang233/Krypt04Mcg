@@ -28,7 +28,7 @@ final class HybridCryptoTest {
     @TempDir Path directory;
 
     static Stream<SignatureAlgorithm> signatures() {
-        return Arrays.stream(SignatureAlgorithm.values()).filter(SignatureAlgorithm::hybrid);
+        return Arrays.stream(SignatureAlgorithm.values()).filter(SignatureAlgorithm::nativeHybrid);
     }
 
     @ParameterizedTest
