@@ -12,6 +12,7 @@ import dev.krypt04mcg.crypto.CryptoService;
 import dev.krypt04mcg.fragment.FragmentReassembler;
 import dev.krypt04mcg.fragment.FragmentService;
 import dev.krypt04mcg.gui.Krypt04McgChatScreen;
+import dev.krypt04mcg.gui.Krypt04McgKeyManagerScreen;
 import dev.krypt04mcg.input.Krypt04McgKeyBindings;
 import dev.krypt04mcg.model.ChatSendFragment;
 import dev.krypt04mcg.protocol.ClientboundChatFragmentPayload;
@@ -171,6 +172,15 @@ public final class Krypt04McgMod implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, joinedClient) -> showDisclaimer(joinedClient));
         LOGGER.info("Krypt04Mcg initialized");
+    }
+
+    public void openKeyManagerScreen() {
+        Minecraft client = Minecraft.getInstance();
+        if (chatSendService == null || keyStoreService == null) {
+            return;
+        }
+        client.gui.setScreen(new Krypt04McgKeyManagerScreen(null, keyStoreService, keyTrustService,
+                sessionService, config));
     }
 
     public void openChatScreen() {

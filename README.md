@@ -242,6 +242,7 @@ Existing ML-KEM keys remain usable.
 /k04m session refresh <player>
 /k04m showalgs
 /k04m status <player>
+/k04m key [gui]
 /k04m key list
 /k04m key fingerprint <player>
 /k04m key export
@@ -254,6 +255,8 @@ Existing ML-KEM keys remain usable.
 /k04m key trust <player>
 /k04m key distrust <player>
 ```
+
+Open the key manager with `/k04m key` or `/k04m key gui` on Fabric and NeoForge. You can also assign the **Open Key Manager** binding in Controls (unbound by default). The left pane lists your identity and imported players with trust indicators; the right pane shows their stored algorithms and copyable fingerprints. Scroll either pane when needed. Import accepts a public key file path, JSON or Base64URL. Export writes only your public keys and copies the file path. Verify requires both fingerprints from a trusted channel; Delete confirms removal of the imported identity, trust record and saved chat session. Regenerate requires your current KEM fingerprint and uses the algorithms selected in configuration.
 
 `/k04m status <player>` shows that player's long-term KEM and signature algorithms from their stored public keys, or unknown when no public key is available. The separately labeled local configuration describes your own settings. The public key export does not include the other player's ephemeral KEM or AEAD configuration; stored keys do not report subsequent remote key changes automatically.
 

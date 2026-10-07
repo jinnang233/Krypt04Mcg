@@ -15,6 +15,7 @@ public final class Krypt04McgKeyBindings {
             Identifier.fromNamespaceAndPath(Krypt04McgMod.MOD_ID, "krypt04mcg")
     );
     private static KeyMapping openChatGui;
+    private static KeyMapping openKeyManager;
 
     private Krypt04McgKeyBindings() {
     }
@@ -26,12 +27,22 @@ public final class Krypt04McgKeyBindings {
                 InputConstants.KEY_K,
                 CATEGORY
         );
+        openKeyManager = new KeyMapping(
+                "key.krypt04mcg.open_key_manager",
+                InputConstants.Type.KEYBOARD,
+                InputConstants.UNKNOWN.getValue(),
+                CATEGORY
+        );
         modBus.addListener((RegisterKeyMappingsEvent event) -> {
             event.registerCategory(CATEGORY);
             event.register(openChatGui);
+            event.register(openKeyManager);
         });
 
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            while (openKeyManager.consumeClick()) {
+                mod.openKeyManagerScreen();
+            }
             while (openChatGui.consumeClick()) {
                 mod.openChatScreen();
             }

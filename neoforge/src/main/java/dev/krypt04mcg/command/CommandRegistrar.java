@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.context.StringRange;
 import dev.krypt04mcg.chat.ChatSendService;
+import dev.krypt04mcg.Krypt04McgMod;
 import dev.krypt04mcg.config.Krypt04McgConfig;
 import dev.krypt04mcg.model.GroupRecord;
 import dev.krypt04mcg.model.LocalKeyMaterial;
@@ -55,6 +56,12 @@ public final class CommandRegistrar {
                     sessionService, decryptionHistoryService, groupService, config));
         });
     }
+    private static int openKeyManager() {
+        // Queue the screen change until the command's chat screen has closed.
+        Minecraft.getInstance().schedule(() -> Krypt04McgMod.instance().openKeyManagerScreen());
+        return 1;
+    }
+
     private static Component copyableFingerprint(String fingerprint) {
         return Component.literal(fingerprint).withStyle(style -> style
                 .withColor(ChatFormatting.AQUA)
@@ -281,6 +288,8 @@ public final class CommandRegistrar {
                                                                                SessionService sessionService,
                                                                                Krypt04McgConfig config) {
         return Commands.literal("key")
+                .executes(ctx -> openKeyManager())
+                .then(Commands.literal("gui").executes(ctx -> openKeyManager()))
                 .then(Commands.literal("list")
                         .executes(ctx -> {
                             try {

@@ -12,6 +12,7 @@ public final class Krypt04McgKeyBindings {
             Identifier.fromNamespaceAndPath(Krypt04McgMod.MOD_ID, "krypt04mcg")
     );
     private static KeyMapping openChatGui;
+    private static KeyMapping openKeyManager;
 
     private Krypt04McgKeyBindings() {
     }
@@ -24,7 +25,17 @@ public final class Krypt04McgKeyBindings {
                 CATEGORY
         ));
 
+        openKeyManager = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.krypt04mcg.open_key_manager",
+                InputConstants.Type.KEYBOARD,
+                InputConstants.UNKNOWN.getValue(),
+                CATEGORY
+        ));
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (openKeyManager.consumeClick()) {
+                mod.openKeyManagerScreen();
+            }
             while (openChatGui.consumeClick()) {
                 mod.openChatScreen();
             }
