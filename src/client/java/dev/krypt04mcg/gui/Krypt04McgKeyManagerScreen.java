@@ -221,12 +221,13 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         graphics.fill(x, y + 28, x + listWidth, y + panelHeight - 52, 0xD91D252D);
         graphics.fill(x, y + panelHeight - 52, x + panelWidth, y + panelHeight - 51, 0xFF344952);
         graphics.nextStratum();
-        graphics.text(font, title, x + 10, y + 10, 0xE8F3FF, false);
-        graphics.text(font, label("identities"), x + 8, y + 35, 0xAFC4D6, false);
+        // GuiGraphicsExtractor requires ARGB; zero alpha skips text rendering.
+        graphics.text(font, title, x + 10, y + 10, 0xFFE8F3FF, false);
+        graphics.text(font, label("identities"), x + 8, y + 35, 0xFFAFC4D6, false);
         graphics.enableScissor(x + listWidth + 12, detailTop, x + panelWidth - 12, detailBottom);
         for (DetailLine line : details) {
             graphics.text(font, line.text(), x + listWidth + 12,
-                    detailTop + line.y() - detailOffset, line.color(), false);
+                    detailTop + line.y() - detailOffset, line.color() | 0xFF000000, false);
         }
         graphics.disableScissor();
         if (detailHeight > detailBottom - detailTop) {
@@ -237,10 +238,10 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         }
         if (!rows.isEmpty() && entries.size() > rows.size()) {
             graphics.text(font, (listOffset + 1) + "–" + Math.min(entries.size(), listOffset + rows.size())
-                    + "/" + entries.size(), x + 8, y + panelHeight - 64, 0xAFC4D6, false);
+                    + "/" + entries.size(), x + 8, y + panelHeight - 64, 0xFFAFC4D6, false);
         }
         graphics.enableScissor(x + 8, y + panelHeight - 48, x + panelWidth - 8, y + panelHeight - 33);
-        graphics.text(font, status, x + 8, y + panelHeight - 45, failed ? 0xFF9090 : 0x8DDBA4, false);
+        graphics.text(font, status, x + 8, y + panelHeight - 45, failed ? 0xFFFF9090 : 0xFF8DDBA4, false);
         graphics.disableScissor();
         if (mouseY >= y + panelHeight - 48 && mouseY < y + panelHeight - 33) {
             graphics.setTooltipForNextFrame(font, status, mouseX, mouseY);
@@ -459,11 +460,11 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(left, top, left + dialogWidth, bottom, 0xF012171C);
             graphics.nextStratum();
-            graphics.text(font, title, left + 12, top + 10, 0xE8F3FF, false);
+            graphics.text(font, title, left + 12, top + 10, 0xFFE8F3FF, false);
             graphics.enableScissor(left + 12, top + 28, left + dialogWidth - 12, helpBottom);
             int lineY = top + 28 - helpOffset;
             for (var line : font.split(help, dialogWidth - 24)) {
-                graphics.text(font, line, left + 12, lineY, 0xAFC4D6, false);
+                graphics.text(font, line, left + 12, lineY, 0xFFAFC4D6, false);
                 lineY += 11;
             }
             graphics.disableScissor();
@@ -476,10 +477,10 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
                         thumbY + thumbHeight, 0xFF5D8195);
             }
             for (int i = 0; i < fields.size(); i++) {
-                graphics.text(font, fields.get(i), left + 12, helpBottom + 3 + i * 36, 0xAFC4D6, false);
+                graphics.text(font, fields.get(i), left + 12, helpBottom + 3 + i * 36, 0xFFAFC4D6, false);
             }
             graphics.enableScissor(left + 12, bottom - 43, left + dialogWidth - 12, bottom - 30);
-            graphics.text(font, error, left + 12, bottom - 41, 0xFF9090, false);
+            graphics.text(font, error, left + 12, bottom - 41, 0xFFFF9090, false);
             graphics.disableScissor();
             if (mouseY >= bottom - 43 && mouseY < bottom - 30) {
                 graphics.setTooltipForNextFrame(font, error, mouseX, mouseY);

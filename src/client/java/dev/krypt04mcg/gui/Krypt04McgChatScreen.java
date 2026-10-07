@@ -126,16 +126,16 @@ public final class Krypt04McgChatScreen extends Screen {
         graphics.fill(rightX, historyTop, rightX + rightWidth, historyBottom, 0x6A071016);
 
         graphics.nextStratum();
-        graphics.text(font, title, panelX + 12, panelY + 9, 0xE8F3FF, false);
-        graphics.text(font, Component.translatable("text.krypt04mcg.gui.players"), panelX + 12, panelY + 36, 0xAFC4D6, false);
-        graphics.text(font, Component.translatable("text.krypt04mcg.gui.player"), rightX, panelY + 28, 0xAFC4D6, false);
+        graphics.text(font, title, panelX + 12, panelY + 9, 0xFFE8F3FF, false);
+        graphics.text(font, Component.translatable("text.krypt04mcg.gui.players"), panelX + 12, panelY + 36, 0xFFAFC4D6, false);
+        graphics.text(font, Component.translatable("text.krypt04mcg.gui.player"), rightX, panelY + 28, 0xFFAFC4D6, false);
         graphics.text(font, Component.translatable("text.krypt04mcg.gui.conversation", receiver.isEmpty() ? "-" : receiver),
-                rightX, panelY + 66, 0xAFC4D6, false);
+                rightX, panelY + 66, 0xFFAFC4D6, false);
         drawHistory(graphics, receiver, rightX + 8, historyTop + 8, rightWidth - 16, historyBottom - historyTop - 16);
 
         if (targets.isEmpty()) {
             graphics.text(font, Component.translatable("text.krypt04mcg.gui.no_players"), panelX + 12,
-                    panelY + 56, 0xD8A657, false);
+                    panelY + 56, 0xFFD8A657, false);
         }
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
@@ -226,7 +226,7 @@ public final class Krypt04McgChatScreen extends Screen {
 
     private void drawHistory(GuiGraphicsExtractor graphics, String receiver, int x, int y, int width, int height) {
         if (receiver.isEmpty()) {
-            graphics.text(font, Component.translatable("text.krypt04mcg.gui.empty_conversation"), x, y, 0x8899A6, false);
+            graphics.text(font, Component.translatable("text.krypt04mcg.gui.empty_conversation"), x, y, 0xFF8899A6, false);
             return;
         }
         Target target = currentTarget();
