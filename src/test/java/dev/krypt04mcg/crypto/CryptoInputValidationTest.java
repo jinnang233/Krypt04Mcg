@@ -106,7 +106,7 @@ final class CryptoInputValidationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = KemAlgorithm.class, names = {"ML_KEM_768", "CMCE_MCELIECE348864", "HQC_HQC128",
+    @EnumSource(value = KemAlgorithm.class, names = {"ML_KEM_768", "CMCE_MCELIECE460896", "HQC_HQC128",
             "NTRULPRIME_NTRULPR653", "SNTRUPRIME_SNTRUP653"})
     void malformedEncapsulationIsRejectedAsCryptoFailure(KemAlgorithm algorithm) throws Exception {
         CryptoService crypto = new CryptoService();

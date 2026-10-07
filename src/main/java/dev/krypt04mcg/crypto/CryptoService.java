@@ -89,12 +89,12 @@ public final class CryptoService {
     }
 
     public LocalKeyMaterial generateLocalKeys(String owner, String uuid) throws CryptoException {
-        return generateLocalKeys(owner, uuid, KemAlgorithm.CMCE_MCELIECE348864, SignatureAlgorithm.FALCON_512);
+        return generateLocalKeys(owner, uuid, KemAlgorithm.ML_KEM_768, SignatureAlgorithm.FALCON_512);
     }
 
     public LocalKeyMaterial generateLocalKeys(String owner, String uuid, KemAlgorithm kemAlgorithm,
                                               SignatureAlgorithm signatureAlgorithm) throws CryptoException {
-        KemAlgorithm selectedKem = kemAlgorithm == null ? KemAlgorithm.CMCE_MCELIECE348864 : kemAlgorithm;
+        KemAlgorithm selectedKem = kemAlgorithm == null ? KemAlgorithm.ML_KEM_768 : kemAlgorithm;
         SignatureAlgorithm selectedSignature = signatureAlgorithm == null
                 ? SignatureAlgorithm.FALCON_512 : signatureAlgorithm;
         try {
@@ -517,7 +517,7 @@ public final class CryptoService {
                                              java.security.spec.AlgorithmParameterSpec expected) throws CryptoException {
         java.security.spec.AlgorithmParameterSpec actual = switch (key) {
             case org.bouncycastle.jcajce.interfaces.MLKEMKey k -> k.getParameterSpec();
-            case org.bouncycastle.pqc.jcajce.interfaces.CMCEKey k -> k.getParameterSpec();
+            case org.bouncycastle.jcajce.interfaces.CMCEKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.HQCKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.NTRULPRimeKey k -> k.getParameterSpec();
             case org.bouncycastle.pqc.jcajce.interfaces.SNTRUPrimeKey k -> k.getParameterSpec();
@@ -537,7 +537,7 @@ public final class CryptoService {
     private static String parameterName(java.security.spec.AlgorithmParameterSpec spec) throws CryptoException {
         return switch (spec) {
             case org.bouncycastle.jcajce.spec.MLKEMParameterSpec p -> p.getName();
-            case org.bouncycastle.pqc.jcajce.spec.CMCEParameterSpec p -> p.getName();
+            case org.bouncycastle.jcajce.spec.CMCEParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.HQCParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.NTRULPRimeParameterSpec p -> p.getName();
             case org.bouncycastle.pqc.jcajce.spec.SNTRUPrimeParameterSpec p -> p.getName();

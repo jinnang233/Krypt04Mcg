@@ -60,8 +60,6 @@
   "text.autoconfig.krypt04mcg.option.shadowListenRegexes": "Shadow Listen Regexes",
   "text.autoconfig.krypt04mcg.option.shadowListenRegex": "Shadow Listen Regex",
   "text.autoconfig.krypt04mcg.option.kemAlgorithm": "KEM Algorithm",
-  "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE348864": "CMCE / mceliece348864",
-  "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE348864F": "CMCE / mceliece348864f",
   "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE460896": "CMCE / mceliece460896",
   "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE460896F": "CMCE / mceliece460896f",
   "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE6688128": "CMCE / mceliece6688128",

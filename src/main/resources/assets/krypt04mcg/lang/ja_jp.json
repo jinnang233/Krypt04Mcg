@@ -66,8 +66,6 @@
   "text.autoconfig.krypt04mcg.option.ephemeralKemAlgorithm.ML_KEM_512": "ML-KEM-512",
   "text.autoconfig.krypt04mcg.option.ephemeralKemAlgorithm.ML_KEM_768": "ML-KEM-768",
   "text.autoconfig.krypt04mcg.option.ephemeralKemAlgorithm.ML_KEM_1024": "ML-KEM-1024",
-  "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE348864": "CMCE / mceliece348864",
-  "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE348864F": "CMCE / mceliece348864f",
   "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE460896": "CMCE / mceliece460896",
   "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE460896F": "CMCE / mceliece460896f",
   "text.autoconfig.krypt04mcg.option.kemAlgorithm.CMCE_MCELIECE6688128": "CMCE / mceliece6688128",

@@ -45,7 +45,17 @@ final class CryptoServiceTest {
         String plaintext = crypto.decrypt(packet, bob, publicIdentity(alice));
 
         assertEquals("hello bob", plaintext);
+        assertEquals("ML-KEM-768/public", alice.kemPublicKey().algorithm());
+        assertEquals("ML-KEM-768/private", bob.kemPrivateKey().algorithm());
+        assertEquals("ML-KEM-768", packet.algorithms().kem());
         assertTrue(packet.signed());
+    }
+
+    @Test
+    void nullAlgorithmSelectionsUseMlKem768AndFalcon512() throws Exception {
+        LocalKeyMaterial keys = new CryptoService().generateLocalKeys("alice", "alice-uuid", null, null);
+        assertEquals("ML-KEM-768/public", keys.kemPublicKey().algorithm());
+        assertEquals("Falcon-512/public", keys.signaturePublicKey().algorithm());
     }
 
     @Test

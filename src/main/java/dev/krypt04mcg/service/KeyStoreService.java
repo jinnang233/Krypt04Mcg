@@ -44,7 +44,7 @@ public final class KeyStoreService {
     }
 
     public void init(String owner, String uuid) throws IOException, CryptoException {
-        init(owner, uuid, KemAlgorithm.CMCE_MCELIECE348864, SignatureAlgorithm.FALCON_512);
+        init(owner, uuid, KemAlgorithm.ML_KEM_768, SignatureAlgorithm.FALCON_512);
     }
 
     public void init(String owner, String uuid, KemAlgorithm kemAlgorithm, SignatureAlgorithm signatureAlgorithm)

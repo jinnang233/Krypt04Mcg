@@ -5,24 +5,13 @@ import dev.krypt04mcg.config.SignatureAlgorithm;
 import dev.krypt04mcg.model.PublicIdentity;
 import dev.krypt04mcg.util.JsonSupport;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
-
-import java.util.Arrays;
-import java.util.stream.Stream;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-final class HqcNtruPrimeKemAlgorithmTest {
-    static Stream<KemAlgorithm> algorithms() {
-        return Arrays.stream(KemAlgorithm.values())
-                .filter(algorithm -> switch (algorithm.jcaName()) {
-                    case "HQC", "NTRULPRIME", "SNTRUPRIME" -> true;
-                    default -> false;
-                });
-    }
-
+final class KemAlgorithmTest {
     @ParameterizedTest
-    @MethodSource("algorithms")
+    @EnumSource(KemAlgorithm.class)
     void serializesValidatesAndEncrypts(KemAlgorithm algorithm) throws Exception {
         var gson = JsonSupport.prettyGson();
         assertEquals(algorithm, gson.fromJson(gson.toJson(algorithm), KemAlgorithm.class));

@@ -59,7 +59,7 @@ final class KeyStoreServiceTest {
         reloaded.init("alice", "alice-uuid", KemAlgorithm.ML_KEM_512, SignatureAlgorithm.ML_DSA_44);
 
         assertEquals(originalFingerprint, reloaded.regenerationFingerprint());
-        assertEquals("CMCE/mceliece348864/public", reloaded.local().kemPublicKey().algorithm());
+        assertEquals("ML-KEM-768/public", reloaded.local().kemPublicKey().algorithm());
         assertEquals("Falcon-512/public", reloaded.local().signaturePublicKey().algorithm());
         assertThrows(CryptoException.class, () -> reloaded.regenerate("wrong-fingerprint",
                 KemAlgorithm.ML_KEM_512, SignatureAlgorithm.ML_DSA_44));

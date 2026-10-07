@@ -46,7 +46,8 @@ This implementation targets:
 - Fabric Loader `0.19.5`
 - Fabric API `0.161.0+26.3`
 - Loom `1.17.20`
-- NeoForge `26.3.0.16-beta` (separate client build)
+- NeoForge `26.3.0.52-beta` (separate client build)
+- Bouncy Castle `1.86`
 - Java `25`
 
 The NeoForge build shares the protocol, cryptography, and storage code with Fabric. It requires no server installation for chat transport. Custom payload and public-key sharing still require a server relay that advertises the corresponding channels.
@@ -125,13 +126,23 @@ Private and public key material are stored separately and scoped to the active M
 
 The KEM and signature selections only apply when no local key exists or when a key is explicitly regenerated. Changing the configuration never rewrites an existing key. Encryption, signing, verification, and decryption resolve algorithms from key records and packet algorithm identifiers rather than assuming the current configuration.
 
-Supported key selections are all ten Bouncy Castle CMCE parameter sets, ML-KEM-512/768/1024, Falcon-512/1024,
+Supported key selections are the eight ISO/IEC 18033-2 CMCE parameter sets already exposed by this mod
+(`mceliece460896`, `mceliece6688128`, `mceliece6960119`, and `mceliece8192128`, each with its `f` variant),
+HQC-128/192/256, all six parameter sets for each of NTRULPRIME and SNTRUPRIME,
+ML-KEM-512/768/1024, Falcon-512/1024,
 ML-DSA-44/65/87, all 24 SLH-DSA variants (the 12 SHA2/SHAKE parameter sets in both pure and pre-hash forms),
 all three SQIsign parameter sets (`SQIsign-lvl1`, `SQIsign-lvl3`, and `SQIsign-lvl5`),
 and all 44 SNOVA variants. SNOVA includes the base parameter sets `24-5-4`, `24-5-5`, `25-8-3`,
 `29-6-5`, `37-8-4`, `37-17-2`, `49-11-3`, `56-25-2`, `60-10-4`, `66-15-3`, and `75-33-2`,
 each with `SSK`, `ESK`, `SHAKE-SSK`, and `SHAKE-ESK` variants (for example, `SNOVA-24-5-4-SSK`).
-The long-term defaults remain `CMCE/mceliece348864`, `Falcon-512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/k04m exchange` and `/k04m etell` sessions defaults to `ML-KEM-768`.
+The long-term defaults are `ML-KEM-768`, `Falcon-512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/k04m exchange` and `/k04m etell` sessions defaults to `ML-KEM-768`.
+
+Bouncy Castle 1.86 removes the round-3 CMCE implementation and the non-standardised
+`CMCE/mceliece348864` and `CMCE/mceliece348864f` selections. Saved configurations using either removed
+selection fall back to `ML-KEM-768`. Existing round-3 CMCE keys cannot be decoded by 1.86, even for
+parameter sizes still supported by the ISO implementation. Back up the account storage before upgrading;
+CMCE users need to replace their local keys and exchange fresh public keys with their contacts.
+Existing ML-KEM keys remain usable.
 
 ## Commands
 

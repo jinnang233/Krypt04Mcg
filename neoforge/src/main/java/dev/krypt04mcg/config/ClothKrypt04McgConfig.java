@@ -52,7 +52,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
             java.util.List.of("^<(?<player>[^>]+)>\\s*(?<message>.*)$"));
     @ConfigEntry.Gui.Excluded
     public String shadowListenRegex = "^<(?<player>[^>]+)>\\s*(?<message>.*)$";
-    public KemAlgorithm kemAlgorithm = KemAlgorithm.CMCE_MCELIECE348864;
+    public KemAlgorithm kemAlgorithm = KemAlgorithm.ML_KEM_768;
     public KemAlgorithm ephemeralKemAlgorithm = KemAlgorithm.ML_KEM_768;
     public SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.FALCON_512;
     public AeadAlgorithm aeadAlgorithm = AeadAlgorithm.AES_256_GCM;
@@ -94,7 +94,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
         config.shadowListenRegexes = new java.util.ArrayList<>(
                 shadowListenRegexes == null ? java.util.List.of(shadowListenRegex) : shadowListenRegexes);
         config.shadowListenRegex = shadowListenRegex;
-        config.kemAlgorithm = kemAlgorithm == null ? KemAlgorithm.CMCE_MCELIECE348864 : kemAlgorithm;
+        config.kemAlgorithm = kemAlgorithm == null ? KemAlgorithm.ML_KEM_768 : kemAlgorithm;
         config.ephemeralKemAlgorithm = ephemeralKemAlgorithm == null ? KemAlgorithm.ML_KEM_768 : ephemeralKemAlgorithm;
         config.signatureAlgorithm = signatureAlgorithm == null ? SignatureAlgorithm.FALCON_512 : signatureAlgorithm;
         config.aeadAlgorithm = aeadAlgorithm == null ? AeadAlgorithm.AES_256_GCM : aeadAlgorithm;
