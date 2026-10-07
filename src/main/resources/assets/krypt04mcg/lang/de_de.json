@@ -34,6 +34,7 @@
   "text.krypt04mcg.error.delete_own_key": "Du kannst deinen eigenen öffentlichen Schlüssel nicht löschen.",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "Sende-Fortschritt anzeigen",
+  "text.autoconfig.krypt04mcg.option.showSentPlaintext": "Gesendeten Klartext anzeigen",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "Rohe verschlüsselte Nachrichten ausblenden",
   "text.autoconfig.krypt04mcg.option.verboseMessages": "Ausführliche Meldungen",
   "text.autoconfig.krypt04mcg.option.enableCompression": "Nachrichten komprimieren",
@@ -155,6 +156,7 @@
   "text.krypt04mcg.gui.target": "Ziel: %s",
 
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Verschlüsselte Nachricht an %s gesendet.",
+  "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s (verschlüsselt): %s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] Sitzung für %s vorbereitet.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] Fragment gesendet.",
   "text.krypt04mcg.warning.tofu_unverified": "[Krypt04Mcg] Verschlüsselt gesendet, aber der Fingerabdruck von %s wurde noch nicht manuell geprüft.",

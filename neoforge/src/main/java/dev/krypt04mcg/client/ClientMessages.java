@@ -27,7 +27,7 @@ public final class ClientMessages {
 
     private static String applyMessagePrefix(String message) {
         if (message.startsWith(DEFAULT_MESSAGE_PREFIX)) {
-            return messagePrefix + message.substring(DEFAULT_MESSAGE_PREFIX.length());
+            return (messagePrefix + message.substring(DEFAULT_MESSAGE_PREFIX.length())).stripLeading();
         }
         return message;
     }

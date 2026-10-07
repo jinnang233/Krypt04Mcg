@@ -9,6 +9,7 @@ public class Krypt04McgConfig {
     public boolean enableFileReceiving = false;
     public boolean permanentlyDisableFileSharing = false;
     public boolean showProgress = true;
+    public boolean showSentPlaintext = true;
     public boolean hideEncryptedRawMessage = true;
     public boolean verboseMessages = false;
     public boolean enableCompression = true;

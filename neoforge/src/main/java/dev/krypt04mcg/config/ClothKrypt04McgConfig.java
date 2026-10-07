@@ -14,6 +14,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     public boolean enableFileReceiving = false;
     public boolean permanentlyDisableFileSharing = false;
     public boolean showProgress = true;
+    public boolean showSentPlaintext = true;
     public boolean hideEncryptedRawMessage = true;
     public boolean verboseMessages = false;
     public boolean enableCompression = true;
@@ -75,6 +76,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
         config.enableFileReceiving = enableFileReceiving;
         config.permanentlyDisableFileSharing = permanentlyDisableFileSharing;
         config.showProgress = showProgress;
+        config.showSentPlaintext = showSentPlaintext;
         config.hideEncryptedRawMessage = hideEncryptedRawMessage;
         config.verboseMessages = verboseMessages;
         config.enableCompression = enableCompression;

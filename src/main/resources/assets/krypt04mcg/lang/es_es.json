@@ -34,6 +34,7 @@
   "text.krypt04mcg.error.delete_own_key": "No puedes eliminar tu propia clave pública.",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "Mostrar progreso de envío",
+  "text.autoconfig.krypt04mcg.option.showSentPlaintext": "Mostrar texto sin cifrar enviado",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "Ocultar mensajes cifrados sin procesar",
   "text.autoconfig.krypt04mcg.option.verboseMessages": "Mensajes detallados",
   "text.autoconfig.krypt04mcg.option.enableCompression": "Comprimir mensajes",
@@ -155,6 +156,7 @@
   "text.krypt04mcg.gui.target": "Destino: %s",
 
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Mensaje cifrado enviado a %s.",
+  "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s (cifrado): %s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] Session material prepared for %s.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] Fragment sent.",
   "text.krypt04mcg.warning.tofu_unverified": "[Krypt04Mcg] Encrypted send allowed, but %s's fingerprint has not been manually verified.",

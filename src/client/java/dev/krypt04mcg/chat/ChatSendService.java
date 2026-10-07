@@ -89,7 +89,7 @@ public final class ChatSendService {
                     keyStoreService.local().kemPublicKey().owner(), message, sign, config.enableCompression,
                     config.aeadAlgorithm);
             sendPacket(packet, receiver);
-            system.accept(ClientMessages.tr("text.krypt04mcg.sent_encrypted", receiver));
+            reportSentMessage(receiver, message);
             return true;
         } catch (Exception e) {
             error(e);
@@ -136,7 +136,7 @@ public final class ChatSendService {
             sendPacket(packet, receiver);
             sessionService.recordSentMessage(receiver, sequence,
                     message.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
-            system.accept(ClientMessages.tr("text.krypt04mcg.sent_encrypted", receiver));
+            reportSentMessage(receiver, message);
             return true;
         } catch (Exception e) {
             error(e);
@@ -232,6 +232,13 @@ public final class ChatSendService {
         if (trustState == TrustState.TOFU_TRUSTED) {
             system.accept(ClientMessages.tr("text.krypt04mcg.warning.tofu_unverified", identity.owner()));
         }
+    }
+
+    private void reportSentMessage(String receiver, String message) {
+        system.accept(config.showSentPlaintext
+                ? ClientMessages.tr("text.krypt04mcg.sent_plaintext",
+                        keyStoreService.local().kemPublicKey().owner(), receiver, message)
+                : ClientMessages.tr("text.krypt04mcg.sent_encrypted", receiver));
     }
 
     private void error(Exception e) {

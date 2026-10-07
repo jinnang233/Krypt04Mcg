@@ -6,6 +6,7 @@
   "enableFileReceiving": false,
   "permanentlyDisableFileSharing": false,
   "showProgress": true,
+  "showSentPlaintext": true,
   "hideEncryptedRawMessage": true,
   "verboseMessages": false,
   "enableCompression": true,

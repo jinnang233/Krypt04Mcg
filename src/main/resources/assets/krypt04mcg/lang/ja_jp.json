@@ -34,6 +34,7 @@
   "text.krypt04mcg.error.delete_own_key": "自分の公開鍵は削除できません。",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "送信進捗を表示",
+  "text.autoconfig.krypt04mcg.option.showSentPlaintext": "送信メッセージの平文を表示",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "暗号化された生メッセージを隠す",
   "text.autoconfig.krypt04mcg.option.verboseMessages": "詳細メッセージ",
   "text.autoconfig.krypt04mcg.option.enableCompression": "メッセージを圧縮",
@@ -155,6 +156,7 @@
   "text.krypt04mcg.gui.target": "宛先: %s",
 
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s に暗号化メッセージを送信しました。",
+  "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s（暗号化）：%s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] %s 用のセッション素材を準備しました。",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] フラグメントを送信しました。",
   "text.krypt04mcg.warning.tofu_unverified": "[Krypt04Mcg] 暗号化送信しましたが、%s の指紋はまだ手動確認されていません。",

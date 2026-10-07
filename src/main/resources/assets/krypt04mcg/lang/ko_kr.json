@@ -34,6 +34,7 @@
   "text.krypt04mcg.error.delete_own_key": "자신의 공개 키는 삭제할 수 없습니다.",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "전송 진행 표시",
+  "text.autoconfig.krypt04mcg.option.showSentPlaintext": "보낸 메시지의 평문 표시",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "암호문 원문 숨기기",
   "text.autoconfig.krypt04mcg.option.verboseMessages": "자세한 메시지",
   "text.autoconfig.krypt04mcg.option.enableCompression": "메시지 압축",
@@ -155,6 +156,7 @@
   "text.krypt04mcg.gui.target": "대상: %s",
 
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s에게 암호화 메시지를 보냈습니다.",
+  "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s (암호화): %s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] %s용 세션 자료를 준비했습니다.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] 조각을 보냈습니다.",
   "text.krypt04mcg.warning.tofu_unverified": "[Krypt04Mcg] 암호화 전송은 허용됐지만 %s의 지문은 아직 수동 확인되지 않았습니다.",

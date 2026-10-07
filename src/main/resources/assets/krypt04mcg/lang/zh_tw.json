@@ -34,6 +34,7 @@
   "text.krypt04mcg.error.delete_own_key": "不能刪除自己的公鑰。",
   "text.autoconfig.krypt04mcg.title": "Krypt04Mcg",
   "text.autoconfig.krypt04mcg.option.showProgress": "顯示傳送進度",
+  "text.autoconfig.krypt04mcg.option.showSentPlaintext": "顯示傳送訊息的明文",
   "text.autoconfig.krypt04mcg.option.hideEncryptedRawMessage": "隱藏原始密文訊息",
   "text.autoconfig.krypt04mcg.option.verboseMessages": "顯示詳細訊息",
   "text.autoconfig.krypt04mcg.option.enableCompression": "壓縮訊息",
@@ -155,6 +156,7 @@
   "text.krypt04mcg.gui.target": "目標：%s",
 
   "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] 已向 %s 傳送加密訊息。",
+  "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s（加密）：%s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] 已為 %s 準備會話材料。",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] 分片已傳送。",
   "text.krypt04mcg.warning.tofu_unverified": "[Krypt04Mcg] 已允許加密傳送，但 %s 的指紋尚未人工確認。",

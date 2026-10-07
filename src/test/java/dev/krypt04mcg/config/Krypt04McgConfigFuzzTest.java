@@ -27,6 +27,7 @@ final class Krypt04McgConfigFuzzTest {
 
             assertNotNull(decoded);
             assertEquals(config.showProgress, decoded.showProgress);
+            assertEquals(config.showSentPlaintext, decoded.showSentPlaintext);
             assertEquals(config.hideEncryptedRawMessage, decoded.hideEncryptedRawMessage);
             assertEquals(config.verboseMessages, decoded.verboseMessages);
             assertEquals(config.enableCompression, decoded.enableCompression);
@@ -83,6 +84,7 @@ final class Krypt04McgConfigFuzzTest {
     private static Krypt04McgConfig randomConfig(Random random) {
         Krypt04McgConfig config = new Krypt04McgConfig();
         config.showProgress = random.nextBoolean();
+        config.showSentPlaintext = random.nextBoolean();
         config.hideEncryptedRawMessage = random.nextBoolean();
         config.verboseMessages = random.nextBoolean();
         config.enableCompression = random.nextBoolean();
