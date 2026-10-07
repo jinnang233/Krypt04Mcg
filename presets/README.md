@@ -6,6 +6,7 @@ other than the algorithms match the defaults in Krypt04Mcg 0.26.1.
 | Preset | Long-term KEM | Ephemeral KEM | Signature | AEAD |
 | --- | --- | --- | --- | --- |
 | [Default](default.json) | `ML-KEM-768+X25519` | `ML-KEM-768+X25519` | `MLDSA65-Ed25519-SHA512` | `AES-256-GCM` |
+| [Compact](compact.json) | `CMCE/mceliece460896` | `ML-KEM-512` | `UOV-IS` | `AES-256-GCM` |
 | [CMCE + Falcon](cmce-falcon.json) | `CMCE/mceliece8192128f` | `ML-KEM-768+X25519` | `Falcon-1024` | `AES-256-GCM` |
 | [SLH-DSA](slh-dsa.json) | `ML-KEM-768+X25519` | `ML-KEM-768+X25519` | `SLH-DSA-SHA2-192S` | `AES-256-GCM` |
 | [BC hybrid, category 5](bc-hybrid-category-5.json) | `ML-KEM-1024+X448` | `ML-KEM-1024+X448` | `MLDSA87-Ed448-SHAKE256` | `AES-256-GCM` |
@@ -16,6 +17,25 @@ algorithm. Its SHA2-192S parameters have NIST security category 3; the `S` varia
 favors smaller signatures over signing speed. Each signature is 16,224 bytes, so
 signed chat messages require substantially more fragments than the default.
 See [FIPS 205, Table 2](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.205.pdf).
+
+The compact preset minimizes the combined signature and KEM ciphertext size for
+signed direct messages among the currently supported selections: CMCE
+`mceliece460896` produces a 156-byte encapsulation and `UOV-IS` a 96-byte
+signature, totaling 252 bytes. The CMCE `f` variant and the UOV-IS compressed-key
+variants tie on these sizes. AES-256-GCM adds a 16-byte authentication tag to the
+encoded (optionally compressed) plaintext; the 12-byte nonce, packet headers and
+transport encoding are additional overhead. These sizes were checked with BC
+1.86; see also the [UOV parameter table](https://github.com/pqov/pqov#parameters)
+and [Classic McEliece ciphertext encoding](https://classic.mceliece.org/mceliece-sage-20221023/byterepr.sage.html).
+
+Compact optimizes message size rather than key size: the raw CMCE and UOV public
+keys are 524,160 and 412,160 bytes respectively. Exported key files are practical
+for exchanging these keys. The ephemeral KEM uses `ML-KEM-512`, whose 768-byte
+encapsulation is the smallest supported choice that fits the session handshake;
+all supported CMCE public keys exceed its 64 KiB plaintext limit. UOV-IS and
+ML-KEM-512 target NIST security category 1, and UOV is an experimental,
+non-standardized signature selection. This preset uses standalone PQ algorithms
+without the defaults' classical hybrid components.
 
 The CMCE preset uses BC's CMCE and Falcon implementations. Its long-term CMCE
 public key is much larger than an ML-KEM public key; exchanging exported public
