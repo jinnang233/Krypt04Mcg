@@ -78,6 +78,14 @@ gradle wrapper
 ./gradlew -p neoforge build
 ```
 
+The Fabric and NeoForge builds each declare Java 25 in
+`gradle/gradle-daemon-jvm.properties`. Gradle uses these
+[Daemon JVM criteria](https://docs.gradle.org/current/userguide/gradle_daemon.html#sec:daemon_jvm_criteria)
+to run the build with Java 25 even when the launcher uses Java 21, as in GitHub's
+managed automatic dependency submission job. If no local Java 25 installation is
+available, Gradle downloads a stable Temurin 25 JDK from Adoptium for the configured
+Linux, macOS or Windows platform.
+
 ## Releases
 
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
