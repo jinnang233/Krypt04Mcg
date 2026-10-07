@@ -45,17 +45,22 @@ final class CryptoServiceTest {
         String plaintext = crypto.decrypt(packet, bob, publicIdentity(alice));
 
         assertEquals("hello bob", plaintext);
-        assertEquals("ML-KEM-768/public", alice.kemPublicKey().algorithm());
-        assertEquals("ML-KEM-768/private", bob.kemPrivateKey().algorithm());
-        assertEquals("ML-KEM-768", packet.algorithms().kem());
+        assertEquals("ML-KEM-768+X25519/public", alice.kemPublicKey().algorithm());
+        assertEquals("ML-KEM-768+X25519/private", bob.kemPrivateKey().algorithm());
+        assertEquals("ML-KEM-768+X25519", packet.algorithms().kem());
+        assertEquals("MLDSA65-Ed25519-SHA512", packet.algorithms().signature());
         assertTrue(packet.signed());
     }
 
     @Test
-    void nullAlgorithmSelectionsUseMlKem768AndFalcon512() throws Exception {
-        LocalKeyMaterial keys = new CryptoService().generateLocalKeys("alice", "alice-uuid", null, null);
-        assertEquals("ML-KEM-768/public", keys.kemPublicKey().algorithm());
-        assertEquals("Falcon-512/public", keys.signaturePublicKey().algorithm());
+    void nullAlgorithmSelectionsUseHybridDefaults() throws Exception {
+        CryptoService crypto = new CryptoService();
+        LocalKeyMaterial keys = crypto.generateLocalKeys("alice", "alice-uuid", null, null);
+        assertEquals("ML-KEM-768+X25519/public", keys.kemPublicKey().algorithm());
+        assertEquals("MLDSA65-Ed25519-SHA512/public", keys.signaturePublicKey().algorithm());
+        try (var ephemeral = crypto.generateEphemeralKemKeyPair(null)) {
+            assertEquals(KemAlgorithm.ML_KEM_768_X25519, ephemeral.algorithm());
+        }
     }
 
     @Test

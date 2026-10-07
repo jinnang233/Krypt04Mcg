@@ -30,6 +30,8 @@ final class KeyStoreServiceTest {
         CryptoService cryptoService = new CryptoService();
         KeyStoreService first = new KeyStoreService(tempDir, cryptoService);
         first.init("alice", "alice-uuid");
+        assertEquals("ML-KEM-768+X25519/public", first.local().kemPublicKey().algorithm());
+        assertEquals("MLDSA65-Ed25519-SHA512/public", first.local().signaturePublicKey().algorithm());
 
         Path localKeys = tempDir.resolve("keys").resolve("private").resolve("local.json");
         Path publicKeys = tempDir.resolve("keys").resolve("public").resolve("self-public.json");
@@ -52,7 +54,8 @@ final class KeyStoreServiceTest {
     void configChangesDoNotReplaceExistingKeysUntilFingerprintConfirmedRegeneration() throws Exception {
         CryptoService cryptoService = new CryptoService();
         KeyStoreService first = new KeyStoreService(tempDir, cryptoService);
-        first.init("alice", "alice-uuid");
+        // Existing non-hybrid keys must survive a change to hybrid defaults/configuration.
+        first.init("alice", "alice-uuid", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.FALCON_512);
         String originalFingerprint = first.regenerationFingerprint();
 
         KeyStoreService reloaded = new KeyStoreService(tempDir, cryptoService);

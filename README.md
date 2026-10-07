@@ -28,7 +28,8 @@ Krypt04Mcg is a Fabric or NeoForge client mod that transports post-quantum encry
 ## Features
 
 - Client-side `/k04m` command tree, also available as `/Krypt04Mcg:enc` and `/Krypt04Mcg:k04m`.
-- Configurable CMCE and ML-KEM key parameter sets.
+- Configurable CMCE, HQC, NTRU Prime and ML-KEM key parameter sets, with X25519/X448 hybrid options.
+- Bouncy Castle native composite ML-DSA signatures with EdDSA, ECDSA or RSA.
 - Configurable Falcon and ML-DSA signature parameter sets.
 - AES-256-GCM or ChaCha20-Poly1305 with a random 96-bit nonce per message.
 - HKDF-SHA256 derives AEAD keys from KEM shared secrets.
@@ -135,7 +136,32 @@ all three SQIsign parameter sets (`SQIsign-lvl1`, `SQIsign-lvl3`, and `SQIsign-l
 and all 44 SNOVA variants. SNOVA includes the base parameter sets `24-5-4`, `24-5-5`, `25-8-3`,
 `29-6-5`, `37-8-4`, `37-17-2`, `49-11-3`, `56-25-2`, `60-10-4`, `66-15-3`, and `75-33-2`,
 each with `SSK`, `ESK`, `SHAKE-SSK`, and `SHAKE-ESK` variants (for example, `SNOVA-24-5-4-SSK`).
-The long-term defaults are `ML-KEM-768`, `Falcon-512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/k04m exchange` and `/k04m etell` sessions defaults to `ML-KEM-768`.
+The long-term defaults are `ML-KEM-768+X25519`, `MLDSA65-Ed25519-SHA512`, and `AES-256-GCM`. The independently configurable ephemeral KEM used only by `/k04m exchange` and `/k04m etell` sessions also defaults to `ML-KEM-768+X25519`.
+
+Version 0.25.0 adds 52 hybrid KEM selections: every supported KEM parameter set can be paired
+with either `X25519` or `X448` (for example, `HQC/hqc192+X448`). These selections are available
+for both long-term keys and the independently configured ephemeral handshake key.
+`ML-KEM-768+X25519` uses BC's native `MLKEM768-X25519-SHA3-256` composite KEM;
+`ML-KEM-1024+X448` uses BC's native `MLKEM1024-X448-SHA3-256` composite KEM.
+All other pairings use BC's existing KEM and X25519/X448 implementations, combined by BC's
+HKDF-SHA256 over the PQ secret followed by the classical secret. The HKDF context binds
+a versioned domain label, the exact suite identifier, both encapsulations and both recipient public keys.
+No classical curve or post-quantum primitive is implemented by this mod. Invalid or missing
+components fail the operation; hybrid selections never fall back to a single component.
+The custom combinations are a mod-specific format, not X-Wing or a standard composite KEM.
+
+The signature selector also offers all 18 BC native composite signature suites: ML-DSA-44
+with Ed25519, ECDSA P-256 or RSA-2048; ML-DSA-65 with Ed25519, ECDSA P-256/P-384/brainpoolP256r1
+or RSA-3072/4096; and ML-DSA-87 with Ed448, ECDSA P-384/P-521/brainpoolP384r1 or RSA-3072/4096.
+RSA choices include the PKCS#1 v1.5 and PSS variants exposed by BC (ML-DSA-87 uses PSS only).
+Signing, combination, key encoding and verification are delegated to BC; verification requires both signatures.
+Example selections are `MLDSA44-Ed25519-SHA512` and `MLDSA87-Ed448-SHAKE256`.
+
+Existing keys and explicit saved selections stay unchanged; new and missing selections default to the hybrid suites above. To use a long-term hybrid KEM or hybrid signature,
+select it in the configuration, explicitly regenerate your keys and exchange the new public keys
+with your contacts. An ephemeral hybrid selection takes effect on the next exchange without
+regenerating long-term keys. Both peers need version 0.25.0 or newer to use these suites;
+existing non-hybrid suites remain supported and the packet protocol version is unchanged.
 
 Bouncy Castle 1.86 removes the round-3 CMCE implementation and the non-standardised
 `CMCE/mceliece348864` and `CMCE/mceliece348864f` selections. Saved configurations using either removed
@@ -287,7 +313,7 @@ Client send mode `CUSTOM_PAYLOAD` only sends on this channel when Fabric reports
 
 ## Session Design
 
-`/k04m exchange` is a signed two-message handshake using the dedicated `SESSION_EXCHANGE` packet type. The initiator creates an in-memory one-time KEM key pair (ML-KEM-768 by default); the responder encrypts fresh session material only to that temporary public key and binds both identities, UUIDs, both fingerprint pairs, the session ID, and the request message ID into the exchange transcript. The initiator destroys the temporary private key after accepting the response or after a short timeout. Consequently, later compromise of either long-term KEM private key does not decrypt a recorded exchange response.
+`/k04m exchange` is a signed two-message handshake using the dedicated `SESSION_EXCHANGE` packet type. The initiator creates an in-memory one-time KEM key pair (`ML-KEM-768+X25519` by default); the responder encrypts fresh session material only to that temporary public key and binds both identities, UUIDs, both fingerprint pairs, the session ID, and the request message ID into the exchange transcript. The initiator destroys the temporary private key after accepting the response or after a short timeout. Consequently, later compromise of either long-term KEM private key does not decrypt a recorded exchange response.
 
 `/k04m etell` uses the resulting session secret with an AEAD-only `SESSION_MESSAGE` packet (no per-message PQ signature or additional HMAC). Protocol v4 carries the session ID and monotonic sequence in the packet header and authenticates them, together with sender and receiver, through AEAD AAD. The encrypted payload contains only its version and message. Old v1–v3 session messages are rejected; both peers must upgrade. `tell` and `stell` continue to use their existing long-term recipient KEM path and do not use the ephemeral KEM setting.
 

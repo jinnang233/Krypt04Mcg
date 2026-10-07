@@ -13,13 +13,10 @@ import dev.krypt04mcg.protocol.PacketCodec;
 import dev.krypt04mcg.util.Base64Url;
 import dev.krypt04mcg.util.Hex;
 import org.bouncycastle.jcajce.SecretKeyWithEncapsulation;
-import org.bouncycastle.jcajce.spec.KEMExtractSpec;
-import org.bouncycastle.jcajce.spec.KEMGenerateSpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider;
 
 import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
 import org.bouncycastle.crypto.params.HKDFParameters;
@@ -89,18 +86,16 @@ public final class CryptoService {
     }
 
     public LocalKeyMaterial generateLocalKeys(String owner, String uuid) throws CryptoException {
-        return generateLocalKeys(owner, uuid, KemAlgorithm.ML_KEM_768, SignatureAlgorithm.FALCON_512);
+        return generateLocalKeys(owner, uuid, KemAlgorithm.ML_KEM_768_X25519, SignatureAlgorithm.MLDSA65_ED25519_SHA512);
     }
 
     public LocalKeyMaterial generateLocalKeys(String owner, String uuid, KemAlgorithm kemAlgorithm,
                                               SignatureAlgorithm signatureAlgorithm) throws CryptoException {
-        KemAlgorithm selectedKem = kemAlgorithm == null ? KemAlgorithm.ML_KEM_768 : kemAlgorithm;
+        KemAlgorithm selectedKem = kemAlgorithm == null ? KemAlgorithm.ML_KEM_768_X25519 : kemAlgorithm;
         SignatureAlgorithm selectedSignature = signatureAlgorithm == null
-                ? SignatureAlgorithm.FALCON_512 : signatureAlgorithm;
+                ? SignatureAlgorithm.MLDSA65_ED25519_SHA512 : signatureAlgorithm;
         try {
-            KeyPairGenerator kemGenerator = KeyPairGenerator.getInstance(selectedKem.jcaName(), selectedKem.provider());
-            kemGenerator.initialize(selectedKem.parameterSpec(), secureRandom);
-            KeyPair kem = kemGenerator.generateKeyPair();
+            KeyPair kem = KemCrypto.generate(selectedKem, secureRandom);
 
             KeyPairGenerator sigGenerator = KeyPairGenerator.getInstance(
                     selectedSignature.jcaName(), selectedSignature.provider());
@@ -162,14 +157,9 @@ public final class CryptoService {
         byte[] derivedKey = null;
         try {
             byte[] messageId = randomMessageId();
-            PublicKey kemPublic = decodePublicKey(kemAlgorithm.jcaName(), kemAlgorithm.provider(),
-                    receiverKem.keyData());
+            PublicKey kemPublic = KemCrypto.decodePublic(kemAlgorithm, Base64Url.decode(receiverKem.keyData()));
             requireRole(receiverKem.algorithm(), "/public");
-            requireKeyParameters(kemPublic, kemAlgorithm.parameterSpec());
-            KeyGenerator keyGenerator = KeyGenerator.getInstance(kemAlgorithm.jcaName(), kemAlgorithm.provider());
-            keyGenerator.init(new KEMGenerateSpec.Builder(kemPublic, "AES", AEAD_KEY_BYTES * 8)
-                    .withNoKdf().build(), secureRandom);
-            SecretKeyWithEncapsulation kemSecret = (SecretKeyWithEncapsulation) keyGenerator.generateKey();
+            SecretKeyWithEncapsulation kemSecret = KemCrypto.encapsulate(kemAlgorithm, kemPublic, secureRandom);
             byte[] encapsulation = kemSecret.getEncapsulation();
             derivedKey = deriveMessageKey(kemSecret, messageId);
             byte[] nonce = randomNonce();
@@ -194,7 +184,7 @@ public final class CryptoService {
                     unsigned.receiver(), unsigned.timestampMillis(), unsigned.messageId(), unsigned.aadFragmentIndex(),
                     unsigned.aadFragmentTotal(), unsigned.algorithms(), unsigned.nonce(), unsigned.kemCiphertext(),
                     unsigned.ciphertext(), signature);
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to encrypt message", e);
         } finally {
             if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
@@ -238,12 +228,11 @@ public final class CryptoService {
         KemAlgorithm packetKem = kemAlgorithm(packet.algorithms().kem());
         requireSameAlgorithm("KEM", packetKem.identifier(), kemAlgorithm(receiverKeys.kemPrivateKey()).identifier());
         try {
-            PrivateKey privateKey = decodePrivateKey(packetKem.jcaName(), packetKem.provider(),
-                    receiverKeys.kemPrivateKey().keyData());
+            PrivateKey privateKey = decodeKemPrivateKey(packetKem, receiverKeys.kemPrivateKey().keyData());
             requireRole(receiverKeys.kemPrivateKey().algorithm(), "/private");
-            requireKeyParameters(privateKey, packetKem.parameterSpec());
+            KemCrypto.requireParameters(privateKey, packetKem);
             return decryptKemPacket(packet, receiverKeys.kemPublicKey().owner(), packetKem, privateKey, claimedSender);
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to decrypt message", e);
         }
     }
@@ -262,12 +251,11 @@ public final class CryptoService {
             PrivateKey privateKey;
             byte[] encoded = ephemeralKeyPair.privateKey();
             try {
-                privateKey = KeyFactory.getInstance(packetKem.jcaName(), packetKem.provider())
-                        .generatePrivate(new PKCS8EncodedKeySpec(encoded));
+                privateKey = KemCrypto.decodePrivate(packetKem, encoded);
             } finally {
                 Arrays.fill(encoded, (byte) 0);
             }
-            requireKeyParameters(privateKey, packetKem.parameterSpec());
+            KemCrypto.requireParameters(privateKey, packetKem);
             return decryptKemPacket(packet, receiver, packetKem, privateKey, claimedSender);
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to decrypt session exchange response", e);
@@ -301,16 +289,13 @@ public final class CryptoService {
                     throw new CryptoException("Signature verification failed for " + packet.sender());
                 }
             }
-            KeyGenerator keyGenerator = KeyGenerator.getInstance(packetKem.jcaName(), packetKem.provider());
-            keyGenerator.init(new KEMExtractSpec.Builder(privateKey, packet.kemCiphertext(), "AES",
-                    AEAD_KEY_BYTES * 8).withNoKdf().build());
-            SecretKeyWithEncapsulation kemSecret = (SecretKeyWithEncapsulation) keyGenerator.generateKey();
+            SecretKeyWithEncapsulation kemSecret = KemCrypto.extract(packetKem, privateKey, packet.kemCiphertext());
             derivedKey = deriveMessageKey(kemSecret, packet.messageId());
             byte[] plaintext = aeadDecrypt(packetAead, derivedKey, packet.nonce(), packetCodec.aadFor(packet),
                     packet.ciphertext());
             byte[] payload = (packet.flags() & FLAG_COMPRESSED) != 0 ? inflate(plaintext) : plaintext;
             return decodePlaintext(payload);
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to decrypt message", e);
         } finally {
             if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
@@ -356,11 +341,11 @@ public final class CryptoService {
             Signature signature = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
             requireRole(privateKeyRecord.algorithm(), "/private");
             PrivateKey key = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), privateKeyRecord.keyData());
-            requireKeyParameters(key, algorithm.parameterSpec());
+            requireSignatureKeyParameters(key, algorithm);
             signature.initSign(key, secureRandom);
             signature.update(input);
             return signature.sign();
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to sign packet", e);
         }
     }
@@ -375,11 +360,11 @@ public final class CryptoService {
             Signature signature = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
             requireRole(publicKeyRecord.algorithm(), "/public");
             PublicKey key = decodePublicKey(algorithm.jcaName(), algorithm.provider(), publicKeyRecord.keyData());
-            requireKeyParameters(key, algorithm.parameterSpec());
+            requireSignatureKeyParameters(key, algorithm);
             signature.initVerify(key);
             signature.update(input);
             return signature.verify(signatureBytes);
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to verify packet signature", e);
         }
     }
@@ -411,11 +396,9 @@ public final class CryptoService {
     }
 
     public EphemeralKemKeyPair generateEphemeralKemKeyPair(KemAlgorithm selectedAlgorithm) throws CryptoException {
-        KemAlgorithm algorithm = selectedAlgorithm == null ? KemAlgorithm.ML_KEM_768 : selectedAlgorithm;
+        KemAlgorithm algorithm = selectedAlgorithm == null ? KemAlgorithm.ML_KEM_768_X25519 : selectedAlgorithm;
         try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance(algorithm.jcaName(), algorithm.provider());
-            generator.initialize(algorithm.parameterSpec(), secureRandom);
-            KeyPair pair = generator.generateKeyPair();
+            KeyPair pair = KemCrypto.generate(algorithm, secureRandom);
             byte[] privateBytes = pair.getPrivate().getEncoded();
             try {
                 return new EphemeralKemKeyPair(algorithm, pair.getPublic().getEncoded(), privateBytes);
@@ -473,16 +456,15 @@ public final class CryptoService {
             if (kem) {
                 KemAlgorithm algorithm = KemAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
-                decoded = decodePublicKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
-                requireKeyParameters(decoded, algorithm.parameterSpec());
+                decoded = KemCrypto.decodePublic(algorithm, Base64Url.decode(record.keyData()));
             } else {
                 SignatureAlgorithm algorithm = SignatureAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
                 decoded = decodePublicKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
-                requireKeyParameters(decoded, algorithm.parameterSpec());
+                requireSignatureKeyParameters(decoded, algorithm);
             }
             return keyRecord(identifier + "/public", owner, uuid, record.createdAt(), decoded.getEncoded());
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Invalid " + (kem ? "KEM" : "signature") + " public key", e);
         }
     }
@@ -497,23 +479,40 @@ public final class CryptoService {
             if (kem) {
                 KemAlgorithm algorithm = KemAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
-                decoded = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
-                requireKeyParameters(decoded, algorithm.parameterSpec());
+                decoded = decodeKemPrivateKey(algorithm, record.keyData());
             } else {
                 SignatureAlgorithm algorithm = SignatureAlgorithm.fromIdentifier(record.algorithm());
                 identifier = algorithm.identifier();
                 decoded = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), record.keyData());
-                requireKeyParameters(decoded, algorithm.parameterSpec());
+                requireSignatureKeyParameters(decoded, algorithm);
             }
             return keyRecord(identifier + "/private", owner, uuid, record.createdAt(), decoded.getEncoded());
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Invalid " + (kem ? "KEM" : "signature") + " private key", e);
+        }
+    }
+
+    private static void requireSignatureKeyParameters(java.security.Key key, SignatureAlgorithm algorithm)
+            throws CryptoException {
+        if (!algorithm.hybrid()) {
+            requireKeyParameters(key, algorithm.parameterSpec());
+            return;
+        }
+        var identifier = switch (key) {
+            case org.bouncycastle.jcajce.CompositePublicKey k -> k.getAlgorithmIdentifier();
+            case org.bouncycastle.jcajce.CompositePrivateKey k -> k.getAlgorithmIdentifier();
+            default -> throw new CryptoException("Expected BC composite signature key");
+        };
+        String actual = org.bouncycastle.jcajce.provider.asymmetric.compositesignatures.CompositeIndex
+                .getAlgorithmName(identifier.getAlgorithm());
+        if (!algorithm.jcaName().equals(actual)) {
+            throw new CryptoException("Composite signature key does not match the declared algorithm");
         }
     }
 
     // Generic JCA key factories accept multiple parameter sets. The record label must match
     // the parameters in the decoded key, including for an ephemeral handshake key.
-    private static void requireKeyParameters(java.security.Key key,
+    static void requireKeyParameters(java.security.Key key,
                                              java.security.spec.AlgorithmParameterSpec expected) throws CryptoException {
         java.security.spec.AlgorithmParameterSpec actual = switch (key) {
             case org.bouncycastle.jcajce.interfaces.MLKEMKey k -> k.getParameterSpec();
@@ -560,20 +559,14 @@ public final class CryptoService {
         }
         KemAlgorithm algorithm = kemAlgorithm(kemPublic);
         try {
-            PublicKey publicKey = decodePublicKey(algorithm.jcaName(), algorithm.provider(), kemPublic.keyData());
-            PrivateKey privateKey = decodePrivateKey(algorithm.jcaName(), algorithm.provider(), kemPrivate.keyData());
-            KeyGenerator generator = KeyGenerator.getInstance(algorithm.jcaName(), algorithm.provider());
-            generator.init(new KEMGenerateSpec.Builder(publicKey, "AES", AEAD_KEY_BYTES * 8)
-                    .withNoKdf().build(), secureRandom);
-            SecretKeyWithEncapsulation generated = (SecretKeyWithEncapsulation) generator.generateKey();
-            KeyGenerator extractor = KeyGenerator.getInstance(algorithm.jcaName(), algorithm.provider());
-            extractor.init(new KEMExtractSpec.Builder(privateKey, generated.getEncapsulation(), "AES",
-                    AEAD_KEY_BYTES * 8).withNoKdf().build());
-            SecretKeyWithEncapsulation extracted = (SecretKeyWithEncapsulation) extractor.generateKey();
+            PublicKey publicKey = KemCrypto.decodePublic(algorithm, Base64Url.decode(kemPublic.keyData()));
+            PrivateKey privateKey = decodeKemPrivateKey(algorithm, kemPrivate.keyData());
+            SecretKeyWithEncapsulation generated = KemCrypto.encapsulate(algorithm, publicKey, secureRandom);
+            SecretKeyWithEncapsulation extracted = KemCrypto.extract(algorithm, privateKey, generated.getEncapsulation());
             if (!MessageDigest.isEqual(generated.getEncoded(), extracted.getEncoded())) {
                 throw new CryptoException("Local KEM public and private keys do not match");
             }
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to validate local KEM key pair", e);
         } finally {
             Arrays.fill(challenge, (byte) 0);
@@ -781,6 +774,16 @@ public final class CryptoService {
         if (!packetAlgorithm.equalsIgnoreCase(keyAlgorithm)) {
             throw new CryptoException("Packet " + type + " algorithm " + packetAlgorithm
                     + " does not match key algorithm " + keyAlgorithm);
+        }
+    }
+
+    private static PrivateKey decodeKemPrivateKey(KemAlgorithm algorithm, String base64)
+            throws GeneralSecurityException, CryptoException {
+        byte[] encoded = Base64Url.decode(base64);
+        try {
+            return KemCrypto.decodePrivate(algorithm, encoded);
+        } finally {
+            Arrays.fill(encoded, (byte) 0);
         }
     }
 

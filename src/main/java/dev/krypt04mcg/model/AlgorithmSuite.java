@@ -8,7 +8,7 @@ public record AlgorithmSuite(String kem, String signature, String aead, String h
     public static final String HKDF_SHA256 = "HKDF-SHA256";
 
     public static AlgorithmSuite defaults() {
-        return of(KemAlgorithm.ML_KEM_768, SignatureAlgorithm.FALCON_512,
+        return of(KemAlgorithm.ML_KEM_768_X25519, SignatureAlgorithm.MLDSA65_ED25519_SHA512,
                 AeadAlgorithm.AES_256_GCM);
     }
 

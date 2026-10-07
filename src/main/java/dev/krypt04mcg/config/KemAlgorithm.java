@@ -65,18 +65,157 @@ public enum KemAlgorithm {
             "CMCE_MCELIECE348864", "CMCE_MCELIECE348864F"})
     ML_KEM_768("ML-KEM-768", "ML-KEM", "BC", MLKEMParameterSpec.ml_kem_768),
     @SerializedName("ML-KEM-1024")
-    ML_KEM_1024("ML-KEM-1024", "ML-KEM", "BC", MLKEMParameterSpec.ml_kem_1024);
+    ML_KEM_1024("ML-KEM-1024", "ML-KEM", "BC", MLKEMParameterSpec.ml_kem_1024),
+    @SerializedName("CMCE/mceliece460896+X25519")
+    CMCE_MCELIECE460896_X25519("CMCE/mceliece460896+X25519", CMCE_MCELIECE460896, "X25519"),
+    @SerializedName("CMCE/mceliece460896+X448")
+    CMCE_MCELIECE460896_X448("CMCE/mceliece460896+X448", CMCE_MCELIECE460896, "X448"),
+    @SerializedName("CMCE/mceliece460896f+X25519")
+    CMCE_MCELIECE460896F_X25519("CMCE/mceliece460896f+X25519", CMCE_MCELIECE460896F, "X25519"),
+    @SerializedName("CMCE/mceliece460896f+X448")
+    CMCE_MCELIECE460896F_X448("CMCE/mceliece460896f+X448", CMCE_MCELIECE460896F, "X448"),
+    @SerializedName("CMCE/mceliece6688128+X25519")
+    CMCE_MCELIECE6688128_X25519("CMCE/mceliece6688128+X25519", CMCE_MCELIECE6688128, "X25519"),
+    @SerializedName("CMCE/mceliece6688128+X448")
+    CMCE_MCELIECE6688128_X448("CMCE/mceliece6688128+X448", CMCE_MCELIECE6688128, "X448"),
+    @SerializedName("CMCE/mceliece6688128f+X25519")
+    CMCE_MCELIECE6688128F_X25519("CMCE/mceliece6688128f+X25519", CMCE_MCELIECE6688128F, "X25519"),
+    @SerializedName("CMCE/mceliece6688128f+X448")
+    CMCE_MCELIECE6688128F_X448("CMCE/mceliece6688128f+X448", CMCE_MCELIECE6688128F, "X448"),
+    @SerializedName("CMCE/mceliece6960119+X25519")
+    CMCE_MCELIECE6960119_X25519("CMCE/mceliece6960119+X25519", CMCE_MCELIECE6960119, "X25519"),
+    @SerializedName("CMCE/mceliece6960119+X448")
+    CMCE_MCELIECE6960119_X448("CMCE/mceliece6960119+X448", CMCE_MCELIECE6960119, "X448"),
+    @SerializedName("CMCE/mceliece6960119f+X25519")
+    CMCE_MCELIECE6960119F_X25519("CMCE/mceliece6960119f+X25519", CMCE_MCELIECE6960119F, "X25519"),
+    @SerializedName("CMCE/mceliece6960119f+X448")
+    CMCE_MCELIECE6960119F_X448("CMCE/mceliece6960119f+X448", CMCE_MCELIECE6960119F, "X448"),
+    @SerializedName("CMCE/mceliece8192128+X25519")
+    CMCE_MCELIECE8192128_X25519("CMCE/mceliece8192128+X25519", CMCE_MCELIECE8192128, "X25519"),
+    @SerializedName("CMCE/mceliece8192128+X448")
+    CMCE_MCELIECE8192128_X448("CMCE/mceliece8192128+X448", CMCE_MCELIECE8192128, "X448"),
+    @SerializedName("CMCE/mceliece8192128f+X25519")
+    CMCE_MCELIECE8192128F_X25519("CMCE/mceliece8192128f+X25519", CMCE_MCELIECE8192128F, "X25519"),
+    @SerializedName("CMCE/mceliece8192128f+X448")
+    CMCE_MCELIECE8192128F_X448("CMCE/mceliece8192128f+X448", CMCE_MCELIECE8192128F, "X448"),
+    @SerializedName("HQC/hqc128+X25519")
+    HQC_HQC128_X25519("HQC/hqc128+X25519", HQC_HQC128, "X25519"),
+    @SerializedName("HQC/hqc128+X448")
+    HQC_HQC128_X448("HQC/hqc128+X448", HQC_HQC128, "X448"),
+    @SerializedName("HQC/hqc192+X25519")
+    HQC_HQC192_X25519("HQC/hqc192+X25519", HQC_HQC192, "X25519"),
+    @SerializedName("HQC/hqc192+X448")
+    HQC_HQC192_X448("HQC/hqc192+X448", HQC_HQC192, "X448"),
+    @SerializedName("HQC/hqc256+X25519")
+    HQC_HQC256_X25519("HQC/hqc256+X25519", HQC_HQC256, "X25519"),
+    @SerializedName("HQC/hqc256+X448")
+    HQC_HQC256_X448("HQC/hqc256+X448", HQC_HQC256, "X448"),
+    @SerializedName("NTRULPRIME/ntrulpr653+X25519")
+    NTRULPRIME_NTRULPR653_X25519("NTRULPRIME/ntrulpr653+X25519", NTRULPRIME_NTRULPR653, "X25519"),
+    @SerializedName("NTRULPRIME/ntrulpr653+X448")
+    NTRULPRIME_NTRULPR653_X448("NTRULPRIME/ntrulpr653+X448", NTRULPRIME_NTRULPR653, "X448"),
+    @SerializedName("NTRULPRIME/ntrulpr761+X25519")
+    NTRULPRIME_NTRULPR761_X25519("NTRULPRIME/ntrulpr761+X25519", NTRULPRIME_NTRULPR761, "X25519"),
+    @SerializedName("NTRULPRIME/ntrulpr761+X448")
+    NTRULPRIME_NTRULPR761_X448("NTRULPRIME/ntrulpr761+X448", NTRULPRIME_NTRULPR761, "X448"),
+    @SerializedName("NTRULPRIME/ntrulpr857+X25519")
+    NTRULPRIME_NTRULPR857_X25519("NTRULPRIME/ntrulpr857+X25519", NTRULPRIME_NTRULPR857, "X25519"),
+    @SerializedName("NTRULPRIME/ntrulpr857+X448")
+    NTRULPRIME_NTRULPR857_X448("NTRULPRIME/ntrulpr857+X448", NTRULPRIME_NTRULPR857, "X448"),
+    @SerializedName("NTRULPRIME/ntrulpr953+X25519")
+    NTRULPRIME_NTRULPR953_X25519("NTRULPRIME/ntrulpr953+X25519", NTRULPRIME_NTRULPR953, "X25519"),
+    @SerializedName("NTRULPRIME/ntrulpr953+X448")
+    NTRULPRIME_NTRULPR953_X448("NTRULPRIME/ntrulpr953+X448", NTRULPRIME_NTRULPR953, "X448"),
+    @SerializedName("NTRULPRIME/ntrulpr1013+X25519")
+    NTRULPRIME_NTRULPR1013_X25519("NTRULPRIME/ntrulpr1013+X25519", NTRULPRIME_NTRULPR1013, "X25519"),
+    @SerializedName("NTRULPRIME/ntrulpr1013+X448")
+    NTRULPRIME_NTRULPR1013_X448("NTRULPRIME/ntrulpr1013+X448", NTRULPRIME_NTRULPR1013, "X448"),
+    @SerializedName("NTRULPRIME/ntrulpr1277+X25519")
+    NTRULPRIME_NTRULPR1277_X25519("NTRULPRIME/ntrulpr1277+X25519", NTRULPRIME_NTRULPR1277, "X25519"),
+    @SerializedName("NTRULPRIME/ntrulpr1277+X448")
+    NTRULPRIME_NTRULPR1277_X448("NTRULPRIME/ntrulpr1277+X448", NTRULPRIME_NTRULPR1277, "X448"),
+    @SerializedName("SNTRUPRIME/sntrup653+X25519")
+    SNTRUPRIME_SNTRUP653_X25519("SNTRUPRIME/sntrup653+X25519", SNTRUPRIME_SNTRUP653, "X25519"),
+    @SerializedName("SNTRUPRIME/sntrup653+X448")
+    SNTRUPRIME_SNTRUP653_X448("SNTRUPRIME/sntrup653+X448", SNTRUPRIME_SNTRUP653, "X448"),
+    @SerializedName("SNTRUPRIME/sntrup761+X25519")
+    SNTRUPRIME_SNTRUP761_X25519("SNTRUPRIME/sntrup761+X25519", SNTRUPRIME_SNTRUP761, "X25519"),
+    @SerializedName("SNTRUPRIME/sntrup761+X448")
+    SNTRUPRIME_SNTRUP761_X448("SNTRUPRIME/sntrup761+X448", SNTRUPRIME_SNTRUP761, "X448"),
+    @SerializedName("SNTRUPRIME/sntrup857+X25519")
+    SNTRUPRIME_SNTRUP857_X25519("SNTRUPRIME/sntrup857+X25519", SNTRUPRIME_SNTRUP857, "X25519"),
+    @SerializedName("SNTRUPRIME/sntrup857+X448")
+    SNTRUPRIME_SNTRUP857_X448("SNTRUPRIME/sntrup857+X448", SNTRUPRIME_SNTRUP857, "X448"),
+    @SerializedName("SNTRUPRIME/sntrup953+X25519")
+    SNTRUPRIME_SNTRUP953_X25519("SNTRUPRIME/sntrup953+X25519", SNTRUPRIME_SNTRUP953, "X25519"),
+    @SerializedName("SNTRUPRIME/sntrup953+X448")
+    SNTRUPRIME_SNTRUP953_X448("SNTRUPRIME/sntrup953+X448", SNTRUPRIME_SNTRUP953, "X448"),
+    @SerializedName("SNTRUPRIME/sntrup1013+X25519")
+    SNTRUPRIME_SNTRUP1013_X25519("SNTRUPRIME/sntrup1013+X25519", SNTRUPRIME_SNTRUP1013, "X25519"),
+    @SerializedName("SNTRUPRIME/sntrup1013+X448")
+    SNTRUPRIME_SNTRUP1013_X448("SNTRUPRIME/sntrup1013+X448", SNTRUPRIME_SNTRUP1013, "X448"),
+    @SerializedName("SNTRUPRIME/sntrup1277+X25519")
+    SNTRUPRIME_SNTRUP1277_X25519("SNTRUPRIME/sntrup1277+X25519", SNTRUPRIME_SNTRUP1277, "X25519"),
+    @SerializedName("SNTRUPRIME/sntrup1277+X448")
+    SNTRUPRIME_SNTRUP1277_X448("SNTRUPRIME/sntrup1277+X448", SNTRUPRIME_SNTRUP1277, "X448"),
+    @SerializedName("ML-KEM-512+X25519")
+    ML_KEM_512_X25519("ML-KEM-512+X25519", ML_KEM_512, "X25519"),
+    @SerializedName("ML-KEM-512+X448")
+    ML_KEM_512_X448("ML-KEM-512+X448", ML_KEM_512, "X448"),
+    @SerializedName("ML-KEM-768+X25519")
+    ML_KEM_768_X25519("ML-KEM-768+X25519", ML_KEM_768, "X25519"),
+    @SerializedName("ML-KEM-768+X448")
+    ML_KEM_768_X448("ML-KEM-768+X448", ML_KEM_768, "X448"),
+    @SerializedName("ML-KEM-1024+X25519")
+    ML_KEM_1024_X25519("ML-KEM-1024+X25519", ML_KEM_1024, "X25519"),
+    @SerializedName("ML-KEM-1024+X448")
+    ML_KEM_1024_X448("ML-KEM-1024+X448", ML_KEM_1024, "X448");
 
     private final String identifier;
     private final String jcaName;
     private final String provider;
     private final AlgorithmParameterSpec parameterSpec;
+    private final KemAlgorithm postQuantumComponent;
+    private final String classicalAlgorithm;
+    private final boolean nativeHybrid;
 
     KemAlgorithm(String identifier, String jcaName, String provider, AlgorithmParameterSpec parameterSpec) {
         this.identifier = identifier;
         this.jcaName = jcaName;
         this.provider = provider;
         this.parameterSpec = parameterSpec;
+        this.postQuantumComponent = null;
+        this.classicalAlgorithm = null;
+        this.nativeHybrid = false;
+    }
+
+    KemAlgorithm(String identifier, KemAlgorithm postQuantumComponent, String classicalAlgorithm) {
+        this.identifier = identifier;
+        this.jcaName = postQuantumComponent.identifier.equals("ML-KEM-768") && classicalAlgorithm.equals("X25519")
+                ? "MLKEM768-X25519-SHA3-256"
+                : postQuantumComponent.identifier.equals("ML-KEM-1024") && classicalAlgorithm.equals("X448")
+                ? "MLKEM1024-X448-SHA3-256" : postQuantumComponent.jcaName;
+        this.nativeHybrid = !jcaName.equals(postQuantumComponent.jcaName);
+        this.provider = nativeHybrid ? "BC" : postQuantumComponent.provider;
+        this.parameterSpec = nativeHybrid ? null : postQuantumComponent.parameterSpec;
+        this.postQuantumComponent = postQuantumComponent;
+        this.classicalAlgorithm = classicalAlgorithm;
+    }
+
+    public String classicalAlgorithm() {
+        return classicalAlgorithm;
+    }
+
+    public boolean nativeHybrid() {
+        return nativeHybrid;
+    }
+
+    public boolean hybrid() {
+        return postQuantumComponent != null;
+    }
+
+    public KemAlgorithm postQuantumComponent() {
+        return hybrid() ? postQuantumComponent : this;
     }
 
     public String identifier() {

@@ -32,11 +32,13 @@ final class AlgorithmConfigTest {
     }
 
     @Test
-    void newConfigsAndDefaultSuiteUseMlKem768() {
+    void newConfigsAndDefaultSuiteUseHybridAlgorithms() {
         Krypt04McgConfig config = JsonSupport.prettyGson().fromJson("{}", Krypt04McgConfig.class);
-        assertEquals(KemAlgorithm.ML_KEM_768, config.kemAlgorithm);
-        assertEquals(KemAlgorithm.ML_KEM_768, config.ephemeralKemAlgorithm);
-        assertEquals("ML-KEM-768", AlgorithmSuite.defaults().kem());
+        assertEquals(KemAlgorithm.ML_KEM_768_X25519, config.kemAlgorithm);
+        assertEquals(KemAlgorithm.ML_KEM_768_X25519, config.ephemeralKemAlgorithm);
+        assertEquals(SignatureAlgorithm.MLDSA65_ED25519_SHA512, config.signatureAlgorithm);
+        assertEquals("MLDSA65-Ed25519-SHA512", AlgorithmSuite.defaults().signature());
+        assertEquals("ML-KEM-768+X25519", AlgorithmSuite.defaults().kem());
     }
 
     @ParameterizedTest

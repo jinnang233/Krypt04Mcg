@@ -40,8 +40,8 @@ public class Krypt04McgConfig {
     public java.util.List<String> shadowListenRegexes = new java.util.ArrayList<>(
             java.util.List.of("^<(?<player>[^>]+)>\\s*(?<message>.*)$"));
     public String shadowListenRegex = "^<(?<player>[^>]+)>\\s*(?<message>.*)$";
-    public KemAlgorithm kemAlgorithm = KemAlgorithm.ML_KEM_768;
-    public KemAlgorithm ephemeralKemAlgorithm = KemAlgorithm.ML_KEM_768;
-    public SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.FALCON_512;
+    public KemAlgorithm kemAlgorithm = KemAlgorithm.ML_KEM_768_X25519;
+    public KemAlgorithm ephemeralKemAlgorithm = KemAlgorithm.ML_KEM_768_X25519;
+    public SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.MLDSA65_ED25519_SHA512;
     public AeadAlgorithm aeadAlgorithm = AeadAlgorithm.AES_256_GCM;
 }
