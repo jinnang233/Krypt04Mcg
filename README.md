@@ -45,17 +45,25 @@ This implementation targets:
 
 - Minecraft Java `26.3`
 - Fabric Loader `0.19.5`
-- Fabric API `0.161.0+26.3`
-- Loom `1.17.20`
+- Fabric API `0.162.0+26.3`
+- Loom `1.18.2`
+- Gradle `9.8.0`
+- ModDevGradle `2.0.148`
+- JUnit `6.1.3`
 - NeoForge `26.3.0.52-beta` (separate client build)
 - Bouncy Castle `1.86`
 - Java `25`
 
+Dependency updates use the latest published stable versions compatible with Minecraft 26.3; snapshot, alpha, beta and release-candidate versions are excluded except for NeoForge.
+
 The NeoForge build shares the protocol, cryptography, and storage code with Fabric. It requires no server installation for chat transport. Custom payload and public-key sharing still require a server relay that advertises the corresponding channels.
 
-NeoForge's optional Cloth Config integration uses `26.3.158` for Minecraft 26.3 and detects its NeoForge mod ID, `cloth_config`. Install Cloth Config separately to enable saved settings and the config screen. The mod starts with default settings when Cloth Config is absent.
+NeoForge's optional Cloth Config integration uses `26.3.159` for Minecraft 26.3 and detects its NeoForge mod ID, `cloth_config`. Install Cloth Config separately to enable saved settings and the config screen. The mod starts with default settings when Cloth Config is absent.
 
 ## Build
+
+Use an installed Gradle 9.8.0 for these commands. CI installs the same stable version;
+Gradle Wrapper files are managed separately.
 
 ```bash
 gradle build
@@ -124,6 +132,8 @@ config/krypt04mcg/accounts/<minecraft-uuid>/
 
 Private and public key material are stored separately and scoped to the active Minecraft account. Private keys, trust bindings, session secrets, and enabled conversation history are encrypted with AES-256-GCM. On Windows, the storage master key is protected with per-user DPAPI; other platforms use an explicitly owner-only master-key file. Sensitive writes are atomic and owner-only permissions are applied where the platform supports them. Public-key records include algorithm, owner, UUID, a full SHA-256 fingerprint, creation time, and Base64URL key data.
 `/k04m key export` writes your shareable public key JSON inside the active account's `export` directory.
+
+The long-term KEM, ephemeral KEM, signature and AEAD configuration fields use dropdown menus on both Fabric and NeoForge.
 
 The KEM and signature selections only apply when no local key exists or when a key is explicitly regenerated. Changing the configuration never rewrites an existing key. Encryption, signing, verification, and decryption resolve algorithms from key records and packet algorithm identifiers rather than assuming the current configuration.
 

@@ -52,9 +52,13 @@ public final class ClothKrypt04McgConfig implements ConfigData {
             java.util.List.of("^<(?<player>[^>]+)>\\s*(?<message>.*)$"));
     @ConfigEntry.Gui.Excluded
     public String shadowListenRegex = "^<(?<player>[^>]+)>\\s*(?<message>.*)$";
+    @ConfigEntry.Gui.EnumHandler(option = ConfigEntry.Gui.EnumHandler.EnumDisplayOption.DROPDOWN)
     public KemAlgorithm kemAlgorithm = KemAlgorithm.ML_KEM_768_X25519;
+    @ConfigEntry.Gui.EnumHandler(option = ConfigEntry.Gui.EnumHandler.EnumDisplayOption.DROPDOWN)
     public KemAlgorithm ephemeralKemAlgorithm = KemAlgorithm.ML_KEM_768_X25519;
+    @ConfigEntry.Gui.EnumHandler(option = ConfigEntry.Gui.EnumHandler.EnumDisplayOption.DROPDOWN)
     public SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.MLDSA65_ED25519_SHA512;
+    @ConfigEntry.Gui.EnumHandler(option = ConfigEntry.Gui.EnumHandler.EnumDisplayOption.DROPDOWN)
     public AeadAlgorithm aeadAlgorithm = AeadAlgorithm.AES_256_GCM;
 
     Krypt04McgConfig toCoreConfig() {
