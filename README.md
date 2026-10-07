@@ -113,7 +113,12 @@ gradle runClient
 
 ## Install
 
-Build the project, then copy `build/libs/krypt04mcg-<version>.jar` into the client `mods` directory together with Fabric API. Cloth Config is optional and only needed for the ModMenu settings screen.
+Build the project, then copy `build/libs/krypt04mcg-<version>.jar` into the client `mods` directory together with Fabric API. Cloth Config is optional and enables saved settings and the ModMenu settings screen.
+
+Ready-to-use [configuration presets](presets/README.md) include the default suite,
+CMCE + Falcon, SLH-DSA, and a category 5 suite using BC's native hybrid KEM and
+signature implementations. Copy a preset to the instance's
+`config/krypt04mcg.json`; see the preset instructions before changing existing keys.
 
 ## Key Storage
 
