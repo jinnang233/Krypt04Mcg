@@ -76,9 +76,11 @@ public final class DecryptionHistoryService {
     }
 
     private Map<String, Instant> readHistory() throws IOException {
+        SecureFiles.rejectLinks(historyFile);
         if (!Files.exists(historyFile)) {
             return new HashMap<>();
         }
+        SecureFiles.restrictToOwner(historyFile, false);
         Map<String, Instant> history = gson.fromJson(Files.readString(historyFile, StandardCharsets.UTF_8), HISTORY_TYPE);
         return history == null ? new HashMap<>() : new HashMap<>(history);
     }

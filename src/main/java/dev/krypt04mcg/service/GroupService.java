@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import dev.krypt04mcg.model.GroupRecord;
 import dev.krypt04mcg.util.JsonSupport;
+import dev.krypt04mcg.util.SecureFiles;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -55,16 +56,17 @@ public final class GroupService {
     }
 
     private Map<String, GroupRecord> readGroups() throws IOException {
+        SecureFiles.rejectLinks(groupsFile);
         if (!Files.exists(groupsFile)) {
             return new LinkedHashMap<>();
         }
+        SecureFiles.restrictToOwner(groupsFile, false);
         Map<String, GroupRecord> groups = gson.fromJson(Files.readString(groupsFile, StandardCharsets.UTF_8), GROUPS_TYPE);
         return groups == null ? new LinkedHashMap<>() : new LinkedHashMap<>(groups);
     }
 
     private void writeGroups(Map<String, GroupRecord> groups) throws IOException {
-        Files.createDirectories(groupsFile.getParent());
-        Files.writeString(groupsFile, gson.toJson(groups, GROUPS_TYPE), StandardCharsets.UTF_8);
+        SecureFiles.atomicWrite(groupsFile, gson.toJson(groups, GROUPS_TYPE).getBytes(StandardCharsets.UTF_8));
     }
 
     private static String normalize(String name) {

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import dev.krypt04mcg.model.CachedSentMessage;
 import dev.krypt04mcg.util.JsonSupport;
+import dev.krypt04mcg.util.SecureFiles;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -39,8 +40,7 @@ public final class SentMessageCacheService {
         cache.put(messageId, new CachedSentMessage(messageId, receiver, Instant.now(), List.copyOf(fragments),
                 recipientFingerprint));
         trim(cache);
-        Files.createDirectories(cacheFile.getParent());
-        Files.writeString(cacheFile, gson.toJson(cache, CACHE_TYPE), StandardCharsets.UTF_8);
+        SecureFiles.atomicWrite(cacheFile, gson.toJson(cache, CACHE_TYPE).getBytes(StandardCharsets.UTF_8));
     }
 
     public synchronized Optional<CachedSentMessage> latest() throws IOException {
@@ -53,9 +53,11 @@ public final class SentMessageCacheService {
     }
 
     private Map<String, CachedSentMessage> readCache() throws IOException {
+        SecureFiles.rejectLinks(cacheFile);
         if (!Files.exists(cacheFile)) {
             return new LinkedHashMap<>();
         }
+        SecureFiles.restrictToOwner(cacheFile, false);
         Map<String, CachedSentMessage> cache = gson.fromJson(Files.readString(cacheFile, StandardCharsets.UTF_8), CACHE_TYPE);
         return cache == null ? new LinkedHashMap<>() : new LinkedHashMap<>(cache);
     }

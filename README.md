@@ -146,6 +146,12 @@ config/krypt04mcg/accounts/<minecraft-uuid>/
 ```
 
 Private and public key material are stored separately and scoped to the active Minecraft account. Private keys, trust bindings, session secrets, and enabled conversation history are encrypted with AES-256-GCM. On Windows, the storage master key is protected with per-user DPAPI; other platforms use an explicitly owner-only master-key file. Sensitive writes are atomic and owner-only permissions are applied where the platform supports them. Public-key records include algorithm, owner, UUID, a full SHA-256 fingerprint, creation time, and Base64URL key data.
+
+Group membership, sent ciphertext fragments, and decryption/replay history retain their
+existing JSON formats. Their files reject symbolic links in the path, including dangling
+links, and enforce owner-only access when read or written. Group and sent-fragment updates
+use private temporary files and atomic replacement where supported. If these files or their
+parent directories were previously linked, move their contents into regular local storage.
 `/k04m key export` writes your shareable public key JSON inside the active account's `export` directory.
 
 The long-term KEM, ephemeral KEM, signature and AEAD configuration fields use dropdown menus on both Fabric and NeoForge.
