@@ -3,6 +3,8 @@ package dev.krypt04mcg;
 import dev.krypt04mcg.chat.ChatReceiveHandler;
 import dev.krypt04mcg.chat.ChatConversationStore;
 import dev.krypt04mcg.chat.ChatSendService;
+import dev.krypt04mcg.chat.TransferProgressTracker;
+import dev.krypt04mcg.client.TransferProgressHud;
 import dev.krypt04mcg.client.ClientMessages;
 import dev.krypt04mcg.command.CommandRegistrar;
 import dev.krypt04mcg.config.ChatSendMode;
@@ -77,6 +79,8 @@ public final class Krypt04McgMod {
     private ChatSendService chatSendService;
     private ChatReceiveHandler chatReceiveHandler;
     private ChatConversationStore conversationStore;
+    private TransferProgressTracker transferProgress;
+    private TransferProgressHud transferProgressHud;
     private dev.krypt04mcg.service.DataTransferService dataApi;
 
     public static Krypt04McgMod instance() {
@@ -87,6 +91,9 @@ public final class Krypt04McgMod {
         instance = this;
         modBus.addListener(this::registerPayloads);
         modBus.addListener(this::registerClientPayloads);
+        modBus.addListener((net.neoforged.neoforge.client.event.RegisterGuiLayersEvent event) ->
+                event.registerAboveAll(net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, "transfer_progress"),
+                        (graphics, delta) -> renderTransferProgress(graphics)));
         container.registerExtensionPoint(IConfigScreenFactory.class, (mc, parent) ->
                 dev.krypt04mcg.config.OptionalClothConfigScreens.configScreenFactory().apply(parent));
         Krypt04McgKeyBindings.register(this, modBus);
@@ -99,6 +106,8 @@ public final class Krypt04McgMod {
         instance = this;
         config = OptionalClothConfig.loadOrDefault();
         ClientMessages.setMessagePrefix(config.messagePrefix);
+        transferProgress = new TransferProgressTracker();
+        transferProgressHud = new TransferProgressHud(transferProgress, config);
 
         PacketCodec packetCodec = new PacketCodec();
         CryptoService cryptoService = new CryptoService();
@@ -137,9 +146,9 @@ public final class Krypt04McgMod {
         chatSendService = new ChatSendService(config, keyStoreService, keyTrustService, sessionService,
                 sessionHandshakeService, sentMessageCacheService, cryptoService, packetCodec,
                 fragmentService, this::sendChatLine, this::system, client::getConnection);
+        chatSendService.setProgressListener(transferProgress);
         applyChatSender();
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> chatSendService.tick());
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> chatSendService.clearPending());
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> clearChatTransfers());
         OptionalClothConfig.registerSaveListener(updated -> {
             ClientMessages.setMessagePrefix(updated.messagePrefix);
             applyChatSender();
@@ -147,6 +156,11 @@ public final class Krypt04McgMod {
         chatReceiveHandler = new ChatReceiveHandler(config, keyStoreService, keyTrustService, cryptoService,
                 packetCodec, fragmentService, reassembler, decryptionHistoryService, sessionService,
                 sessionHandshakeService, chatSendService::sendPacket, this::system, conversationStore::incoming);
+        chatReceiveHandler.setProgressListener(transferProgress);
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            chatSendService.tick();
+            chatReceiveHandler.tick();
+        });
         var optionalSharing = new dev.krypt04mcg.client.OptionalSharing(config, keyStoreService,
                 keyTrustService, cryptoService, root);
         optionalSharing.register();
@@ -182,7 +196,10 @@ public final class Krypt04McgMod {
                     .ifPresent(value -> chatReceiveHandler.handle(null, value.message()));
             if (shadowMessage.map(value -> chatReceiveHandler.shouldHide(value.message())).orElse(false)) event.setCanceled(true);
         });
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> showDisclaimer(Minecraft.getInstance()));
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> {
+            clearChatTransfers();
+            showDisclaimer(Minecraft.getInstance());
+        });
         LOGGER.info("Krypt04Mcg initialized");
     }
 
@@ -207,30 +224,27 @@ public final class Krypt04McgMod {
         Minecraft client = Minecraft.getInstance();
         String line = chatSendFragment.fragment();
         if (!fragmentService.isFragment(line, config.packetPrefix)) {
-            LOGGER.warn("Refusing to send non-Krypt04Mcg chat line");
-            return;
+            throw new IllegalArgumentException("Invalid Krypt04Mcg chat fragment");
         }
-        if (client.getConnection() != null) {
-            client.getConnection().sendChat(line);
-        }
+        if (client.getConnection() == null) throw new IllegalStateException("Not connected to a server");
+        client.getConnection().sendChat(line);
     }
 
     private void sendServerCommand(ChatSendFragment chatSendFragment) {
         Minecraft client = Minecraft.getInstance();
         String fragment = chatSendFragment.fragment();
         if (!fragmentService.isFragment(fragment, config.packetPrefix)) {
-            LOGGER.warn("Refusing to send non-Krypt04Mcg command fragment");
-            return;
+            throw new IllegalArgumentException("Invalid Krypt04Mcg command fragment");
         }
-        if (client.getConnection() != null) {
-            client.getConnection().sendCommand(formatServerCommand(config.serverCommandTemplate, chatSendFragment));
-        }
+        if (client.getConnection() == null) throw new IllegalStateException("Not connected to a server");
+        client.getConnection().sendCommand(formatServerCommand(config.serverCommandTemplate, chatSendFragment));
     }
 
     private void applyChatSender() {
         if (chatSendService == null) {
             return;
         }
+        clearChatTransfers();
         if (config.chatSendMode == ChatSendMode.SERVER_COMMAND) {
             chatSendService.setChatSender(this::sendServerCommand);
         } else if (config.chatSendMode == ChatSendMode.CUSTOM_PAYLOAD) {
@@ -243,15 +257,24 @@ public final class Krypt04McgMod {
     private void sendCustomPayload(ChatSendFragment chatSendFragment) {
         String fragment = chatSendFragment.fragment();
         if (!fragmentService.isFragment(fragment, config.packetPrefix)) {
-            LOGGER.warn("Refusing to send non-Krypt04Mcg payload fragment");
-            return;
+            throw new IllegalArgumentException("Invalid Krypt04Mcg payload fragment");
         }
         if (canSend(NeoChatPayload.TYPE)) {
             ClientPacketDistributor.sendToServer(new NeoChatPayload(
                     chatSendFragment.receiver(), fragment, chatSendFragment.version()));
-        } else if (config.verboseMessages) {
-            system("Krypt04Mcg payload channel is not available on this server: " + ChatFragmentPayload.CHANNEL);
+        } else {
+            throw new IllegalStateException("Krypt04Mcg payload channel is not available on this server: " + ChatFragmentPayload.CHANNEL);
         }
+    }
+
+    private void clearChatTransfers() {
+        chatSendService.clearPending();
+        if (chatReceiveHandler != null) chatReceiveHandler.clearPending();
+        transferProgress.clear();
+    }
+
+    public void renderTransferProgress(net.minecraft.client.gui.GuiGraphicsExtractor graphics) {
+        if (transferProgressHud != null) transferProgressHud.render(graphics);
     }
 
     private void registerPayloads(RegisterPayloadHandlersEvent event) {

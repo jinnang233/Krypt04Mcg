@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.28.0 — 2026-10-08
+
+### Transfer progress
+
+- Replace per-fragment chat notices with send/receive HUD progress bars on Fabric and NeoForge, including the encrypted chat screen. Show the peer, percentage, fragment counts and queued/transferring/verifying/completed/failed/timed-out/cancelled state; completed results disappear after three seconds.
+- Keep `showProgress` and `showReceiveProgress` as independent switches and respect the hidden HUD. Show at most two transfers per direction, with bounded state separated between sends and receives.
+- Count only successful local transport submissions as sent. Unsupported custom-payload channels now fail and cancel remaining queued work, instead of silently reporting success. Sent progress does not acknowledge delivery to the other player.
+- Report receive completion only after decoding, identity checks, decryption, freshness and replay/session validation. Duplicate fragments do not inflate counts; expiry is processed on idle ticks and attributed to the correct sender.
+- Local plaintext conversation entries still represent accepted/queued sends, not delivery receipts. The HUD reports their subsequent transport state.
+
+### Security and upgrade notes
+
+- Limit chat reassembly to 16 pending messages per transport sender, case-insensitively, within the existing 128-message global limit. Unbound shadow-chat fragments share one bounded bucket. New IDs cannot evict admitted messages.
+- Clear incoming assemblies, outgoing queues and progress on disconnect/join and configuration saves. Hexadecimal message ID case aliases share one assembly.
+- No packet layout, cryptographic algorithm, JSON format or stream API change. These progress bars cover encrypted chat/session/exchange fragments; raw API and built-in file streams retain their existing behavior.
+- Relay plugin 1.8.3 adds corresponding vanilla-chat sender and buffered-text quotas. k04m-reverseforward 1.3.2 remains compatible.
+
+Details and validation limits: [chat progress and sender quotas](docs/security/2026-10-08-chat-progress-and-quotas.md). Actual game rendering/networking, Windows permissions, the full high-cost PQ matrix and existing GitHub dependency alerts are not covered by this validation.
+
 ## 0.27.5 — 2026-10-08
 
 ### Security and reliability

@@ -18,6 +18,47 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 final class FragmentServiceTest {
     @Test
+    void senderFloodCannotConsumeOtherSendersAssemblyCapacity() {
+        FragmentReassembler reassembler = new FragmentReassembler();
+        for (int i = 0; i < 128; i++) {
+            reassembler.accept(new Fragment("mallory:" + i, 0, 2, "AA"), i % 2 == 0 ? "Mallory" : "MALLORY");
+        }
+        assertEquals(FragmentReassembler.DEFAULT_MAX_MESSAGES_PER_SENDER, reassembler.pendingMessages());
+        reassembler.accept(new Fragment("alice:message", 0, 2, "AQ"), "Alice");
+        assertTrue(reassembler.progress("alice:message").isPresent());
+        assertArrayEquals(new byte[]{1, 2, 3}, reassembler.accept(new Fragment("alice:message", 1, 2, "ID"), "ALICE").orElseThrow());
+    }
+
+    @Test
+    void senderQuotaIsReleasedOnCompletionExpiryAndDisconnectClear() {
+        MutableClock clock = new MutableClock();
+        FragmentReassembler reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 128, 10);
+        for (int i = 0; i < 16; i++) reassembler.accept(new Fragment("alice:" + i, 0, 2, "AQ"), "Alice");
+        reassembler.accept(new Fragment("alice:overflow", 0, 2, "AQ"), "Alice");
+        assertTrue(reassembler.progress("alice:overflow").isEmpty());
+        assertArrayEquals(new byte[]{1, 2, 3}, reassembler.accept(new Fragment("alice:0", 1, 2, "ID"), "Alice").orElseThrow());
+        reassembler.accept(new Fragment("alice:overflow", 0, 2, "AQ"), "Alice");
+        assertTrue(reassembler.progress("alice:overflow").isPresent());
+        clock.advance(Duration.ofSeconds(10));
+        assertEquals(16, reassembler.cleanup());
+        reassembler.accept(new Fragment("alice:new", 0, 2, "AQ"), "Alice");
+        assertEquals(1, reassembler.pendingMessages());
+        reassembler.clear();
+        assertEquals(0, reassembler.pendingMessages());
+        assertTrue(reassembler.accept(new Fragment("alice:new", 1, 2, "ID"), "Alice").isEmpty(),
+                "Fragments from a retired connection must not complete on the new one");
+    }
+
+    @Test
+    void senderCannotTakeOverAnotherSourcesAssembly() {
+        FragmentReassembler reassembler = new FragmentReassembler();
+        reassembler.accept(new Fragment("id", 0, 2, "AQ"), "Alice");
+        assertThrows(IllegalArgumentException.class,
+                () -> reassembler.accept(new Fragment("id", 1, 2, "ID"), "Mallory"));
+        assertEquals(1, reassembler.progress("id").orElseThrow().received());
+        assertArrayEquals(new byte[]{1, 2, 3}, reassembler.accept(new Fragment("id", 1, 2, "ID"), "Alice").orElseThrow());
+    }
+    @Test
     void newFragmentsCannotKeepAnIncompleteMessageAlivePastItsDeadline() {
         MutableClock clock = new MutableClock();
         FragmentReassembler reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 2, 10);

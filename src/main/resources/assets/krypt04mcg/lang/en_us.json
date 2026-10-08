@@ -151,7 +151,7 @@
   "text.krypt04mcg.gui.no_players": "No imported keys; type a player name on the right.",
   "text.krypt04mcg.gui.empty_conversation": "No messages yet.",
   "text.krypt04mcg.gui.target": "Target: %s",
-  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Sent encrypted message to %s.",
+  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Encrypted message queued for %s.",
   "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s (encrypted): %s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] Session material prepared for %s.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] Fragment sent.",
@@ -882,5 +882,15 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192F_WITH_SHAKE256": "SLH-DSA-SHAKE-192F-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192S_WITH_SHAKE256": "SLH-DSA-SHAKE-192S-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256F_WITH_SHAKE256": "SLH-DSA-SHAKE-256F-WITH-SHAKE256",
-  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256"
+  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256",
+  "text.krypt04mcg.progress.send": "Sending to %s",
+  "text.krypt04mcg.progress.receive": "Receiving from %s",
+  "text.krypt04mcg.progress.queued": "Queued",
+  "text.krypt04mcg.progress.transferring": "Transferring",
+  "text.krypt04mcg.progress.verifying": "Verifying",
+  "text.krypt04mcg.progress.send_complete": "Sent",
+  "text.krypt04mcg.progress.receive_complete": "Received",
+  "text.krypt04mcg.progress.failed": "Failed",
+  "text.krypt04mcg.progress.timed_out": "Timed out",
+  "text.krypt04mcg.progress.cancelled": "Cancelled"
 }

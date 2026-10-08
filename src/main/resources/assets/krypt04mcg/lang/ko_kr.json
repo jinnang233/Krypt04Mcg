@@ -155,7 +155,7 @@
 
   "text.krypt04mcg.gui.target": "대상: %s",
 
-  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s에게 암호화 메시지를 보냈습니다.",
+  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] %s에게 보낼 암호화 메시지가 대기열에 추가되었습니다.",
   "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s (암호화): %s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] %s용 세션 자료를 준비했습니다.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] 조각을 보냈습니다.",
@@ -859,5 +859,15 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192F_WITH_SHAKE256": "SLH-DSA-SHAKE-192F-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192S_WITH_SHAKE256": "SLH-DSA-SHAKE-192S-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256F_WITH_SHAKE256": "SLH-DSA-SHAKE-256F-WITH-SHAKE256",
-  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256"
+  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256",
+  "text.krypt04mcg.progress.send": "%s에게 전송",
+  "text.krypt04mcg.progress.receive": "%s에게서 수신",
+  "text.krypt04mcg.progress.queued": "대기 중",
+  "text.krypt04mcg.progress.transferring": "전송 중",
+  "text.krypt04mcg.progress.verifying": "검증 중",
+  "text.krypt04mcg.progress.send_complete": "전송 완료",
+  "text.krypt04mcg.progress.receive_complete": "수신 완료",
+  "text.krypt04mcg.progress.failed": "실패",
+  "text.krypt04mcg.progress.timed_out": "시간 초과",
+  "text.krypt04mcg.progress.cancelled": "취소됨"
 }

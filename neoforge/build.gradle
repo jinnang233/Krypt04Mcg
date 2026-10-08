@@ -52,6 +52,10 @@ tasks.named('compileTestJava') {
     source(fileTree('../src/test/java') {
         include 'dev/krypt04mcg/chat/HandshakeStateMachineTest.java'
         include 'dev/krypt04mcg/chat/ChatSessionIdentityTest.java'
+        include 'dev/krypt04mcg/chat/FragmentSendQueueTest.java'
+        include 'dev/krypt04mcg/chat/TransferProgressTrackerTest.java'
+        include 'dev/krypt04mcg/chat/ChatReceiveProgressTest.java'
+        include 'dev/krypt04mcg/fragment/FragmentServiceTest.java'
         include 'dev/krypt04mcg/service/HandshakeFailureRecoveryTest.java'
         include 'dev/krypt04mcg/service/HandshakeEpochCommitTest.java'
         include 'dev/krypt04mcg/service/SessionServiceTest.java'

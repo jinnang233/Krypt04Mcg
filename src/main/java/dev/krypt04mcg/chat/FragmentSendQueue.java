@@ -6,6 +6,8 @@ import dev.krypt04mcg.config.ChatSendMode;
 
 import java.util.ArrayDeque;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -17,6 +19,8 @@ final class FragmentSendQueue {
     private final Supplier<?> connection;
     private final LongSupplier clock;
     private long nextSend;
+    private long nextBatchId;
+    private Consumer<TransferProgressTracker.Update> progress = ignored -> {};
 
     FragmentSendQueue(Supplier<?> connection, LongSupplier clock) {
         this.connection = connection;
@@ -31,10 +35,18 @@ final class FragmentSendQueue {
         if (fragments.size() > MAX_PENDING_FRAGMENTS - pending.size()) {
             throw new IllegalStateException("Encrypted message send queue is full");
         }
+        if (fragments.isEmpty()) return;
+        Objects.requireNonNull(sender);
+        Batch batch = new Batch(Long.toUnsignedString(++nextBatchId), receiver, fragments.size());
         for (String fragment : fragments) {
             pending.addLast(new Delivery(current, sender,
-                    new ChatSendFragment(receiver, fragment, EncryptedPacket.VERSION)));
+                    new ChatSendFragment(receiver, fragment, EncryptedPacket.VERSION), batch));
         }
+        report(batch, TransferProgressTracker.Status.QUEUED);
+    }
+
+    void setProgressListener(Consumer<TransferProgressTracker.Update> progress) {
+        this.progress = Objects.requireNonNull(progress);
     }
 
     boolean tick(ChatSendMode mode, int delayMillis) {
@@ -51,13 +63,27 @@ final class FragmentSendQueue {
         try {
             delivery.sender.accept(delivery.fragment);
         } catch (RuntimeException e) {
-            clear();
+            report(delivery.batch, TransferProgressTracker.Status.FAILED);
+            cancelPending(delivery.batch);
             throw e;
         }
+        delivery.batch.sent++;
+        report(delivery.batch, delivery.batch.sent == delivery.batch.total
+                ? TransferProgressTracker.Status.COMPLETE : TransferProgressTracker.Status.TRANSFERRING);
         return true;
     }
 
     void clear() {
+        cancelPending(null);
+    }
+
+    private void cancelPending(Batch failed) {
+        var cancelled = new LinkedHashSet<Batch>();
+        for (Delivery delivery : pending) {
+            if (delivery.batch != failed && cancelled.add(delivery.batch)) {
+                report(delivery.batch, TransferProgressTracker.Status.CANCELLED);
+            }
+        }
         pending.clear();
         nextSend = clock.getAsLong();
     }
@@ -66,5 +92,23 @@ final class FragmentSendQueue {
         if (!pending.isEmpty() && pending.peekFirst().connection != current) clear();
     }
 
-    private record Delivery(Object connection, Consumer<ChatSendFragment> sender, ChatSendFragment fragment) {}
+    private void report(Batch batch, TransferProgressTracker.Status status) {
+        progress.accept(new TransferProgressTracker.Update(TransferProgressTracker.Direction.SEND,
+                batch.id, batch.receiver, batch.sent, batch.total, status));
+    }
+
+    private static final class Batch {
+        private final String id;
+        private final String receiver;
+        private final int total;
+        private int sent;
+
+        private Batch(String id, String receiver, int total) {
+            this.id = id;
+            this.receiver = receiver;
+            this.total = total;
+        }
+    }
+
+    private record Delivery(Object connection, Consumer<ChatSendFragment> sender, ChatSendFragment fragment, Batch batch) {}
 }

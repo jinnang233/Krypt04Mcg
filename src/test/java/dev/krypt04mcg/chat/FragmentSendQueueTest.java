@@ -97,4 +97,58 @@ final class FragmentSendQueueTest {
         assertTrue(queue.tick(0));
         assertEquals(List.of("recovered"), sent);
     }
+
+    @Test void progressCountsOnlySuccessfulSubmissionsPerQueuedMessage() {
+        var updates = new ArrayList<TransferProgressTracker.Update>();
+        queue.setProgressListener(updates::add);
+        enqueue("one", "two");
+        queue.enqueue("alice", List.of("other"), value -> sent.add(value.fragment()));
+        assertEquals(0, updates.getFirst().completed());
+        assertEquals(TransferProgressTracker.Status.QUEUED, updates.getFirst().status());
+        assertTrue(queue.tick(250));
+        var first = updates.getLast();
+        assertEquals(1, first.completed());
+        assertEquals(50, first.percent());
+        assertEquals(TransferProgressTracker.Status.TRANSFERRING, first.status());
+        assertFalse(queue.tick(250));
+        assertEquals(first, updates.getLast());
+        now.set(250_000_000L);
+        assertTrue(queue.tick(250));
+        assertEquals(100, updates.getLast().percent());
+        assertEquals(TransferProgressTracker.Status.COMPLETE, updates.getLast().status());
+        now.set(500_000_000L);
+        assertTrue(queue.tick(250));
+        assertNotEquals(first.id(), updates.getLast().id());
+        assertEquals("alice", updates.getLast().peer());
+    }
+
+    @Test void transportFailureDoesNotCountFailedSubmissionAndCancelsOtherBatchesOnce() {
+        var updates = new ArrayList<TransferProgressTracker.Update>();
+        queue.setProgressListener(updates::add);
+        queue.enqueue("bob", List.of("one", "fails", "must-not-send"), value -> {
+            if (value.fragment().equals("fails")) throw new IllegalStateException("channel unavailable");
+            sent.add(value.fragment());
+        });
+        enqueue("other", "cancelled");
+        assertTrue(queue.tick(0));
+        assertThrows(IllegalStateException.class, () -> queue.tick(0));
+        var failure = updates.stream().filter(p -> p.status() == TransferProgressTracker.Status.FAILED).toList();
+        assertEquals(1, failure.size());
+        assertEquals(1, failure.getFirst().completed());
+        assertEquals(1, updates.stream().filter(p -> p.status() == TransferProgressTracker.Status.CANCELLED).count());
+        assertFalse(queue.tick(0));
+        assertEquals(List.of("one"), sent);
+    }
+
+    @Test void switchingConnectionsCancelsProgressForEveryPendingBatch() {
+        var updates = new ArrayList<TransferProgressTracker.Update>();
+        queue.setProgressListener(updates::add);
+        enqueue("one", "two");
+        enqueue("other");
+        assertTrue(queue.tick(0));
+        connection.set(new Object());
+        assertFalse(queue.tick(0));
+        assertEquals(2, updates.stream().filter(p -> p.status() == TransferProgressTracker.Status.CANCELLED).count());
+        assertEquals(List.of("one"), sent);
+    }
 }

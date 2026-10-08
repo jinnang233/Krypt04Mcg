@@ -89,14 +89,14 @@ Linux, macOS or Windows platform.
 
 ## Releases
 
-Current version: **0.27.5** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
-for the security fixes, receive deadlines, and storage migration notes in this release.
+Current version: **0.28.0** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
+for the new progress HUD, sender quotas, and upgrade notes in this release.
 
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag -a v0.27.5 -m "Release 0.27.5"
-git push origin v0.27.5
+git tag -a v0.28.0 -m "Release 0.28.0"
+git push origin v0.28.0
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -110,7 +110,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.27.5.jar.sign krypt04mcg-0.27.5.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.28.0.jar.sign krypt04mcg-0.28.0.jar
 ```
 
 ## License
@@ -363,7 +363,7 @@ Each chat fragment has this form:
 [KRYPT04MCG] <messageIdHex> <index> <total> <payload>
 ```
 
-The receiver supports out-of-order fragments, ignores duplicate fragments, cleans up timed-out partial messages, caps pending messages, and rejects excessive fragment counts.
+The receiver supports out-of-order fragments, ignores duplicates and expires assemblies two minutes after their first fragment. Network receive admission is bounded to 128 pending messages globally and 16 per transport sender, ignoring name case; unbound shadow chat shares one bucket. New IDs cannot evict admitted messages. Hex ID case aliases share an assembly. Disconnect/join and saved settings clear pending transfers.
 
 ## Optional Payload Channel
 
@@ -400,6 +400,10 @@ Client send mode `CUSTOM_PAYLOAD` only sends on this channel when Fabric reports
 ## GUI Chat
 
 The encrypted chat panel can be opened with the configured Krypt04Mcg key binding. It lists imported players, recent peers, and configured groups. Group targets are shown with a `#` prefix and send through the existing group fan-out flow.
+
+Sending and receiving encrypted chat/session/exchange fragments now show progress bars at the upper right, both in the game HUD and in this panel. Each bar shows the peer, percentage, fragment counts and transfer state; up to two bars per direction are visible. `showProgress` and `showReceiveProgress` independently control display, and hiding the HUD also hides the bars. Results remain for up to three seconds, with active transfers prioritized.
+
+Send counts advance only after local transport submission succeeds; the final state is not a remote delivery receipt. Receive completion follows decryption, freshness and replay/session validation, rather than only assembling bytes. Missing custom-payload support now fails instead of silently appearing sent. The local plaintext notification/history still represents an accepted, queued message. Bars do not track raw API or file-stream bytes. See the [progress and sender-quota audit](docs/security/2026-10-08-chat-progress-and-quotas.md).
 
 Recent plaintext conversation history is cached locally under:
 

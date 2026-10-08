@@ -70,11 +70,13 @@ public final class ChatSendService {
         sendQueue.clear();
     }
 
+    public void setProgressListener(Consumer<TransferProgressTracker.Update> progress) {
+        sendQueue.setProgressListener(progress);
+    }
+
     public void tick() {
         try {
-            if (sendQueue.tick(config.chatSendMode, config.sendDelayMs) && config.showProgress) {
-                system.accept(ClientMessages.tr("text.krypt04mcg.fragment_sent"));
-            }
+            sendQueue.tick(config.chatSendMode, config.sendDelayMs);
         } catch (Exception e) {
             error(e);
         }
@@ -89,7 +91,7 @@ public final class ChatSendService {
                     keyStoreService.local().kemPublicKey().owner(), message, sign, config.enableCompression,
                     config.aeadAlgorithm);
             sendPacket(packet, receiver);
-            reportSentMessage(receiver, message);
+            reportQueuedMessage(receiver, message);
             return true;
         } catch (Exception e) {
             error(e);
@@ -140,7 +142,7 @@ public final class ChatSendService {
             sendPacket(packet, receiver);
             sessionService.recordSentMessage(receiver, sequence,
                     message.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
-            reportSentMessage(receiver, message);
+            reportQueuedMessage(receiver, message);
             return true;
         } catch (Exception e) {
             error(e);
@@ -238,7 +240,7 @@ public final class ChatSendService {
         }
     }
 
-    private void reportSentMessage(String receiver, String message) {
+    private void reportQueuedMessage(String receiver, String message) {
         system.accept(config.showSentPlaintext
                 ? ClientMessages.tr("text.krypt04mcg.sent_plaintext",
                         keyStoreService.local().kemPublicKey().owner(), receiver, message)

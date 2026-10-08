@@ -155,7 +155,7 @@
 
   "text.krypt04mcg.gui.target": "目标：%s",
 
-  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] 已向 %s 发送加密消息。",
+  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] 加密消息已排队，目标：%s。",
   "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s（加密）：%s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] 已为 %s 准备会话材料。",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] 分片已发送。",
@@ -886,5 +886,15 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192F_WITH_SHAKE256": "SLH-DSA-SHAKE-192F-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192S_WITH_SHAKE256": "SLH-DSA-SHAKE-192S-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256F_WITH_SHAKE256": "SLH-DSA-SHAKE-256F-WITH-SHAKE256",
-  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256"
+  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256",
+  "text.krypt04mcg.progress.send": "发送至 %s",
+  "text.krypt04mcg.progress.receive": "接收自 %s",
+  "text.krypt04mcg.progress.queued": "排队中",
+  "text.krypt04mcg.progress.transferring": "传输中",
+  "text.krypt04mcg.progress.verifying": "校验中",
+  "text.krypt04mcg.progress.send_complete": "已发送",
+  "text.krypt04mcg.progress.receive_complete": "已接收",
+  "text.krypt04mcg.progress.failed": "失败",
+  "text.krypt04mcg.progress.timed_out": "超时",
+  "text.krypt04mcg.progress.cancelled": "已取消"
 }

@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -47,6 +48,7 @@ public final class ChatReceiveHandler {
     private final Gson gson = JsonSupport.prettyGson();
     private final Consumer<String> system;
     private final BiConsumer<String, String> decryptedMessageSink;
+    private Consumer<TransferProgressTracker.Update> progress = ignored -> {};
 
     public ChatReceiveHandler(Krypt04McgConfig config, KeyStoreService keyStoreService,
                               KeyTrustService keyTrustService, CryptoService cryptoService,
@@ -68,10 +70,35 @@ public final class ChatReceiveHandler {
         this.packetSender = packetSender;
         this.system = system;
         this.decryptedMessageSink = decryptedMessageSink;
+        if (reassembler != null) reassembler.setTimeoutListener(this::timedOut);
     }
 
     public boolean shouldHide(String raw) {
         return config.hideEncryptedRawMessage && extractFragmentLine(raw).isPresent();
+    }
+
+    public void setProgressListener(Consumer<TransferProgressTracker.Update> progress) {
+        this.progress = Objects.requireNonNull(progress);
+    }
+
+    public void tick() {
+        reassembler.cleanupTimedOut();
+    }
+
+    private void timedOut(FragmentProgress timeout) {
+        int separator = timeout.messageId().indexOf(':');
+        String peer = separator < 0 ? "unknown" : timeout.messageId().substring(0, separator);
+        report(timeout.messageId(), peer.equals("signed-unbound") ? "unknown" : peer,
+                timeout.received(), timeout.total(), TransferProgressTracker.Status.TIMED_OUT);
+    }
+
+    public void clearPending() {
+        reassembler.clear();
+    }
+
+    private void report(String id, String peer, int completed, int total, TransferProgressTracker.Status status) {
+        progress.accept(new TransferProgressTracker.Update(TransferProgressTracker.Direction.RECEIVE,
+                id, peer, completed, total, status));
     }
 
     public void handle(String transportSender, String raw) {
@@ -80,34 +107,34 @@ public final class ChatReceiveHandler {
             return;
         }
         String displaySender = transportSender == null || transportSender.isBlank() ? "unknown" : transportSender;
+        String reassemblyId = null;
+        int received = 0;
+        int total = 0;
         try {
-            for (FragmentProgress timeout : reassembler.cleanupTimedOut()) {
-                if (config.showReceiveProgress) {
-                    system.accept(ClientMessages.tr("text.krypt04mcg.receive_timeout", displaySender,
-                            timeout.received(), timeout.total()));
-                }
-            }
+            tick();
             Fragment fragment = fragmentService.parse(fragmentLine.get(), config.packetPrefix);
-            String reassemblyId = normalizeTransportSender(transportSender) + ":" + fragment.messageId();
+            String source = normalizeTransportSender(transportSender);
+            reassemblyId = source + ":" + fragment.messageId().toLowerCase(Locale.ROOT);
+            total = fragment.total();
             Fragment senderBoundFragment = new Fragment(reassemblyId, fragment.index(), fragment.total(), fragment.payload());
-            Optional<byte[]> packetBytes = reassembler.accept(senderBoundFragment);
+            Optional<byte[]> packetBytes = reassembler.accept(senderBoundFragment, source);
             if (packetBytes.isEmpty()) {
-                if (config.showReceiveProgress) {
-                    reassembler.progress(reassemblyId).ifPresent(progress ->
-                            system.accept(ClientMessages.tr("text.krypt04mcg.receiving", displaySender,
-                                    progress.received(), progress.total())));
+                var counts = reassembler.progress(reassemblyId);
+                if (counts.isPresent()) {
+                    report(reassemblyId, displaySender, counts.get().received(), counts.get().total(),
+                            TransferProgressTracker.Status.TRANSFERRING);
                 }
                 return;
             }
-            if (config.showReceiveProgress) {
-                system.accept(ClientMessages.tr("text.krypt04mcg.receive_complete", displaySender));
-            }
+            received = total;
+            report(reassemblyId, displaySender, received, total, TransferProgressTracker.Status.VERIFYING);
             EncryptedPacket packet = packetCodec.decode(packetBytes.get());
             if (!fragment.messageId().equalsIgnoreCase(Hex.encode(packet.messageId()))) {
                 throw new IllegalArgumentException("Fragment message ID does not match the encrypted packet");
             }
             requireTransportIdentity(transportSender, packet);
             if (!packet.receiver().equalsIgnoreCase(keyStoreService.local().kemPublicKey().owner())) {
+                report(reassemblyId, displaySender, received, total, TransferProgressTracker.Status.CANCELLED);
                 if (config.verboseMessages) {
                     system.accept(ClientMessages.tr("text.krypt04mcg.ignored_packet", packet.receiver()));
                 }
@@ -163,6 +190,7 @@ public final class ChatReceiveHandler {
                 boolean established = sessionHandshakeService.complete(packet, exchange, sender, keyStoreService.local(),
                         config.enableCompression, config.aeadAlgorithm, packetSender);
                 decryptionHistoryService.recordSuccess(packet.sender());
+                report(reassemblyId, packet.sender(), received, total, TransferProgressTracker.Status.COMPLETE);
                 if (established) {
                     system.accept(ClientMessages.tr("text.krypt04mcg.session_accepted", packet.sender()));
                 }
@@ -183,9 +211,20 @@ public final class ChatReceiveHandler {
                             ? "text.krypt04mcg.signature.session"
                             : "text.krypt04mcg.signature.unsigned");
             decryptedMessageSink.accept(packet.sender(), plaintext);
+            report(reassemblyId, packet.sender(), received, total, TransferProgressTracker.Status.COMPLETE);
             system.accept(ClientMessages.tr("text.krypt04mcg.decrypt_display", packet.sender(),
                     signatureStatus, plaintext));
         } catch (Exception e) {
+            if (reassemblyId != null && total > 0) {
+                var counts = reassembler.progress(reassemblyId);
+                if (counts.isPresent()) {
+                    // A conflicting fragment must not turn the admitted transfer into a failure.
+                    report(reassemblyId, displaySender, counts.get().received(), counts.get().total(),
+                            TransferProgressTracker.Status.TRANSFERRING);
+                } else {
+                    report(reassemblyId, displaySender, total, total, TransferProgressTracker.Status.FAILED);
+                }
+            }
             system.accept(ClientMessages.tr("text.krypt04mcg.decrypt_invalid", displaySender, e.getMessage()));
         }
     }

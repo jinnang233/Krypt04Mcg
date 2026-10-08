@@ -155,7 +155,7 @@
 
   "text.krypt04mcg.gui.target": "Ziel: %s",
 
-  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Verschlüsselte Nachricht an %s gesendet.",
+  "text.krypt04mcg.sent_encrypted": "[Krypt04Mcg] Verschlüsselte Nachricht für %s eingereiht.",
   "text.krypt04mcg.sent_plaintext": "[Krypt04Mcg] %s → %s (verschlüsselt): %s",
   "text.krypt04mcg.session_prepared": "[Krypt04Mcg] Sitzung für %s vorbereitet.",
   "text.krypt04mcg.fragment_sent": "[Krypt04Mcg] Fragment gesendet.",
@@ -859,5 +859,15 @@
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192F_WITH_SHAKE256": "SLH-DSA-SHAKE-192F-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_192S_WITH_SHAKE256": "SLH-DSA-SHAKE-192S-WITH-SHAKE256",
   "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256F_WITH_SHAKE256": "SLH-DSA-SHAKE-256F-WITH-SHAKE256",
-  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256"
+  "text.autoconfig.krypt04mcg.option.signatureAlgorithm.SLH_DSA_SHAKE_256S_WITH_SHAKE256": "SLH-DSA-SHAKE-256S-WITH-SHAKE256",
+  "text.krypt04mcg.progress.send": "Senden an %s",
+  "text.krypt04mcg.progress.receive": "Empfang von %s",
+  "text.krypt04mcg.progress.queued": "Wartend",
+  "text.krypt04mcg.progress.transferring": "Übertragung",
+  "text.krypt04mcg.progress.verifying": "Prüfung",
+  "text.krypt04mcg.progress.send_complete": "Gesendet",
+  "text.krypt04mcg.progress.receive_complete": "Empfangen",
+  "text.krypt04mcg.progress.failed": "Fehler",
+  "text.krypt04mcg.progress.timed_out": "Zeitüberschreitung",
+  "text.krypt04mcg.progress.cancelled": "Abgebrochen"
 }

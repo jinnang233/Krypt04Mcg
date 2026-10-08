@@ -138,6 +138,10 @@ public final class Krypt04McgChatScreen extends Screen {
                     panelY + 56, 0xFFD8A657, false);
         }
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        graphics.nextStratum();
+        if (dev.krypt04mcg.Krypt04McgMod.instance() != null) {
+            dev.krypt04mcg.Krypt04McgMod.instance().renderTransferProgress(graphics);
+        }
     }
 
     @Override
