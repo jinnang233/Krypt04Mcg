@@ -9,6 +9,7 @@ import dev.krypt04mcg.model.LocalKeyMaterial;
 import dev.krypt04mcg.model.PublicIdentity;
 import dev.krypt04mcg.util.JsonSupport;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -20,6 +21,28 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class HandshakeFailureRecoveryTest {
     @TempDir Path root;
+
+    @Test void establishedEpochRejectsReplayEvenWithoutRecordedExchangeHistory() throws Exception {
+        var crypto = new CryptoService();
+        var alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        var bob = crypto.generateLocalKeys("bob", "b", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        var sessions = new SessionService(root.resolve("bob"));
+        try (var initiator = new SessionHandshakeService(crypto, new SessionService(root.resolve("alice")));
+             var responder = new SessionHandshakeService(crypto, sessions)) {
+            var request = initiator.begin(identity(bob), alice, KemAlgorithm.ML_KEM_768, false, AeadAlgorithm.AES_256_GCM);
+            assertTrue(responder.complete(request, responder.decrypt(request, bob, identity(alice)), identity(alice),
+                    bob, false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> {}));
+            sessions.recordSentMessage("alice", 0, 4);
+            var established = sessions.find("alice").orElseThrow();
+            // Represents an established session saved before durable API replay tracking existed.
+            try (var restarted = new SessionHandshakeService(crypto, new SessionService(root.resolve("bob")))) {
+                var decrypted = restarted.decrypt(request, bob, identity(alice));
+                assertThrows(IOException.class, () -> restarted.complete(request, decrypted, identity(alice), bob,
+                        false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> fail("A replay must not send a response")));
+            }
+            assertTrue(established.equals(sessions.find("alice").orElseThrow()));
+        }
+    }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})

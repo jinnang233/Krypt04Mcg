@@ -22,10 +22,12 @@ public final class SessionService {
     private final SecureRandom random = new SecureRandom();
     private final Gson gson = JsonSupport.prettyGson();
     private final SensitiveFileStore sensitiveFiles;
+    private final DecryptionHistoryService exchangeHistory;
 
     public SessionService(Path root) {
         this.sessionsDir = root.resolve("sessions");
         this.sensitiveFiles = new SensitiveFileStore(root);
+        this.exchangeHistory = new DecryptionHistoryService(root);
     }
 
     public synchronized void migrateLegacyFiles() throws IOException {
@@ -125,6 +127,11 @@ public final class SessionService {
 
     public synchronized void clear(String peer) throws IOException {
         Files.deleteIfExists(pathFor(peer));
+    }
+
+    /** Admit authenticated API exchanges durably before they mutate session state. */
+    public synchronized boolean recordAcceptedExchange(String peer, byte[] messageId, byte[] nonce) throws IOException {
+        return exchangeHistory.recordAcceptedPacket(peer, messageId, nonce);
     }
 
     public synchronized void recordSentMessage(String peer, long expectedSequence, long bytes) throws IOException {

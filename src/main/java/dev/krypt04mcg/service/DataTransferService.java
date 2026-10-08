@@ -264,6 +264,10 @@ public final class DataTransferService implements AutoCloseable {
                 if (epoch != generation || error != null || !active()) return;
                 try {
                     if (local != keys.local() || !KeyTrustService.fingerprintPair(identity).equals(KeyTrustService.fingerprintPair(trusted(p.peer())))) return;
+                    if (!sessions.recordAcceptedExchange(p.peer(), packet.messageId(), packet.nonce())) {
+                        seenExchanges.put(id, packet.timestampMillis() + 300000);
+                        return;
+                    }
                     if (handshakes.complete(packet, decrypted, identity, local, false, AeadAlgorithm.CHACHA20_POLY1305, this::exchangePacket)) {
                         var c = connections.get(p.peer().toLowerCase(Locale.ROOT));
                         if (c != null && !c.disposed) activate(c, session(p.peer(), null));

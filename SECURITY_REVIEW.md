@@ -14,6 +14,25 @@ tests passed with each loader's chat implementation in an offline, resource-limi
 Java/JUnit sandbox. Presentation was replaced with a dummy translation adapter;
 live Minecraft integration and a full Gradle build were not performed.
 
+## API exchange replay across lifecycle resets
+
+Disconnect and service reconstruction discarded accepted API exchange identifiers
+while preserving session files. Redelivery of a still-fresh, previously accepted
+signed request replaced the responder's secret under the old session identifier;
+the initiator retained its original secret. Older requests could also overwrite a
+newer session. This affected the peer pair's session integrity and availability.
+
+API exchange admission now persists peer-scoped message identifiers and nonces
+before session mutation, using the existing bounded 65-minute replay history in
+the separate API storage root. The handshake also rejects an already established
+epoch, including sessions saved before this tracking existed. Fresh exchanges and
+normal disconnect cleanup remain supported.
+
+Three API regressions failed against the original implementation. All 33 related
+API, session, handshake and channel tests passed after the fix in the same offline
+sandbox, including preservation of existing session secrets and counters. Live
+relay/server integration and a full Gradle build were not performed.
+
 ---
 
 # Crypto/channel follow-up review (2026-09-30)

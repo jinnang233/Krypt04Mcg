@@ -123,6 +123,10 @@ public final class SessionHandshakeService implements AutoCloseable {
         if (Base64Url.decode(payload.sessionId()).length != CryptoService.MESSAGE_ID_BYTES) {
             throw new IOException("Invalid session exchange ID");
         }
+        SessionRecord established = sessionService.find(sender.owner()).orElse(null);
+        if (established != null && established.sessionId().equals(payload.sessionId())) {
+            throw new IOException("Session exchange epoch was already established");
+        }
         PendingHandshake simultaneous = pending.get(normalize(sender.owner()));
         if (simultaneous != null) {
             if (receiverKeys.kemPublicKey().owner().compareToIgnoreCase(sender.owner()) < 0) {

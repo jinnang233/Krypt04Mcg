@@ -160,6 +160,87 @@ class DataTransferServiceTest {
             next.close();
         }
     }
+
+    @Test void acceptedExchangeCannotResetSessionAfterDisconnect() throws Exception {
+        try (var pair = new Pair()) {
+            var connected = pair.alice.connect("Bob");
+            pair.until(connected::isReady);
+            var request = pair.controls.getFirst();
+            var sessions = new SessionService(root.resolve("bob-api"));
+            var original = sessions.find("Alice").orElseThrow();
+            pair.alice.clear(); pair.bob.clear();
+            pair.bob.receive(request.routed("Alice", ControlPayload.Kind.EXCHANGE, -1));
+            pair.bob.tick();
+            pair.until(() -> !exchangeWorker(pair.bob).busy());
+            var restored = sessions.find("Alice").orElseThrow();
+            assertEquals(original.sessionId(), restored.sessionId());
+            assertTrue(original.secret().equals(new SessionService(root.resolve("alice-api"))
+                    .find("Bob").orElseThrow().secret()), "The initiator must retain its established secret");
+            assertTrue(original.secret().equals(restored.secret()), "Replay must not replace the responder's secret");
+            assertTrue(original.equals(restored),
+                    "Replaying a completed request must not replace its persisted session or counters");
+            var freshStream = pair.alice.open("Bob", CHANNEL);
+            pair.until(() -> pair.right != null);
+            freshStream.close();
+            pair.until(freshStream::isClosed);
+        }
+    }
+
+    @Test void acceptedExchangeCannotResetSessionAfterServiceRestart() throws Exception {
+        ControlPayload request;
+        dev.krypt04mcg.model.SessionRecord original;
+        try (var pair = new Pair()) {
+            var connected = pair.alice.connect("Bob");
+            pair.until(connected::isReady);
+            request = pair.controls.getFirst();
+            original = new SessionService(root.resolve("bob-api")).find("Alice").orElseThrow();
+        }
+        try (var restarted = new Pair()) {
+            restarted.bob.receive(request.routed("Alice", ControlPayload.Kind.EXCHANGE, -1));
+            restarted.bob.tick();
+            restarted.until(() -> !exchangeWorker(restarted.bob).busy());
+            var restored = new SessionService(root.resolve("bob-api")).find("Alice").orElseThrow();
+            assertEquals(original.sessionId(), restored.sessionId());
+            assertTrue(original.secret().equals(restored.secret()), "Restart must not permit session secret replacement");
+            assertTrue(original.equals(restored),
+                    "Accepted exchange history must survive a service restart");
+        }
+    }
+
+    private static SharingWorker exchangeWorker(DataTransferService service) {
+        try {
+            var field = DataTransferService.class.getDeclaredField("worker");
+            field.setAccessible(true);
+            return (SharingWorker) field.get(service);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    @Test void acceptedOldExchangeCannotReplaceANewerSessionAfterRestart() throws Exception {
+        ControlPayload request;
+        String originalId;
+        try (var pair = new Pair()) {
+            var connected = pair.alice.connect("Bob");
+            pair.until(connected::isReady);
+            request = pair.controls.getFirst();
+            originalId = new SessionService(root.resolve("bob-api")).find("Alice").orElseThrow().sessionId();
+        }
+        new SessionService(root.resolve("alice-api")).clear("Bob");
+        new SessionService(root.resolve("bob-api")).clear("Alice");
+        try (var restarted = new Pair()) {
+            var connected = restarted.alice.connect("Bob");
+            restarted.until(connected::isReady);
+            var sessions = new SessionService(root.resolve("bob-api"));
+            var current = sessions.find("Alice").orElseThrow();
+            assertNotEquals(originalId, current.sessionId());
+            restarted.bob.receive(request.routed("Alice", ControlPayload.Kind.EXCHANGE, -1));
+            restarted.bob.tick();
+            restarted.until(() -> !exchangeWorker(restarted.bob).busy());
+            assertTrue(current.equals(sessions.find("Alice").orElseThrow()),
+                    "A completed request must not roll back a newer session epoch");
+        }
+    }
     @Test void largeFileConsumesSocketAsStreamWithoutReassembly() throws Exception {
         try (var pair = new Pair(); var reader = java.util.concurrent.Executors.newSingleThreadExecutor()) {
             pair.keepOpen = true;
