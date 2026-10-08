@@ -47,16 +47,15 @@ public final class FragmentReassembler {
             throw new IllegalArgumentException("Too many fragments: " + fragment.total());
         }
         if (partials.size() >= maxMessages && !partials.containsKey(fragment.messageId())) {
-            evictOldest();
+            // Unauthenticated new IDs must not evict messages already being received.
+            return Optional.empty();
         }
         PartialMessage partial = partials.computeIfAbsent(fragment.messageId(),
                 id -> new PartialMessage(fragment.total(), clock.millis()));
         if (partial.total != fragment.total()) {
             throw new IllegalArgumentException("Fragment total changed for " + fragment.messageId());
         }
-        if (partial.fragments.putIfAbsent(fragment.index(), fragment.payload()) == null) {
-            partial.lastTouched = clock.millis();
-        }
+        partial.fragments.putIfAbsent(fragment.index(), fragment.payload());
         if (!partial.complete()) {
             return Optional.empty();
         }
@@ -75,7 +74,8 @@ public final class FragmentReassembler {
     public synchronized List<FragmentProgress> cleanupTimedOut() {
         long cutoff = clock.millis() - timeout.toMillis();
         List<FragmentProgress> removed = partials.entrySet().stream()
-                .filter(entry -> entry.getValue().lastTouched < cutoff)
+                // The deadline is fixed at admission, including for fresh indices.
+                .filter(entry -> entry.getValue().createdAt <= cutoff)
                 .map(entry -> new FragmentProgress(entry.getKey(), entry.getValue().fragments.size(), entry.getValue().total))
                 .toList();
         for (FragmentProgress progress : removed) {
@@ -96,30 +96,14 @@ public final class FragmentReassembler {
         return partials.size();
     }
 
-    private void evictOldest() {
-        String oldestId = null;
-        long oldestTime = Long.MAX_VALUE;
-        for (Map.Entry<String, PartialMessage> entry : partials.entrySet()) {
-            if (entry.getValue().lastTouched < oldestTime) {
-                oldestTime = entry.getValue().lastTouched;
-                oldestId = entry.getKey();
-            }
-        }
-        if (oldestId != null) {
-            partials.remove(oldestId);
-        }
-    }
-
     private static final class PartialMessage {
         private final int total;
         private final long createdAt;
         private final Map<Integer, String> fragments = new HashMap<>();
-        private long lastTouched;
 
         private PartialMessage(int total, long now) {
             this.total = total;
             this.createdAt = now;
-            this.lastTouched = now;
         }
 
         private boolean complete() {

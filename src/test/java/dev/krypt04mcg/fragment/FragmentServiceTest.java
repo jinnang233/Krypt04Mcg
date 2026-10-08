@@ -18,6 +18,43 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 final class FragmentServiceTest {
     @Test
+    void newFragmentsCannotKeepAnIncompleteMessageAlivePastItsDeadline() {
+        MutableClock clock = new MutableClock();
+        FragmentReassembler reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 2, 10);
+        reassembler.accept(new Fragment("alice:message", 0, 3, "AA"));
+        clock.advance(Duration.ofSeconds(9));
+        reassembler.accept(new Fragment("alice:message", 1, 3, "AA"));
+        clock.advance(Duration.ofSeconds(1));
+        assertEquals(1, reassembler.cleanup());
+        assertEquals(0, reassembler.pendingMessages());
+    }
+
+    @Test
+    void newMessageFloodDoesNotEvictAnAdmittedMessage() {
+        FragmentReassembler reassembler = new FragmentReassembler(
+                Clock.systemUTC(), Duration.ofMinutes(1), 1, 10);
+        reassembler.accept(new Fragment("alice:message", 0, 2, "AQ"));
+        for (int i = 0; i < 100; i++) {
+            assertTrue(reassembler.accept(new Fragment("mallory:" + i, 0, 2, "AA")).isEmpty());
+        }
+        assertEquals(1, reassembler.pendingMessages());
+        assertArrayEquals(new byte[]{1, 2, 3},
+                reassembler.accept(new Fragment("alice:message", 1, 2, "ID")).orElseThrow());
+    }
+
+    @Test
+    void rejectsMalformedWireIdsAndPayloadsBeforeReassembly() {
+        FragmentService service = new FragmentService();
+        String id = "00000000000000000000000000000000";
+        for (String body : List.of("not-an-id 0 2 AA", id + " 0 2 AA!",
+                id + " 0 2 AA BB", id + " +0 2 AA", id + " 0 513 AA")) {
+            String line = FragmentService.PREFIX + " " + body;
+            assertTrue(!service.isFragment(line));
+            assertThrows(IllegalArgumentException.class, () -> service.parse(line));
+        }
+    }
+
+    @Test
     void duplicateFragmentsDoNotExtendCacheLifetime() {
         MutableClock clock = new MutableClock();
         FragmentReassembler reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 10, 10);

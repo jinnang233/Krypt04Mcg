@@ -58,10 +58,18 @@ public final class FragmentService {
         if (parts == null) {
             return false;
         }
+        // Validate the wire grammar before an unauthenticated fragment reserves storage.
+        if (!parts.messageId().matches("[0-9A-Fa-f]{32}")
+                || !parts.index().matches("[0-9]{1,3}")
+                || !parts.total().matches("[0-9]{1,3}")
+                || !parts.payload().matches("[A-Za-z0-9_-]*")) {
+            return false;
+        }
         try {
             int index = Integer.parseInt(parts.index());
             int total = Integer.parseInt(parts.total());
-            return index >= 0 && total > 0 && index < total;
+            return total > 0 && total <= FragmentReassembler.DEFAULT_MAX_FRAGMENTS_PER_MESSAGE
+                    && index < total;
         } catch (NumberFormatException e) {
             return false;
         }
