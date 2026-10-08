@@ -81,7 +81,7 @@ final class SlhDsaSignatureAlgorithmTest {
 
     private static List<SignatureAlgorithm> slhDsaAlgorithms() {
         return Stream.of(SignatureAlgorithm.values())
-                .filter(algorithm -> algorithm.identifier().startsWith("SLH-DSA-"))
+                .filter(algorithm -> !algorithm.hybrid() && algorithm.identifier().startsWith("SLH-DSA-"))
                 .toList();
     }
 

@@ -206,6 +206,19 @@ Hashing is performed by BC. Verification requires both signatures; incomplete si
 malformed framing and trailing bytes are rejected, with no fallback to a single component.
 The existing BC native ML-DSA composite signatures and the hybrid defaults remain unchanged.
 
+Every supported PQ signature parameter selection now offers both `+Ed25519` and `+Ed448`.
+This includes 152 additional pairings for Falcon (2 parameter sets), ML-DSA (3), SLH-DSA (24,
+including every pre-hash variant), SQIsign (3), and SNOVA (44). Examples are
+`Falcon-512+Ed25519`, `ML-DSA-87+Ed448`, `SLH-DSA-SHAKE-256F-WITH-SHAKE256+Ed448`,
+`SQIsign-lvl3+Ed25519`, and `SNOVA-24-5-4-SSK+Ed448`.
+These selections use the same mod-specific versioned signature framing and transcript binding
+described above, and require both signatures. They are available in the Fabric and NeoForge
+configuration dropdowns and work with saved identities and signed ephemeral handshakes.
+The explicit `ML-DSA-65+Ed25519` selection uses this custom format; the existing
+`MLDSA65-Ed25519-SHA512` default continues to use BC's native composite format.
+Both peers must support the selected identifier. To adopt a new long-term signature suite,
+regenerate the local keys and exchange the new public identity with contacts.
+
 The new signature families are experimental, non-standardized selections. Large UOV public keys
 are supported by local import/export and the optional public-key sharing channel, whose bounded
 maximum is now 512 chunks (about 6 MB of JSON). This accommodates the largest UOV public key

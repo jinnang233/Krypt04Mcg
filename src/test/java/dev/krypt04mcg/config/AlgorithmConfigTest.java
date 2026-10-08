@@ -2,14 +2,46 @@ package dev.krypt04mcg.config;
 
 import dev.krypt04mcg.util.JsonSupport;
 import dev.krypt04mcg.model.AlgorithmSuite;
+import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 final class AlgorithmConfigTest {
+    @ParameterizedTest
+    @ValueSource(strings = {"en_us", "zh_cn", "zh_tw", "de_de", "es_es", "fr_fr", "ja_jp", "ko_kr"})
+    void everyAlgorithmHasLocalizedDropdownLabels(String locale) throws Exception {
+        String resource = "/assets/krypt04mcg/lang/" + locale + ".json";
+        try (var reader = new InputStreamReader(getClass().getResourceAsStream(resource), StandardCharsets.UTF_8)) {
+            var labels = JsonSupport.prettyGson().fromJson(reader, JsonObject.class);
+            String prefix = "text.autoconfig.krypt04mcg.option.";
+            for (var algorithm : KemAlgorithm.values()) {
+                for (String field : new String[] {"kemAlgorithm", "ephemeralKemAlgorithm"}) {
+                    String key = prefix + field + "." + algorithm.name();
+                    assertNotNull(labels.get(key), key);
+                    String label = labels.get(key).getAsString();
+                    assertFalse(label.isBlank());
+                    if (algorithm.hybrid()) assertEquals(algorithm.identifier(), label);
+                }
+            }
+            for (var algorithm : SignatureAlgorithm.values()) {
+                String key = prefix + "signatureAlgorithm." + algorithm.name();
+                assertNotNull(labels.get(key), key);
+                String label = labels.get(key).getAsString();
+                assertFalse(label.isBlank());
+                if (algorithm.customHybrid()) assertEquals(algorithm.identifier(), label);
+            }
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"CMCE/mceliece348864", "CMCE/mceliece348864f",
             "CMCE_MCELIECE348864", "CMCE_MCELIECE348864F"})
