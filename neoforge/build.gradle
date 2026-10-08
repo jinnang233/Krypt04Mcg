@@ -56,6 +56,7 @@ tasks.named('compileTestJava') {
         include 'dev/krypt04mcg/service/HandshakeEpochCommitTest.java'
         include 'dev/krypt04mcg/service/SessionServiceTest.java'
         include 'dev/krypt04mcg/service/DataTransferServiceTest.java'
+        include 'dev/krypt04mcg/service/FileReceiveTaskTest.java'
     })
 }
 tasks.named('test') {

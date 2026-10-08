@@ -42,7 +42,7 @@ public final class OptionalSharing {
     private final OptionalTransferAssembler keyParts = new OptionalTransferAssembler(OptionalTransferAssembler.MAX_KEY_CHUNKS, 4);
     private static final String FILE_CHANNEL = "krypt04mcg_file:stream";
     private FileSend outgoing;
-    private KryptSocket receiving;
+    private FileReceiveTask receiving;
     private final Deque<PublicKeyPayload> outgoingKeys = new ArrayDeque<>();
     private final Map<String, Pending> pending = new HashMap<>();
     private final FileSharingLock fileLock;
@@ -61,6 +61,7 @@ public final class OptionalSharing {
     }
 
     public void applySettings() {
+        if (receiving != null && receiving.expire()) receiving = null;
         if (wasSending != config.enableFileSending || wasReceiving != config.enableFileReceiving
                 || previousMode != config.chatSendMode) generation++;
         wasSending = config.enableFileSending; wasReceiving = config.enableFileReceiving;
@@ -189,7 +190,7 @@ public final class OptionalSharing {
         } catch (Exception e) { cancelOutgoing(); message(tr("text.krypt04mcg.share.failed")); }
     }
     private void cancelOutgoing() { if (outgoing != null) { outgoing.socket.fail("File send cancelled"); outgoing = null; } }
-    private void cancelReceiving() { if (receiving != null) { receiving.fail("File receive cancelled"); receiving = null; } }
+    private void cancelReceiving() { if (receiving != null) { receiving.cancel(); receiving = null; } }
     private String fileIdentity(String peer) throws Exception {
         var local = keys.local();
         return KeyTrustService.fingerprintPair(trusted(peer)) + "/" + local.kemPublicKey().fingerprint()
@@ -203,11 +204,11 @@ public final class OptionalSharing {
         }
         try {
             String fingerprint = fileIdentity(socket.peer());
-            receiving = socket; socket.close();
+            var task = new FileReceiveTask(socket);
+            receiving = task; socket.close();
             submit(true, false, () -> {
-                try { return FileStreamCodec.read(socket.getInputStream()); }
-                catch (java.io.IOException e) { socket.fail("Invalid file stream"); throw e; }
-                finally { Minecraft.getInstance().execute(() -> { if (receiving == socket) receiving = null; }); }
+                try { return task.read(); }
+                finally { Minecraft.getInstance().execute(() -> { if (receiving == task) receiving = null; }); }
             }, data -> {
                 if (!fingerprint.equals(fileIdentity(socket.peer()))) return;
                 offer(new Pending(socket.peer(), fingerprint, data, System.currentTimeMillis()),

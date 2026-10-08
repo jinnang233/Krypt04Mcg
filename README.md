@@ -461,6 +461,11 @@ appears only after the complete stream and authenticated EOF have been received.
 saved only after explicit acceptance and a fresh identity/trust check, under `received-files`
 with sanitized names and a random prefix. Files are never opened or executed automatically.
 Up to four offers, including at most one file, may await consent for 60 seconds.
+Each incoming file must finish, including authenticated EOF, within two minutes of
+admission. Receiving more bytes does not extend this fixed deadline. An expired receive
+is cancelled to release the sharing worker; very slow transfers may need to be retried.
+This limit applies to built-in file receiving, while general API streams keep their
+existing 60-second idle timeout.
 
 `/k04m-share disable-files` or `permanentlyDisableFileSharing=true` persists the existing
 account-level file-sharing lock. Disabling sharing, disconnecting, or switching transport
