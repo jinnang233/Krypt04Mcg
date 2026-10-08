@@ -127,6 +127,10 @@ public final class ChatSendService {
             if (!session.peerFingerprint().equalsIgnoreCase(peerFingerprint)) {
                 throw new IllegalStateException("Session identity binding no longer matches " + receiver);
             }
+            if (!KeyTrustService.fingerprintPair(keyStoreService.ownPublicIdentity())
+                    .equalsIgnoreCase(session.localFingerprint())) {
+                throw new IllegalStateException("Session local identity changed; exchange a new session");
+            }
             long sequence = session.nextSendSequence();
             String payload = gson.toJson(new SessionMessagePayload(SessionMessagePayload.VERSION,
                     message));

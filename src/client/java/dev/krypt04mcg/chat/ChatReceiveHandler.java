@@ -146,6 +146,10 @@ public final class ChatReceiveHandler {
                     if (!session.peerFingerprint().equalsIgnoreCase(KeyTrustService.fingerprintPair(sender))) {
                         throw new IllegalStateException("Session identity binding mismatch for " + packet.sender());
                     }
+                    if (!KeyTrustService.fingerprintPair(keyStoreService.ownPublicIdentity())
+                            .equalsIgnoreCase(session.localFingerprint())) {
+                        throw new IllegalStateException("Session local identity changed; exchange a new session");
+                    }
                     String decrypted = cryptoService.decryptWithSession(packet, keyStoreService.local().kemPublicKey().owner(), sender.owner(),
                             Base64Url.decode(session.secret()), session.sessionId(), session.nextReceiveSequence());
                     sessionMessage = parseSessionMessage(decrypted);

@@ -1,3 +1,21 @@
+# Core review (2026-10-08)
+
+## Chat session local identity binding
+
+Both chat loaders accepted and sent new session messages after the local long-term
+keys were regenerated. They checked the peer fingerprint but omitted the local
+fingerprint recorded by the handshake. A holder of the old, unexpired session
+secret could therefore continue authenticating messages for that peer.
+
+Send and receive now require the current local fingerprint pair before encryption,
+decryption, or state changes. Unbound legacy sessions require a new handshake.
+Three rejection regressions failed before the fix; all 19 related chat/handshake
+tests passed with each loader's chat implementation in an offline, resource-limited
+Java/JUnit sandbox. Presentation was replaced with a dummy translation adapter;
+live Minecraft integration and a full Gradle build were not performed.
+
+---
+
 # Crypto/channel follow-up review (2026-09-30)
 
 This follow-up examined shared crypto, raw API channels, loader registration, and vanilla

@@ -213,12 +213,14 @@ final class HandshakeStateMachineTest {
         Krypt04McgConfig config = new Krypt04McgConfig();
         Fixture f = fixture(config);
         var original = f.sessionService.createLocalSession("alice",
-                KeyTrustService.fingerprintPair(publicIdentity(f.aliceMaterial)));
+                KeyTrustService.fingerprintPair(publicIdentity(f.aliceMaterial)))
+                .withLocalFingerprint(KeyTrustService.fingerprintPair(f.bobKeys.ownPublicIdentity()));
         for (int limit = 0; limit < 3; limit++) {
             var expired = new dev.krypt04mcg.model.SessionRecord(original.peer(), original.peerFingerprint(),
                     original.sessionId(), limit == 0 ? java.time.Instant.now().minusSeconds(7200) : original.createdAt(),
                     original.lastUsedAt(), original.secret(), limit == 1 ? config.maxMessagesPerSession : 0,
-                    limit == 2 ? config.rotateAfterBytes : 0, 0, 0);
+                    limit == 2 ? config.rotateAfterBytes : 0, 0, 0)
+                    .withLocalFingerprint(original.localFingerprint());
             f.sessionService.save(expired);
             EncryptedPacket packet = f.crypto.encryptWithSession("bob", "alice", Base64Url.decode(original.secret()),
                     original.sessionId(), 0, JsonSupport.prettyGson().toJson(
