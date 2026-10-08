@@ -159,9 +159,6 @@ public final class ChatReceiveHandler {
             }
 
             validateFreshness(packet);
-            if (!decryptionHistoryService.recordAcceptedPacket(packet.sender(), packet.messageId(), packet.nonce())) {
-                throw new IllegalStateException("Replay or repeated nonce detected for " + packet.sender());
-            }
             if (exchange != null) {
                 boolean established = sessionHandshakeService.complete(packet, exchange, sender, keyStoreService.local(),
                         config.enableCompression, config.aeadAlgorithm, packetSender);
@@ -170,6 +167,9 @@ public final class ChatReceiveHandler {
                     system.accept(ClientMessages.tr("text.krypt04mcg.session_accepted", packet.sender()));
                 }
                 return;
+            }
+            if (!decryptionHistoryService.recordAcceptedPacket(packet.sender(), packet.messageId(), packet.nonce())) {
+                throw new IllegalStateException("Replay or repeated nonce detected for " + packet.sender());
             }
             if (sessionMessage != null) {
                 sessionService.recordReceivedMessage(packet.sender(), packet.sessionId(),

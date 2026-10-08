@@ -43,6 +43,15 @@ public final class DecryptionHistoryService {
         return Optional.ofNullable(readHistory().get(normalize(player)));
     }
 
+    /** Read-only admission check for legacy exchange records. New handshakes commit in the session ledger. */
+    public synchronized boolean wasAcceptedPacket(String player, byte[] messageId, byte[] nonce) throws IOException {
+        Map<String, Instant> history = readHistory();
+        pruneExpiredReplayEntries(history, Instant.now());
+        String normalized = normalize(player);
+        return history.containsKey(PACKET_PREFIX + normalized + ":" + Hex.encode(messageId))
+                || history.containsKey(NONCE_PREFIX + normalized + ":" + Hex.encode(nonce));
+    }
+
     public synchronized boolean recordAcceptedPacket(String player, byte[] messageId, byte[] nonce) throws IOException {
         Map<String, Instant> history = readHistory();
         String normalized = normalize(player);

@@ -33,6 +33,29 @@ final class HandshakeStateMachineTest {
     @TempDir
     private Path tempDir;
 
+    @Test void failedChatResponseCanRetryWithoutBurningReplayHistory() throws Exception {
+        var failSend = new java.util.concurrent.atomic.AtomicBoolean(true);
+        Fixture f = fixture(new Krypt04McgConfig(), failSend);
+        var sessions = new SessionService(tempDir.resolve("alice"));
+        try (var initiator = new SessionHandshakeService(f.crypto, sessions)) {
+            var request = initiator.begin(f.bobKeys.ownPublicIdentity(), f.aliceMaterial,
+                    KemAlgorithm.ML_KEM_768, false, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
+            var fragments = f.fragments.fragment(f.codec.encode(request), request.messageId(), 96);
+            for (var fragment : fragments) f.handler.handle("alice", fragment);
+            assertTrue(f.responses.isEmpty());
+            assertTrue(f.sessionService.find("alice").isEmpty());
+            assertTrue(!f.history.wasAcceptedPacket("alice", request.messageId(), request.nonce()));
+            failSend.set(false);
+            for (var fragment : fragments) f.handler.handle("alice", fragment);
+            assertEquals(1, f.responses.size());
+            var reply = f.responses.getFirst();
+            assertTrue(initiator.complete(reply, initiator.decrypt(reply, f.aliceMaterial, f.bobKeys.ownPublicIdentity()),
+                    f.bobKeys.ownPublicIdentity(), f.aliceMaterial, false,
+                    dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM, (packet, peer) -> { throw new AssertionError(); }));
+            assertEquals(f.sessionService.find("alice").orElseThrow().secret(), sessions.find("bob").orElseThrow().secret());
+        }
+    }
+
     @Test
     void signedSessionHandshakeAcceptsOnceAndRejectsReplay() throws Exception {
         Fixture fixture = fixture();
@@ -60,7 +83,7 @@ final class HandshakeStateMachineTest {
                 });
         assertEquals(fixture.sessionService.find("alice").orElseThrow().secret(),
                 aliceSessions.find("bob").orElseThrow().secret());
-        assertTrue(!fixture.history.recordAcceptedPacket("alice", packet.messageId(), packet.nonce()));
+        // Exchange admission is now committed atomically in the session ledger.
 
         for (String fragment : fragments) {
             fixture.handler.handle("alice", fragment);
@@ -180,6 +203,10 @@ final class HandshakeStateMachineTest {
     }
 
     private Fixture fixture(Krypt04McgConfig config) throws Exception {
+        return fixture(config, new java.util.concurrent.atomic.AtomicBoolean(false));
+    }
+
+    private Fixture fixture(Krypt04McgConfig config, java.util.concurrent.atomic.AtomicBoolean failSend) throws Exception {
         CryptoService crypto = new CryptoService();
         KeyStoreService bobKeys = new KeyStoreService(tempDir.resolve("bob"), crypto);
         bobKeys.init("bob", "bob-uuid");
@@ -197,7 +224,10 @@ final class HandshakeStateMachineTest {
         List<EncryptedPacket> responses = new ArrayList<>();
         ChatReceiveHandler handler = new ChatReceiveHandler(config, bobKeys, trust, crypto,
                 codec, fragments, new FragmentReassembler(), history, sessionService, handshake,
-                (packet, receiver) -> responses.add(packet),
+                (packet, receiver) -> {
+                    if (failSend.get()) throw new java.io.IOException("Simulated chat send failure");
+                    responses.add(packet);
+                },
                 systemMessages::add, (player, message) -> decryptedMessages.add(message));
         return new Fixture(crypto, bobKeys, alice, codec, fragments, sessionService, history, trust, systemMessages,
                 decryptedMessages, responses, handler);

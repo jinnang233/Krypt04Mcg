@@ -45,3 +45,19 @@ processResources {
     }
 }
 test { useJUnitPlatform() }
+
+// Exercise shared handshake regressions against this loader's chat entry point too.
+tasks.named('compileTestJava') {
+    classpath += tasks.named('compileJava').get().classpath
+    source(fileTree('../src/test/java') {
+        include 'dev/krypt04mcg/chat/HandshakeStateMachineTest.java'
+        include 'dev/krypt04mcg/chat/ChatSessionIdentityTest.java'
+        include 'dev/krypt04mcg/service/HandshakeFailureRecoveryTest.java'
+        include 'dev/krypt04mcg/service/HandshakeEpochCommitTest.java'
+        include 'dev/krypt04mcg/service/SessionServiceTest.java'
+        include 'dev/krypt04mcg/service/DataTransferServiceTest.java'
+    })
+}
+tasks.named('test') {
+    classpath += tasks.named('compileJava').get().classpath
+}

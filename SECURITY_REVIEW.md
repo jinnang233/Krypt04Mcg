@@ -1,3 +1,123 @@
+# Targeted handshake follow-up (2026-10-08)
+
+Reviewed commit: `9aecbdb306c47e914980b1d0c67a5933f5452f25`. The working
+baseline also contains the subsequent version-only change. This review is limited
+to handshake epochs, replay admission, commit recovery, and both chat loaders.
+
+Three new regressions failed before production changes; the other 20 tests in
+that initial run passed:
+
+- A signed, unseen older request could replace a newer session after restart.
+  Random session IDs establish uniqueness, not generation order. A relay able to
+  delay legitimate packets could desynchronize the peer pair and reset counters.
+- API and chat ingress recorded Message ID / Nonce before completion. A failed
+  response send consumed a legitimate request permanently within replay retention.
+- The responder sent its secret before saving any recovery record. A subsequent
+  persistence failure left an externally usable response without matching local
+  session state.
+
+## Epoch and commit invariants
+
+Handshake payload v2 carries `previousSessionId` and `requestEpoch`. The initiator
+reserves a strictly increasing per-peer request counter in encrypted storage
+before generating/sending a request. Responses echo both fields and must match
+the pending request. Requests require the current predecessor and a counter above
+the accepted/prepared high-water mark. Counters survive clearing sessions, restarts,
+and identity key rotation; freshness timestamps are not used as epoch ordering.
+Existing simultaneous-handshake arbitration remains in place.
+
+A response lost before the initiator installed it must not prevent renegotiation.
+A newer request from that same initiating side can supersede its previous result
+using the same predecessor. This exception is restricted to the last remotely
+initiated session; it cannot overwrite a session established by a later handshake
+in the opposite direction. An authenticated successor of a prepared candidate can
+also recover it. Invalid successor requests perform no recovery writes.
+
+Each encrypted session file now contains one ledger: the active session, epoch
+metadata, received exchange IDs/nonces, and at most one prepared response. The
+responder persists the candidate and exact encrypted response before delivery;
+after the send callback succeeds, one atomic replacement commits the session,
+epoch and replay entries. Repeating a prepared request requires the same SHA-256
+packet digest and reuses the exact response and secret. Completed requests cannot
+reset keys or counters. The initiator commits its response and replay entries in
+one replacement before destroying its pending ephemeral private key.
+
+When delivery is uncertain, a predecessor session is unavailable for use until
+recovery; callers must not silently resume old keys. A failed send/save preserves
+the simultaneous pending key. An ignored competing request consumes neither the
+durable replay ledger nor the API's temporary admission cache. Legacy replay
+history is checked read-only. Non-handshake replay tracking remains unchanged.
+Ledger writes flush their temporary file and require atomic rename, with no
+non-atomic fallback. All secrets continue to use the existing encrypted file store
+and existing KEM/signature/AEAD implementations.
+
+The prepared responder can initiate recovery too: fresh attempts alternate between
+the candidate ID and that request's predecessor, covering whether the response was
+installed or lost. A matching authenticated response commits the recovered state
+and successor together. This also covers multiple lost responses where the peer
+never installed the locally active session, without another protocol field or ACK.
+
+## Compatibility and validation limits
+
+Only the encrypted handshake JSON changes from v1 to v2; outer packet encoding,
+session-message encoding and data-channel encryption stay unchanged. Both peers
+must upgrade for new handshakes. Accepting v1 requests as a downgrade would restore
+the unseen-old-request vulnerability. Legacy session records are read and migrated
+without resetting counters; older clients cannot read the new ledger format.
+
+Regression coverage includes unseen reordered requests, disconnect during
+decryption, responder/initiator restart, 60-second API timeout, five-minute
+ephemeral expiry, send failure, preparation/final-commit/initiator persistence
+failure, interrupted delivery, exact-response retry, signed-successor recovery,
+simultaneous initiation, bidirectional rotation, identity rotation and v1 rejection.
+Shared handshake regressions also run against NeoForge's chat entry point.
+
+Final validation: Fabric's complete `test build --offline` passed with **711 tests,
+zero failures/errors/skips**. NeoForge's `test build --offline -x
+createMinecraftArtifacts` passed with **59 tests, zero failures/errors/skips**,
+including the shared security regressions. NeoForge reused existing
+`26.3.0.52-beta` Minecraft artifacts; fresh artifact generation attempted to fetch
+Mojang's manifest even in offline mode and could not run in the no-network sandbox.
+`git diff --check` passed.
+
+Tests ran using JDK 25 and local dependency caches only, in a Bubblewrap namespace
+with no external network, read-only source/toolchain mounts, a capacity-limited
+temporary source copy and no host credentials. The explicit environment was
+`PATH=/usr/bin:/bin`, `JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64`,
+`HOME=/tmp/home`, `GRADLE_USER_HOME=/tmp/gradle-home`, `TMPDIR=/tmp/tmp`,
+`LANG=C.UTF-8`, `LC_ALL=C.UTF-8`. Limits: 1.9 GB temporary filesystem, 200 CPU seconds
+per process, 12 GiB address space per process, 160 processes, 256 MiB per file,
+1024 file descriptors, and 600 seconds for the full Fabric run. Gradle used two
+workers, a 768 MiB heap and two active CPUs. A temporary init script set
+`forkEvery=1`, `maxParallelForks=1`, and two active CPUs for each test JVM; the
+command was `gradle --offline --no-daemon --max-workers=2
+-Dorg.gradle.jvmargs="-Xmx768m -XX:MaxMetaspaceSize=256m -XX:ReservedCodeCacheSize=128m -XX:ActiveProcessorCount=2"
+-I security-test.init.gradle test build`. The init script only changes process
+isolation and is not part of the production build. An earlier shared test process
+exited with code 137 under these resource limits; a subsequent complete run exposed the
+ASCII default locale's rejection of the existing Unicode filename test. Both
+sandbox issues were resolved before the final successful run, without changing
+production code or suppressing tests.
+
+Changed production files: `SessionExchangePayload.java`, `SessionHandshakeService.java`,
+`SessionService.java`, `DecryptionHistoryService.java`, `DataTransferService.java`,
+both loaders' `ChatReceiveHandler.java`, `SecureFiles.java`, and
+`SensitiveFileStore.java`. Regression files: `HandshakeFailureRecoveryTest.java`,
+`HandshakeEpochCommitTest.java`, `DataTransferServiceTest.java`,
+`HandshakeStateMachineTest.java`, `SessionServiceTest.java`; `neoforge/build.gradle`
+also includes the shared handshake tests and their Minecraft classpath.
+
+Interruption tests inject failure at the durable prepare/send/commit boundaries
+and reconstruct services from disk; they do not kill a live Minecraft process.
+No live relay/client integration, Windows filesystem run, physical power-loss
+test or cryptographic proof was performed. Directory-entry durability under power
+loss is not guaranteed by the file flush alone. Recovery depends on retransmission
+of the prepared request or a fresh authenticated negotiation, not a new wire ACK.
+Concurrent client processes sharing an account directory and rollback/deletion of
+the ledger are outside this review's verified lifecycle model.
+
+The historical admission design below is superseded by this follow-up.
+
 # Core review (2026-10-08)
 
 ## Chat session local identity binding

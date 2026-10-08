@@ -69,6 +69,14 @@ public final class SensitiveFileStore {
     }
 
     public synchronized void writeString(Path path, String value) throws IOException {
+        writeString(path, value, false);
+    }
+
+    public synchronized void writeDurableString(Path path, String value) throws IOException {
+        writeString(path, value, true);
+    }
+
+    private void writeString(Path path, String value, boolean durable) throws IOException {
         byte[] aad = label(path);
         byte[] plaintext = value.getBytes(StandardCharsets.UTF_8);
         byte[] nonce = new byte[NONCE_BYTES];
@@ -83,7 +91,8 @@ public final class SensitiveFileStore {
             bytes.write(FILE_MAGIC);
             bytes.write(nonce);
             bytes.write(ciphertext);
-            SecureFiles.atomicWrite(path, bytes.toByteArray());
+            if (durable) SecureFiles.atomicWriteDurable(path, bytes.toByteArray());
+            else SecureFiles.atomicWrite(path, bytes.toByteArray());
             Arrays.fill(ciphertext, (byte) 0);
         } catch (GeneralSecurityException e) {
             throw new IOException("Unable to encrypt sensitive file " + path, e);

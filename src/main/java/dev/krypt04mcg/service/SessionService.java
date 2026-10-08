@@ -2,6 +2,10 @@ package dev.krypt04mcg.service;
 
 import com.google.gson.Gson;
 import dev.krypt04mcg.model.SessionRecord;
+import dev.krypt04mcg.model.EncryptedPacket;
+import dev.krypt04mcg.model.SessionExchangePayload;
+import dev.krypt04mcg.util.Hex;
+import dev.krypt04mcg.protocol.PacketCodec;
 import dev.krypt04mcg.util.Base64Url;
 import dev.krypt04mcg.util.JsonSupport;
 import dev.krypt04mcg.util.SensitiveFileStore;
@@ -16,6 +20,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class SessionService {
     private final Path sessionsDir;
@@ -23,11 +29,17 @@ public final class SessionService {
     private final Gson gson = JsonSupport.prettyGson();
     private final SensitiveFileStore sensitiveFiles;
     private final DecryptionHistoryService exchangeHistory;
+    private final LedgerWriter ledgerWriter;
 
     public SessionService(Path root) {
+        this(root, null);
+    }
+
+    SessionService(Path root, LedgerWriter ledgerWriter) {
         this.sessionsDir = root.resolve("sessions");
         this.sensitiveFiles = new SensitiveFileStore(root);
         this.exchangeHistory = new DecryptionHistoryService(root);
+        this.ledgerWriter = ledgerWriter == null ? sensitiveFiles::writeDurableString : ledgerWriter;
     }
 
     public synchronized void migrateLegacyFiles() throws IOException {
@@ -37,9 +49,8 @@ public final class SessionService {
         try (var stream = Files.list(sessionsDir)) {
             for (Path path : stream.filter(candidate -> candidate.toString().endsWith(".json")).toList()) {
                 if (!SensitiveFileStore.isEncrypted(path)) {
-                    SessionRecord record = read(path);
-                    validate(record);
-                    save(record);
+                    State state = readState(path);
+                    writeState(path, state);
                 }
             }
         }
@@ -85,20 +96,29 @@ public final class SessionService {
         if (!Files.exists(path)) {
             return Optional.empty();
         }
-        SessionRecord record = read(path);
-        validate(record);
-        if (!SensitiveFileStore.isEncrypted(path)) {
-            save(record);
+        State state = readState(path);
+        // Delivery may have happened before a crash or an IOException. Never use
+        // the predecessor's keys while the peer might already use the candidate.
+        if (state.prepared != null && state.session != null) {
+            throw new IOException("Session switch awaits handshake retry for " + peer);
         }
-        return Optional.of(record);
+        if (!SensitiveFileStore.isEncrypted(path)) {
+            writeState(path, state);
+        }
+        return Optional.ofNullable(state.session);
     }
 
     public synchronized void save(SessionRecord record) throws IOException {
         validate(record);
-        sensitiveFiles.writeString(pathFor(record.peer()), gson.toJson(record));
+        Path path = pathFor(record.peer());
+        State state = readState(path);
+        if (state.prepared != null) throw new IOException("Unresolved session switch");
+        state.session = record;
+        state.epochId = record.sessionId();
+        writeState(path, state);
     }
 
-    public List<SessionRecord> list() throws IOException {
+    public synchronized List<SessionRecord> list() throws IOException {
         if (!Files.exists(sessionsDir)) {
             return List.of();
         }
@@ -106,17 +126,15 @@ public final class SessionService {
             return stream.filter(path -> path.toString().endsWith(".json"))
                     .map(path -> {
                         try {
-                            SessionRecord record = read(path);
-                            validate(record);
-                            if (!SensitiveFileStore.isEncrypted(path)) {
-                                save(record);
-                            }
-                            return record;
+                            State state = readState(path);
+                            if (state.prepared != null) throw new IOException("Unresolved session switch");
+                            if (!SensitiveFileStore.isEncrypted(path)) writeState(path, state);
+                            return state.session;
                         } catch (IOException e) {
                             throw new IllegalStateException("Unable to read session " + path, e);
                         }
                     })
-                    .toList();
+                    .filter(java.util.Objects::nonNull).toList();
         } catch (IllegalStateException e) {
             if (e.getCause() instanceof IOException ioException) {
                 throw ioException;
@@ -126,12 +144,172 @@ public final class SessionService {
     }
 
     public synchronized void clear(String peer) throws IOException {
-        Files.deleteIfExists(pathFor(peer));
+        Path path = pathFor(peer);
+        State state = readState(path);
+        if (state.prepared != null) throw new IOException("Retry the unresolved handshake before clearing");
+        state.session = null;
+        // Clearing a key must not clear the epoch or permit replay of old requests.
+        writeState(path, state);
     }
 
-    /** Admit authenticated API exchanges durably before they mutate session state. */
-    public synchronized boolean recordAcceptedExchange(String peer, byte[] messageId, byte[] nonce) throws IOException {
-        return exchangeHistory.recordAcceptedPacket(peer, messageId, nonce);
+    /** Reserve before generating/sending a request. Gaps are safe, reuse is not. */
+    public synchronized OutgoingEpoch reserveHandshake(String peer) throws IOException {
+        Path path = pathFor(peer);
+        State state = readState(path);
+        if (state.issuedEpoch == Long.MAX_VALUE) throw new IOException("Handshake epoch exhausted");
+        state.issuedEpoch++;
+        String previous = state.epochId;
+        if (state.prepared != null) {
+            // Delivery has only two possible outcomes. Try the candidate first,
+            // then the predecessor on a fresh attempt if the peer never installed it.
+            state.recoveryAttempts++;
+            previous = (state.recoveryAttempts & 1) != 0 ? state.prepared.session().sessionId()
+                    : state.prepared.previousSessionId();
+        }
+        writeState(path, state);
+        return new OutgoingEpoch(previous, state.issuedEpoch);
+    }
+
+    /** Authenticated requests may recover an uncertain delivery or supersede an abandoned request. */
+    public synchronized PreparedExchange checkRequest(String peer, SessionExchangePayload payload,
+                                                       EncryptedPacket packet, String localFingerprint) throws IOException {
+        State state = readState(pathFor(peer));
+        requireFreshExchange(peer, packet, state);
+        if (state.prepared != null && state.prepared.messageId().equals(Hex.encode(packet.messageId()))) {
+            PreparedExchange prepared = state.prepared;
+            if (!prepared.nonce().equals(Hex.encode(packet.nonce()))
+                    || !prepared.requestDigest().equals(exchangeDigest(packet))
+                    || !prepared.session().sessionId().equals(payload.sessionId())
+                    || !prepared.session().peerFingerprint().equals(payload.initiatorFingerprint())
+                    || !prepared.session().localFingerprint().equals(localFingerprint)
+                    || prepared.requestEpoch() != payload.requestEpoch()
+                    || !prepared.previousSessionId().equals(payload.previousSessionId())) {
+                throw new IOException("Prepared exchange transcript changed");
+            }
+            return prepared;
+        }
+        if (state.prepared != null && payload.previousSessionId().equals(state.prepared.session().sessionId())) {
+            // A signed successor proves that the initiator accepted our saved response.
+            // Evaluate recovery in memory; invalid requests must never commit it.
+            applyPrepared(state);
+            requireReplayCapacity(state);
+        }
+        long accepted = state.remoteEpoch;
+        if (state.prepared != null) {
+            accepted = Math.max(accepted, state.prepared.requestEpoch());
+        }
+        if (payload.requestEpoch() <= accepted) throw new IOException("Stale session request epoch");
+        // The peer can lose a response or restart before installing it. A strictly
+        // newer request from the SAME initiator may replace that unconfirmed result.
+        // This exception never applies to a session installed from our own request.
+        boolean retryAfterLostResponse = state.epochId.equals(state.remoteSessionId)
+                && state.remoteParent.equals(payload.previousSessionId());
+        if (!retryAfterLostResponse) requirePredecessor(state, payload.previousSessionId(), payload.sessionId());
+        if (state.epochId.equals(payload.sessionId())) throw new IOException("Session epoch already established");
+        return null;
+    }
+
+    public synchronized void prepareExchange(String peer, PreparedExchange prepared,
+                                               SessionExchangePayload payload, EncryptedPacket request) throws IOException {
+        validate(prepared.session());
+        if (checkRequest(peer, payload, request, prepared.session().localFingerprint()) != null) {
+            throw new IOException("Exchange was concurrently prepared");
+        }
+        State state = readState(pathFor(peer));
+        if (state.prepared != null && payload.previousSessionId().equals(state.prepared.session().sessionId())) {
+            applyPrepared(state);
+        }
+        state.prepared = prepared;
+        state.recoveryAttempts = 0;
+        writeState(pathFor(peer), state);
+    }
+
+    /** One encrypted atomic replacement commits keys, predecessor, epoch, and replay records together. */
+    public synchronized void commitPrepared(String peer, String messageId) throws IOException {
+        Path path = pathFor(peer);
+        State state = readState(path);
+        PreparedExchange prepared = state.prepared;
+        if (prepared == null || !prepared.messageId().equals(messageId)) throw new IOException("Prepared exchange changed");
+        applyPrepared(state);
+        writeState(path, state);
+    }
+
+    private static void applyPrepared(State state) {
+        PreparedExchange prepared = state.prepared;
+        state.session = prepared.session();
+        state.epochId = prepared.session().sessionId();
+        state.remoteEpoch = prepared.requestEpoch();
+        state.remoteSessionId = prepared.session().sessionId();
+        state.remoteParent = prepared.previousSessionId();
+        addReplay(state, prepared.messageId(), prepared.nonce());
+        state.prepared = null;
+        state.recoveryAttempts = 0;
+    }
+
+    public synchronized void commitResponse(SessionRecord session, EncryptedPacket packet,
+                                             String previousSessionId) throws IOException {
+        validate(session);
+        Path path = pathFor(session.peer());
+        State state = readState(path);
+        requireFreshExchange(session.peer(), packet, state);
+        boolean recoveredPredecessor = state.prepared != null
+                && previousSessionId.equals(state.prepared.previousSessionId());
+        if (state.prepared != null && previousSessionId.equals(state.prepared.session().sessionId())) {
+            // The response proves that the peer knew our durable candidate.
+            // Recover it and install the successor in the same replacement.
+            applyPrepared(state);
+            requireReplayCapacity(state);
+        }
+        if (!recoveredPredecessor) requirePredecessor(state, previousSessionId, session.sessionId());
+        if (state.epochId.equals(session.sessionId())) throw new IOException("Session epoch already established");
+        state.session = session;
+        state.epochId = session.sessionId();
+        // Successful completion of our competing request supersedes an unsent response.
+        state.prepared = null;
+        state.recoveryAttempts = 0;
+        addReplay(state, Hex.encode(packet.messageId()), Hex.encode(packet.nonce()));
+        writeState(path, state);
+    }
+
+    private void requireFreshExchange(String peer, EncryptedPacket packet, State state) throws IOException {
+        pruneReplay(state);
+        if (state.replay.containsKey("packet:" + Hex.encode(packet.messageId()))
+                || state.replay.containsKey("nonce:" + Hex.encode(packet.nonce()))
+                || state.prepared != null && state.prepared.nonce().equals(Hex.encode(packet.nonce()))
+                    && !state.prepared.messageId().equals(Hex.encode(packet.messageId()))
+                || exchangeHistory.wasAcceptedPacket(peer, packet.messageId(), packet.nonce())) {
+            throw new IOException("Replay or repeated exchange nonce");
+        }
+        requireReplayCapacity(state);
+    }
+
+    private static void requireReplayCapacity(State state) throws IOException {
+        if (state.replay.size() > 32_768 - 2) throw new IOException("Exchange replay history full");
+    }
+
+    private static void requirePredecessor(State state, String previous, String next) throws IOException {
+        if (!state.epochId.equals(previous) || state.epochId.equals(next)) {
+            throw new IOException("Session request predecessor changed");
+        }
+    }
+
+    private static void pruneReplay(State state) {
+        Instant cutoff = Instant.now().minus(Duration.ofMinutes(65));
+        state.replay.values().removeIf(time -> time.isBefore(cutoff));
+    }
+
+    private static void addReplay(State state, String messageId, String nonce) {
+        pruneReplay(state);
+        state.replay.put("packet:" + messageId, Instant.now());
+        state.replay.put("nonce:" + nonce, Instant.now());
+    }
+
+    static String exchangeDigest(EncryptedPacket packet) throws IOException {
+        try {
+            return Hex.encode(java.security.MessageDigest.getInstance("SHA-256").digest(new PacketCodec().encode(packet)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IOException("SHA-256 is unavailable", e);
+        }
     }
 
     public synchronized void recordSentMessage(String peer, long expectedSequence, long bytes) throws IOException {
@@ -206,8 +384,58 @@ public final class SessionService {
         return sessionsDir.resolve(peer.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_") + ".json");
     }
 
-    private SessionRecord read(Path path) throws IOException {
-        return gson.fromJson(sensitiveFiles.readString(path), SessionRecord.class);
+    private State readState(Path path) throws IOException {
+        if (!Files.exists(path)) return new State();
+        try {
+            var json = com.google.gson.JsonParser.parseString(sensitiveFiles.readString(path)).getAsJsonObject();
+            State state;
+            if (json.has("stateVersion")) {
+                state = gson.fromJson(json, State.class);
+                if (state.stateVersion != 1 || state.epochId == null
+                        || state.remoteSessionId == null || state.remoteParent == null
+                        || state.replay == null || state.issuedEpoch < 0 || state.remoteEpoch < 0
+                        || state.recoveryAttempts < 0) {
+                    throw new IOException("Invalid session ledger");
+                }
+            } else {
+                state = new State();
+                state.session = gson.fromJson(json, SessionRecord.class);
+                validate(state.session);
+                state.epochId = state.session.sessionId();
+            }
+            if (state.session != null) validate(state.session);
+            if (state.prepared != null) validate(state.prepared.session());
+            return state;
+        } catch (RuntimeException e) {
+            throw new IOException("Invalid session ledger", e);
+        }
+    }
+
+    private void writeState(Path path, State state) throws IOException {
+        ledgerWriter.write(path, gson.toJson(state));
+    }
+
+    @FunctionalInterface
+    interface LedgerWriter {
+        void write(Path path, String value) throws IOException;
+    }
+
+    public record OutgoingEpoch(String previousSessionId, long requestEpoch) {}
+
+    public record PreparedExchange(SessionRecord session, EncryptedPacket response, String messageId, String nonce,
+                                   String previousSessionId, long requestEpoch, String requestDigest) {}
+
+    private static final class State {
+        int stateVersion = 1;
+        SessionRecord session;
+        String epochId = "";
+        long issuedEpoch;
+        long remoteEpoch;
+        long recoveryAttempts;
+        String remoteSessionId = "";
+        String remoteParent = "";
+        Map<String, Instant> replay = new HashMap<>();
+        PreparedExchange prepared;
     }
 
     private static void validate(SessionRecord record) throws IOException {

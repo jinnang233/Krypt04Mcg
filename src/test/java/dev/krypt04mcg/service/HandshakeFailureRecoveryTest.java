@@ -22,6 +22,51 @@ import static org.junit.jupiter.api.Assertions.*;
 final class HandshakeFailureRecoveryTest {
     @TempDir Path root;
 
+    @Test void unseenOlderRequestCannotReplaceNewerEpochAfterRestart() throws Exception {
+        var crypto = new CryptoService();
+        var alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        var bob = crypto.generateLocalKeys("bob", "b", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        var sessions = new SessionService(root.resolve("bob"));
+        try (var initiator = new SessionHandshakeService(crypto, new SessionService(root.resolve("alice")));
+             var responder = new SessionHandshakeService(crypto, sessions)) {
+            var old = initiator.begin(identity(bob), alice, KemAlgorithm.ML_KEM_768, false, AeadAlgorithm.AES_256_GCM);
+            var current = initiator.begin(identity(bob), alice, KemAlgorithm.ML_KEM_768, false, AeadAlgorithm.AES_256_GCM);
+            responder.complete(current, responder.decrypt(current, bob, identity(alice)), identity(alice), bob,
+                    false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> {});
+            var established = sessions.find("alice").orElseThrow();
+            try (var restarted = new SessionHandshakeService(crypto, new SessionService(root.resolve("bob")))) {
+                var decrypted = restarted.decrypt(old, bob, identity(alice));
+                assertThrows(IOException.class, () -> restarted.complete(old, decrypted, identity(alice), bob,
+                        false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> fail("Stale request must not send")));
+            }
+            assertEquals(established, sessions.find("alice").orElseThrow());
+        }
+    }
+
+    @Test void persistenceFailureMustNotExposeAnUnrecoverableResponse() throws Exception {
+        var crypto = new CryptoService();
+        var alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        var bob = crypto.generateLocalKeys("bob", "b", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        var store = root.resolve("bob");
+        try (var initiator = new SessionHandshakeService(crypto, new SessionService(root.resolve("alice")));
+             var responder = new SessionHandshakeService(crypto, new SessionService(store))) {
+            var request = initiator.begin(identity(bob), alice, KemAlgorithm.ML_KEM_768, false, AeadAlgorithm.AES_256_GCM);
+            var decrypted = responder.decrypt(request, bob, identity(alice));
+            java.nio.file.Files.createDirectories(store);
+            java.nio.file.Files.writeString(store.resolve("sessions"), "blocked");
+            var responses = new ArrayList<EncryptedPacket>();
+            assertThrows(IOException.class, () -> responder.complete(request, decrypted, identity(alice), bob,
+                    false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> responses.add(packet)));
+            assertTrue(responses.isEmpty(), "Response must have a durable recovery record before delivery");
+            java.nio.file.Files.delete(store.resolve("sessions"));
+            assertTrue(responder.complete(request, decrypted, identity(alice), bob, false,
+                    AeadAlgorithm.AES_256_GCM, (packet, peer) -> responses.add(packet)));
+            var reply = responses.getFirst();
+            initiator.complete(reply, initiator.decrypt(reply, alice, identity(bob)), identity(bob), alice,
+                    false, AeadAlgorithm.AES_256_GCM, (packet, peer) -> fail());
+        }
+    }
+
     @Test void establishedEpochRejectsReplayEvenWithoutRecordedExchangeHistory() throws Exception {
         var crypto = new CryptoService();
         var alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);

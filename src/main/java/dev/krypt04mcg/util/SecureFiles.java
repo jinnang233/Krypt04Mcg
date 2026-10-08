@@ -8,6 +8,9 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.channels.FileChannel;
+import java.nio.ByteBuffer;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.AclEntry;
 import java.nio.file.attribute.AclEntryPermission;
 import java.nio.file.attribute.AclEntryType;
@@ -34,15 +37,29 @@ public final class SecureFiles {
     }
 
     public static void atomicWrite(Path path, byte[] data) throws IOException {
+        atomicWrite(path, data, false);
+    }
+
+    /** Handshake journals must never fall back to a non-atomic replacement. */
+    public static void atomicWriteDurable(Path path, byte[] data) throws IOException {
+        atomicWrite(path, data, true);
+    }
+
+    private static void atomicWrite(Path path, byte[] data, boolean durable) throws IOException {
         rejectLinks(path);
         createPrivateDirectories(path.getParent());
         Path temporary = Files.createTempFile(path.getParent(), path.getFileName().toString(), ".tmp");
         try {
             restrictToOwner(temporary, false);
-            Files.write(temporary, data);
+            try (FileChannel file = FileChannel.open(temporary, StandardOpenOption.WRITE)) {
+                ByteBuffer buffer = ByteBuffer.wrap(data);
+                while (buffer.hasRemaining()) file.write(buffer);
+                if (durable) file.force(true);
+            }
             try {
                 Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {
+                if (durable) throw e;
                 Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
             }
             restrictToOwner(path, false);

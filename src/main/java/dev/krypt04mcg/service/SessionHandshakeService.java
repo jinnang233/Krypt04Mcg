@@ -50,6 +50,12 @@ public final class SessionHandshakeService implements AutoCloseable {
                                               KemAlgorithm ephemeralAlgorithm, boolean compress,
                                               AeadAlgorithm aeadAlgorithm) throws CryptoException {
         cleanupExpired();
+        SessionService.OutgoingEpoch epoch;
+        try {
+            epoch = sessionService.reserveHandshake(receiver.owner());
+        } catch (IOException e) {
+            throw new CryptoException("Unable to reserve durable handshake epoch", e);
+        }
         String sender = senderKeys.kemPublicKey().owner();
         EphemeralKemKeyPair ephemeral = cryptoService.generateEphemeralKemKeyPair(ephemeralAlgorithm);
         try {
@@ -61,11 +67,12 @@ public final class SessionHandshakeService implements AutoCloseable {
             SessionExchangePayload payload = new SessionExchangePayload(SessionExchangePayload.VERSION,
                     SessionExchangePayload.Kind.REQUEST, sender, senderKeys.kemPublicKey().uuid(), receiver.owner(),
                     receiver.uuid(), sessionId, "", fingerprint(senderKeys), fingerprint(receiver),
-                    ephemeral.algorithm().identifier(), ephemeralPublic.keyData(), "", createdAt.toEpochMilli());
+                    ephemeral.algorithm().identifier(), ephemeralPublic.keyData(), "", createdAt.toEpochMilli(),
+                    epoch.previousSessionId(), epoch.requestEpoch());
             EncryptedPacket packet = cryptoService.encryptSessionExchange(receiver.kemPublicKey(), receiver.owner(),
                     senderKeys, sender, gson.toJson(payload), false, compress, aeadAlgorithm);
             putPending(receiver.owner(), new PendingHandshake(receiver, sessionId, Hex.encode(packet.messageId()),
-                    ephemeral, createdAt));
+                    ephemeral, createdAt, epoch.previousSessionId(), epoch.requestEpoch()));
             return packet;
         } catch (RuntimeException | CryptoException e) {
             ephemeral.close();
@@ -103,6 +110,7 @@ public final class SessionHandshakeService implements AutoCloseable {
                                          PublicIdentity sender, LocalKeyMaterial receiverKeys,
                                          boolean compress, AeadAlgorithm aeadAlgorithm,
                                          PacketSender packetSender) throws Exception {
+        cleanupExpired();
         SessionExchangePayload payload = exchange.payload();
         validateCommon(packet, payload, sender, receiverKeys);
         if (isResponse(packet)) {
@@ -123,9 +131,12 @@ public final class SessionHandshakeService implements AutoCloseable {
         if (Base64Url.decode(payload.sessionId()).length != CryptoService.MESSAGE_ID_BYTES) {
             throw new IOException("Invalid session exchange ID");
         }
-        SessionRecord established = sessionService.find(sender.owner()).orElse(null);
-        if (established != null && established.sessionId().equals(payload.sessionId())) {
-            throw new IOException("Session exchange epoch was already established");
+        var prepared = sessionService.checkRequest(sender.owner(), payload, packet, fingerprint(receiverKeys));
+        if (prepared != null) {
+            packetSender.send(prepared.response(), sender.owner());
+            sessionService.commitPrepared(sender.owner(), prepared.messageId());
+            discardPending(sender.owner());
+            return true;
         }
         PendingHandshake simultaneous = pending.get(normalize(sender.owner()));
         if (simultaneous != null) {
@@ -143,11 +154,14 @@ public final class SessionHandshakeService implements AutoCloseable {
                 SessionExchangePayload.Kind.RESPONSE, payload.initiator(), payload.initiatorUuid(),
                 payload.responder(), payload.responderUuid(), session.sessionId(), Hex.encode(packet.messageId()),
                 payload.initiatorFingerprint(), payload.responderFingerprint(), payload.ephemeralKem(), "",
-                session.secret(), System.currentTimeMillis());
+                session.secret(), System.currentTimeMillis(), payload.previousSessionId(), payload.requestEpoch());
         EncryptedPacket responsePacket = cryptoService.encryptSessionExchange(ephemeralPublic, sender.owner(),
                 receiverKeys, receiverKeys.kemPublicKey().owner(), gson.toJson(response), true, compress, aeadAlgorithm);
+        sessionService.prepareExchange(sender.owner(), new SessionService.PreparedExchange(session, responsePacket,
+                Hex.encode(packet.messageId()), Hex.encode(packet.nonce()), payload.previousSessionId(), payload.requestEpoch(),
+                SessionService.exchangeDigest(packet)), payload, packet);
         packetSender.send(responsePacket, sender.owner());
-        sessionService.save(session);
+        sessionService.commitPrepared(sender.owner(), Hex.encode(packet.messageId()));
         // Keep the previous response key until the competing exchange has succeeded.
         // Invalid key material or a failed send/save must not destroy the pending exchange.
         if (simultaneous != null && pending.remove(normalize(sender.owner()), simultaneous)) {
@@ -165,11 +179,13 @@ public final class SessionHandshakeService implements AutoCloseable {
                 || !pendingHandshake.peer().uuid().equalsIgnoreCase(payload.responderUuid())
                 || !payload.ephemeralPublicKey().isEmpty()
                 || !pendingHandshake.ephemeral().algorithm().identifier().equalsIgnoreCase(payload.ephemeralKem())
+                || !pendingHandshake.previousSessionId().equals(payload.previousSessionId())
+                || pendingHandshake.requestEpoch() != payload.requestEpoch()
                 || Base64Url.decode(payload.sessionSecret()).length != 32) {
             throw new IOException("Session exchange response does not match the pending request");
         }
-        sessionService.save(new SessionRecord(sender.owner(), fingerprint(sender), payload.sessionId(), Instant.now(), Instant.now(),
-                payload.sessionSecret(), 0, 0L).withLocalFingerprint(fingerprint(receiverKeys)));
+        sessionService.commitResponse(new SessionRecord(sender.owner(), fingerprint(sender), payload.sessionId(), Instant.now(), Instant.now(),
+                payload.sessionSecret(), 0, 0L).withLocalFingerprint(fingerprint(receiverKeys)), packet, payload.previousSessionId());
         pending.remove(normalize(sender.owner()));
         pendingHandshake.ephemeral().close();
     }
@@ -178,7 +194,13 @@ public final class SessionHandshakeService implements AutoCloseable {
                                        LocalKeyMaterial receiverKeys) throws IOException {
         PublicIdentity receiver = new PublicIdentity(receiverKeys.kemPublicKey().owner(),
                 receiverKeys.kemPublicKey().uuid(), receiverKeys.kemPublicKey(), receiverKeys.signaturePublicKey());
+        long now = System.currentTimeMillis();
         if (payload.version() != SessionExchangePayload.VERSION
+                || payload.requestEpoch() <= 0 || payload.previousSessionId() == null
+                || !payload.previousSessionId().isEmpty()
+                    && Base64Url.decode(payload.previousSessionId()).length != CryptoService.MESSAGE_ID_BYTES
+                || packet.timestampMillis() < now - Duration.ofHours(1).toMillis()
+                || packet.timestampMillis() > now + Duration.ofMinutes(5).toMillis()
                 || !payload.initiator().equalsIgnoreCase(isResponse(packet) ? receiver.owner() : sender.owner())
                 || !payload.responder().equalsIgnoreCase(isResponse(packet) ? sender.owner() : receiver.owner())
                 || !payload.initiatorUuid().equalsIgnoreCase(isResponse(packet) ? receiver.uuid() : sender.uuid())
@@ -203,6 +225,11 @@ public final class SessionHandshakeService implements AutoCloseable {
             String oldest = pending.keySet().iterator().next();
             pending.remove(oldest).ephemeral().close();
         }
+    }
+
+    private void discardPending(String peer) {
+        PendingHandshake previous = pending.remove(normalize(peer));
+        if (previous != null) previous.ephemeral().close();
     }
 
     private synchronized void expire(String peer, PendingHandshake expected) {
@@ -269,6 +296,7 @@ public final class SessionHandshakeService implements AutoCloseable {
     }
 
     private record PendingHandshake(PublicIdentity peer, String sessionId, String requestMessageId,
-                                    EphemeralKemKeyPair ephemeral, Instant createdAt) {
+                                    EphemeralKemKeyPair ephemeral, Instant createdAt,
+                                    String previousSessionId, long requestEpoch) {
     }
 }

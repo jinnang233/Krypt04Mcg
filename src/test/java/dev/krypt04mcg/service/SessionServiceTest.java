@@ -17,6 +17,27 @@ final class SessionServiceTest {
     @TempDir
     private Path tempDir;
 
+    @Test void legacyRecordsMigrateWithoutLosingCountersAndClearRetainsEpoch() throws Exception {
+        var sessions = new SessionService(tempDir);
+        var fresh = sessions.newSession("bob", "kem:sig");
+        var legacy = new SessionRecord(fresh.peer(), fresh.peerFingerprint(), fresh.sessionId(), fresh.createdAt(),
+                fresh.lastUsedAt(), fresh.secret(), 3, 17, 5, 7).withLocalFingerprint("own:keys");
+        var file = tempDir.resolve("sessions/bob.json");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, dev.krypt04mcg.util.JsonSupport.prettyGson().toJson(legacy));
+        assertEquals(java.util.List.of(legacy), sessions.list());
+        assertTrue(SensitiveFileStore.isEncrypted(file));
+        assertEquals(legacy, new SessionService(tempDir).find("bob").orElseThrow());
+        var first = sessions.reserveHandshake("bob");
+        assertEquals(legacy.sessionId(), first.previousSessionId());
+        sessions.clear("bob");
+        var restarted = new SessionService(tempDir);
+        assertTrue(restarted.find("bob").isEmpty());
+        var next = restarted.reserveHandshake("bob");
+        assertEquals(first.previousSessionId(), next.previousSessionId());
+        assertTrue(next.requestEpoch() > first.requestEpoch());
+    }
+
     @Test
     void sessionSecretsAreEncryptedAndSequencesAdvanceAtomically() throws Exception {
         SessionService sessions = new SessionService(tempDir);

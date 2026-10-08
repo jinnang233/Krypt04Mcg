@@ -18,6 +18,80 @@ import static org.junit.jupiter.api.Assertions.*;
 class DataTransferServiceTest {
     @TempDir Path root;
     static final String CHANNEL = "test:stream";
+    @Test void simultaneousApiHandshakeConvergesAndCanRotateAgain() throws Exception {
+        try (var pair = new Pair()) {
+            var alice = pair.alice.connect("Bob");
+            var bob = pair.bob.connect("Alice");
+            pair.until(() -> alice.isReady() && bob.isReady());
+            var as = new SessionService(root.resolve("alice-api"));
+            var bs = new SessionService(root.resolve("bob-api"));
+            assertEquals(as.find("Bob").orElseThrow().secret(), bs.find("Alice").orElseThrow().secret());
+            String epoch = as.find("Bob").orElseThrow().sessionId();
+            pair.alice.clear(); pair.bob.clear();
+            as.clear("Bob"); bs.clear("Alice");
+            var rotated = pair.alice.connect("Bob");
+            pair.until(rotated::isReady);
+            assertNotEquals(epoch, rotated.sessionId());
+            assertEquals(as.find("Bob").orElseThrow().secret(), bs.find("Alice").orElseThrow().secret());
+        }
+    }
+
+    @Test void disconnectBeforeDecryptionCompletionDoesNotConsumeRequest() throws Exception {
+        try (var pair = new Pair()) {
+            pair.alice.connect("Bob");
+            pair.until(() -> !pair.controls.isEmpty());
+            pair.bob.tick(); // submit decrypt; its commit callback has not run yet
+            assertTrue(exchangeWorker(pair.bob).busy());
+            pair.bob.clear();
+            pair.until(() -> !exchangeWorker(pair.bob).busy());
+            var sessions = new SessionService(root.resolve("bob-api"));
+            assertTrue(sessions.find("Alice").isEmpty());
+            pair.bob.receive(pair.controls.getFirst().routed("Alice", ControlPayload.Kind.EXCHANGE, -1));
+            pair.bob.tick();
+            pair.until(() -> !exchangeWorker(pair.bob).busy());
+            assertTrue(sessions.find("Alice").isPresent());
+        }
+    }
+    @Test void handshakeTimeoutRejectsLateResponseAndAllowsRenegotiation() throws Exception {
+        try (var pair = new Pair()) {
+            pair.dropResponse = true;
+            var first = pair.alice.connect("Bob");
+            pair.until(() -> pair.controls.size() == 2);
+            var response = pair.controls.getLast();
+            var field = DataTransferService.class.getDeclaredField("connections");
+            field.setAccessible(true);
+            Object connection = ((Map<?, ?>) field.get(pair.alice)).get("bob");
+            var created = connection.getClass().getDeclaredField("created");
+            created.setAccessible(true);
+            created.setLong(connection, System.currentTimeMillis() - 60001);
+            pair.alice.tick();
+            assertTrue(first.ready().toCompletableFuture().isCompletedExceptionally());
+            pair.alice.receive(response.routed("Bob", ControlPayload.Kind.EXCHANGE, -1));
+            pair.alice.tick();
+            pair.until(() -> !exchangeWorker(pair.alice).busy());
+            assertTrue(new SessionService(root.resolve("alice-api")).find("Bob").isEmpty());
+            pair.dropResponse = false;
+            var second = pair.alice.connect("Bob");
+            pair.until(second::isReady);
+            assertEquals(new SessionService(root.resolve("bob-api")).find("Alice").orElseThrow().sessionId(),
+                    new SessionService(root.resolve("alice-api")).find("Bob").orElseThrow().sessionId());
+        }
+    }
+    @Test void failedResponseSendCanRetryTheSameAuthenticatedRequest() throws Exception {
+        try (var pair = new Pair()) {
+            pair.failResponse = true;
+            pair.alice.connect("Bob");
+            pair.until(() -> pair.responseFailures == 1);
+            pair.until(() -> !exchangeWorker(pair.bob).busy());
+            var request = pair.controls.getFirst();
+            pair.failResponse = false;
+            pair.bob.receive(request.routed("Alice", ControlPayload.Kind.EXCHANGE, -1));
+            pair.bob.tick();
+            pair.until(() -> !exchangeWorker(pair.bob).busy());
+            assertTrue(new SessionService(root.resolve("bob-api")).find("Alice").isPresent(),
+                    "Failed send must not burn the request's Message ID / Nonce");
+        }
+    }
     @Test void selfConnectionsAreRejectedBeforeExchange() throws Exception {
         try (var pair = new Pair()) {
             assertThrows(IllegalArgumentException.class, () -> pair.alice.connect("aLiCe"));
@@ -368,7 +442,8 @@ class DataTransferServiceTest {
         final List<RawChannelPayload> raw = new ArrayList<>();
         final List<ControlPayload> controls = new ArrayList<>();
         final TestChannels relay;
-        KryptSocket right; boolean dropData, tamperData, keepOpen, unavailable;
+        KryptSocket right; boolean dropData, tamperData, keepOpen, unavailable, failResponse, dropResponse;
+        int responseFailures;
         Pair() throws Exception {
             config.enableDataApi = true; config.apiChannelCount = 2;
             var crypto = new CryptoService();
@@ -393,7 +468,16 @@ class DataTransferServiceTest {
             });
         }
         void send(String source, CustomPacketPayload payload) {
-            if (payload instanceof ControlPayload p) { controls.add(p); relay.receive(source, p); }
+            if (failResponse && source.equals("Bob") && payload instanceof ControlPayload p
+                    && p.kind() == ControlPayload.Kind.EXCHANGE) {
+                responseFailures++;
+                throw new IllegalStateException("Simulated response send failure");
+            }
+            if (payload instanceof ControlPayload p) {
+                controls.add(p);
+                if (dropResponse && source.equals("Bob") && p.kind() == ControlPayload.Kind.EXCHANGE) return;
+                relay.receive(source, p);
+            }
             else if (payload instanceof RawChannelPayload p) {
                 if (source.equals("Alice")) {
                     raw.add(p); if (dropData) return;

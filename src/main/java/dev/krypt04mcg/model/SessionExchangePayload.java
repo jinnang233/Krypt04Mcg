@@ -14,9 +14,12 @@ public record SessionExchangePayload(
         String ephemeralKem,
         String ephemeralPublicKey,
         String sessionSecret,
-        long createdAtMillis
+        long createdAtMillis,
+        String previousSessionId,
+        long requestEpoch
 ) {
-    public static final int VERSION = 1;
+    // v1 cannot distinguish an unseen delayed request from a new negotiation.
+    public static final int VERSION = 2;
 
     public enum Kind {
         REQUEST,
