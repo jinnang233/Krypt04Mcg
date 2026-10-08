@@ -9,6 +9,36 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class FragmentSendQueueTest {
+    @Test void maximumBatchCompletesBeforeAssemblyDeadlineAtCapturedPayloadPacing() {
+        queue.enqueue("bob", Collections.nCopies(2048, "part"), value -> sent.add(value.fragment()), 50, 110_000);
+        for (int i = 0; i < 2048; i++) {
+            now.set(i * 50_000_000L);
+            assertTrue(queue.tick(dev.krypt04mcg.config.ChatSendMode.CHAT, 1000));
+        }
+        assertEquals(2048, sent.size());
+        assertTrue(now.get() < 120_000_000_000L);
+    }
+
+    @Test void admissionRejectsQueueThatWouldMissDeadlineWithoutDiscardingExistingWork() {
+        queue.enqueue("bob", Collections.nCopies(100, "part"), value -> sent.add(value.fragment()), 1000, 110_000);
+        assertThrows(IllegalStateException.class,
+                () -> queue.enqueue("alice", List.of("overflow"), value -> sent.add(value.fragment()), 50, 30_000));
+        for (int i = 0; i < 100; i++) {
+            now.set(i * 1_000_000_000L);
+            assertTrue(queue.tick(0));
+        }
+        assertEquals(100, sent.size());
+        assertFalse(sent.contains("overflow"));
+    }
+
+    @Test void stalledClientCancelsExpiredCiphertextBeforeSubmission() {
+        queue.enqueue("bob", List.of("one", "two"), value -> sent.add(value.fragment()), 50, 110_000);
+        assertTrue(queue.tick(0));
+        now.set(110_000_000_000L);
+        assertThrows(IllegalStateException.class, () -> queue.tick(0));
+        assertEquals(List.of("one"), sent);
+        assertFalse(queue.tick(0));
+    }
     private final AtomicReference<Object> connection = new AtomicReference<>(new Object());
     private final AtomicLong now = new AtomicLong();
     private final FragmentSendQueue queue = new FragmentSendQueue(connection::get, now::get);

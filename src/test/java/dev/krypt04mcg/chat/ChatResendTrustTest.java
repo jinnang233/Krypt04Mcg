@@ -16,6 +16,34 @@ import static org.junit.jupiter.api.Assertions.*;
 class ChatResendTrustTest {
     @TempDir Path root;
 
+    @Test void largeDefaultChatSelectsAvailablePayloadAndFailsEarlyWithoutIt() throws Exception {
+        var crypto = new CryptoService();
+        var keys = new KeyStoreService(root, crypto);
+        keys.init("Bob", "bob", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
+        keys.importPublicIdentity("Bob", JsonSupport.prettyGson().toJson(keys.ownPublicIdentity()));
+        var config = new Krypt04McgConfig();
+        config.enableCompression = false;
+        var chat = new ArrayList<ChatSendFragment>();
+        var payload = new ArrayList<ChatSendFragment>();
+        var errors = new ArrayList<String>();
+        Object connection = new Object();
+        var service = new ChatSendService(config, keys, new KeyTrustService(root), null, null,
+                new SentMessageCacheService(root), crypto, new dev.krypt04mcg.protocol.PacketCodec(),
+                new dev.krypt04mcg.fragment.FragmentService(), chat::add, errors::add, () -> connection);
+        service.setCustomPayloadTransport(payload::add, () -> true);
+        assertTrue(service.sendKemMessage("Bob", "x".repeat(65536), true));
+        service.tick();
+        assertEquals(1, payload.size());
+        assertTrue(chat.isEmpty());
+        service.setCustomPayloadTransport(payload::add, () -> false);
+        int noticesBeforeFailure = errors.size();
+        assertFalse(service.sendKemMessage("Bob", "x".repeat(65536), true));
+        service.tick();
+        assertEquals(1, payload.size());
+        assertTrue(chat.isEmpty());
+        assertTrue(errors.size() > noticesBeforeFailure);
+    }
+
     @Test void newCiphertextPersistsRecipientBindingAndCanBeResent() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root, crypto);

@@ -17,6 +17,29 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 final class FragmentServiceTest {
+    @Test void maximumPacketRoundTripsWithFourDigitIndicesAndRejectsOneExtraByte() {
+        byte[] packet = new byte[ChatTransferLimits.MAX_PACKET_BYTES];
+        new java.util.Random(42).nextBytes(packet);
+        var service = new FragmentService();
+        var assembler = new FragmentReassembler();
+        var lines = service.fragment(packet, fixedId(), 180);
+        assertTrue(lines.size() > 1024);
+        Optional<byte[]> completed = Optional.empty();
+        for (var line : lines) completed = assembler.accept(service.parse(line), "alice");
+        assertArrayEquals(packet, completed.orElseThrow());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.fragment(new byte[packet.length + 1], fixedId(), 180));
+    }
+
+    @Test void oversizeEncodedPacketIsRemovedWithoutEvictingOtherMessages() {
+        var assembler = new FragmentReassembler();
+        assembler.accept(new Fragment("victim", 0, 2, "AQ"), "bob");
+        for (int i = 0; i < 1365; i++) assembler.accept(new Fragment("large", i, 2048, "A".repeat(256)), "alice");
+        assertThrows(IllegalArgumentException.class,
+                () -> assembler.accept(new Fragment("large", 1365, 2048, "A".repeat(256)), "alice"));
+        assertTrue(assembler.progress("large").isEmpty());
+        assertArrayEquals(new byte[]{1, 2, 3}, assembler.accept(new Fragment("victim", 1, 2, "ID"), "bob").orElseThrow());
+    }
     @Test
     void senderFloodCannotConsumeOtherSendersAssemblyCapacity() {
         FragmentReassembler reassembler = new FragmentReassembler();
@@ -88,7 +111,7 @@ final class FragmentServiceTest {
         FragmentService service = new FragmentService();
         String id = "00000000000000000000000000000000";
         for (String body : List.of("not-an-id 0 2 AA", id + " 0 2 AA!",
-                id + " 0 2 AA BB", id + " +0 2 AA", id + " 0 513 AA")) {
+                id + " 0 2 AA BB", id + " +0 2 AA", id + " 0 2049 AA")) {
             String line = FragmentService.PREFIX + " " + body;
             assertTrue(!service.isFragment(line));
             assertThrows(IllegalArgumentException.class, () -> service.parse(line));
@@ -202,11 +225,12 @@ final class FragmentServiceTest {
     }
 
     @Test
-    void rejectsMessagesBeyondReceiverFragmentLimit() {
+    void increasesSmallConfiguredPayloadForMaximumPacket() {
         FragmentService service = new FragmentService();
-        byte[] packet = new byte[12_288];
+        byte[] packet = new byte[ChatTransferLimits.MAX_PACKET_BYTES];
         List<String> lines = service.fragment(packet, fixedId(), 32);
-        assertEquals(FragmentReassembler.DEFAULT_MAX_FRAGMENTS_PER_MESSAGE, lines.size());
+        assertTrue(lines.size() <= FragmentReassembler.DEFAULT_MAX_FRAGMENTS_PER_MESSAGE);
+        assertTrue(service.parse(lines.getFirst()).payload().length() > 32);
         FragmentReassembler reassembler = new FragmentReassembler();
         Optional<byte[]> result = Optional.empty();
         for (String line : lines) {

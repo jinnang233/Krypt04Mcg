@@ -15,7 +15,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 public final class FragmentReassembler {
-    public static final int DEFAULT_MAX_FRAGMENTS_PER_MESSAGE = 512;
+    public static final int DEFAULT_MAX_FRAGMENTS_PER_MESSAGE = ChatTransferLimits.MAX_FRAGMENTS;
     public static final int DEFAULT_MAX_MESSAGES_PER_SENDER = 16;
 
     private final Clock clock;
@@ -74,7 +74,15 @@ public final class FragmentReassembler {
         if (partial.total != fragment.total()) {
             throw new IllegalArgumentException("Fragment total changed for " + fragment.messageId());
         }
-        partial.fragments.putIfAbsent(fragment.index(), fragment.payload());
+        if (!partial.fragments.containsKey(fragment.index())) {
+            int added = fragment.payload().length();
+            if (added > ChatTransferLimits.MAX_ENCODED_PACKET_CHARS - partial.chars) {
+                remove(fragment.messageId());
+                throw new IllegalArgumentException("Encrypted chat packet exceeds 256 KiB");
+            }
+            partial.fragments.put(fragment.index(), fragment.payload());
+            partial.chars += added;
+        }
         if (!partial.complete()) {
             return Optional.empty();
         }
@@ -82,7 +90,7 @@ public final class FragmentReassembler {
         for (int i = 0; i < partial.total; i++) {
             payload.append(partial.fragments.get(i));
         }
-        partials.remove(fragment.messageId());
+        remove(fragment.messageId());
         return Optional.of(Base64Url.decode(payload.toString()));
     }
 
@@ -98,7 +106,7 @@ public final class FragmentReassembler {
                 .map(entry -> new FragmentProgress(entry.getKey(), entry.getValue().fragments.size(), entry.getValue().total))
                 .toList();
         for (FragmentProgress progress : removed) {
-            partials.remove(progress.messageId());
+            remove(progress.messageId());
             timeoutListener.accept(progress);
         }
         return removed;
@@ -120,6 +128,10 @@ public final class FragmentReassembler {
         partials.clear();
     }
 
+    private void remove(String id) {
+        partials.remove(id);
+    }
+
     public synchronized void setTimeoutListener(Consumer<FragmentProgress> listener) {
         timeoutListener = Objects.requireNonNull(listener);
     }
@@ -129,6 +141,7 @@ public final class FragmentReassembler {
         private final long createdAt;
         private final String sender;
         private final Map<Integer, String> fragments = new HashMap<>();
+        private int chars;
 
         private PartialMessage(int total, long now, String sender) {
             this.total = total;

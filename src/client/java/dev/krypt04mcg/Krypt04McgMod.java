@@ -119,6 +119,8 @@ public final class Krypt04McgMod implements ClientModInitializer {
                 sessionHandshakeService, sentMessageCacheService, cryptoService, packetCodec,
                 fragmentService, this::sendChatLine, this::system, client::getConnection);
         chatSendService.setProgressListener(transferProgress);
+        chatSendService.setCustomPayloadTransport(this::sendCustomPayload,
+                () -> client.getConnection() != null && ClientPlayNetworking.canSend(ServerboundChatFragmentPayload.TYPE));
         applyChatSender();
         ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> clearChatTransfers());
         OptionalClothConfig.registerSaveListener(updated -> {

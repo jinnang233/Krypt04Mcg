@@ -53,6 +53,8 @@ tasks.named('compileTestJava') {
         include 'dev/krypt04mcg/chat/HandshakeStateMachineTest.java'
         include 'dev/krypt04mcg/chat/ChatSessionIdentityTest.java'
         include 'dev/krypt04mcg/chat/FragmentSendQueueTest.java'
+        include 'dev/krypt04mcg/chat/ChatSendPolicyTest.java'
+        include 'dev/krypt04mcg/chat/ChatResendTrustTest.java'
         include 'dev/krypt04mcg/chat/TransferProgressTrackerTest.java'
         include 'dev/krypt04mcg/chat/ChatReceiveProgressTest.java'
         include 'dev/krypt04mcg/fragment/FragmentServiceTest.java'

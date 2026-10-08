@@ -21,6 +21,9 @@ public final class FragmentService {
     }
 
     public List<String> fragment(byte[] packetBytes, byte[] messageId, int configuredPayloadSize, String prefix) {
+        if (packetBytes.length > ChatTransferLimits.MAX_PACKET_BYTES) {
+            throw new IllegalArgumentException("Encrypted chat packet exceeds 256 KiB");
+        }
         String encoded = Base64Url.encode(packetBytes);
         String id = Hex.encode(messageId);
         String normalizedPrefix = normalizePrefix(prefix);
@@ -60,8 +63,8 @@ public final class FragmentService {
         }
         // Validate the wire grammar before an unauthenticated fragment reserves storage.
         if (!parts.messageId().matches("[0-9A-Fa-f]{32}")
-                || !parts.index().matches("[0-9]{1,3}")
-                || !parts.total().matches("[0-9]{1,3}")
+                || !parts.index().matches("[0-9]{1,4}")
+                || !parts.total().matches("[0-9]{1,4}")
                 || !parts.payload().matches("[A-Za-z0-9_-]*")) {
             return false;
         }
@@ -114,6 +117,9 @@ public final class FragmentService {
 
     private static int payloadSizeFor(int encodedLength, String id, int configuredPayloadSize, String prefix) {
         int requested = Math.max(MIN_PAYLOAD_SIZE, configuredPayloadSize);
+        // Small configured slices must not prevent otherwise valid large packets.
+        requested = Math.max(requested, (encodedLength + ChatTransferLimits.MAX_FRAGMENTS - 1)
+                / ChatTransferLimits.MAX_FRAGMENTS);
         int payloadSize = Math.min(requested, maxPayloadFor(id, 0, 1, prefix));
         while (true) {
             if (payloadSize < MIN_PAYLOAD_SIZE) {

@@ -25,6 +25,7 @@ import dev.krypt04mcg.util.JsonSupport;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 
 public final class ChatSendService {
     private final Krypt04McgConfig config;
@@ -38,6 +39,8 @@ public final class ChatSendService {
     private final FragmentService fragmentService;
     private final Gson gson = JsonSupport.prettyGson();
     private Consumer<ChatSendFragment> chatSender;
+    private Consumer<ChatSendFragment> customPayloadSender;
+    private BooleanSupplier customPayloadAvailable = () -> false;
     private final Consumer<String> system;
     private final FragmentSendQueue sendQueue;
 
@@ -64,6 +67,12 @@ public final class ChatSendService {
     public void setChatSender(Consumer<ChatSendFragment> chatSender) {
         clearPending();
         this.chatSender = Objects.requireNonNull(chatSender, "chatSender");
+    }
+
+    public void setCustomPayloadTransport(Consumer<ChatSendFragment> sender, BooleanSupplier available) {
+        clearPending();
+        this.customPayloadSender = Objects.requireNonNull(sender);
+        this.customPayloadAvailable = Objects.requireNonNull(available);
     }
 
     public void clearPending() {
@@ -206,7 +215,10 @@ public final class ChatSendService {
     }
 
     private void sendFragments(String receiver, List<String> fragments, String recipientFingerprint) {
-        Consumer<ChatSendFragment> sender = chatSender;
+        ChatSendPolicy.Plan plan = ChatSendPolicy.plan(config.chatSendMode, config.sendDelayMs,
+                config.maxPacketAgeSeconds, fragments.size(), customPayloadAvailable.getAsBoolean());
+        Consumer<ChatSendFragment> sender = plan.customPayload() && customPayloadSender != null
+                ? customPayloadSender : chatSender;
         sendQueue.enqueue(receiver, fragments, fragment -> {
             try {
                 PublicIdentity current = keyStoreService.findPublicIdentity(receiver).orElse(null);
@@ -219,7 +231,7 @@ public final class ChatSendService {
                 throw new IllegalStateException(e.getMessage(), e);
             }
             sender.accept(fragment);
-        });
+        }, plan.delayMillis(), plan.queueBudgetMillis());
     }
 
     private void ensureRecipientMatches(String receiver, PublicIdentity identity, String fingerprint) {

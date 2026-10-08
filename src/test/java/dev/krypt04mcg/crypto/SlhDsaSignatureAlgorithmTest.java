@@ -49,17 +49,25 @@ final class SlhDsaSignatureAlgorithmTest {
     void largestSlhDsaSignatureSurvivesDefaultPacketFragmentation() throws Exception {
         CryptoService crypto = new CryptoService();
         LocalKeyMaterial alice = crypto.generateLocalKeys("alice", "alice-uuid", KemAlgorithm.ML_KEM_512,
-                SignatureAlgorithm.SLH_DSA_SHAKE_256F_WITH_SHAKE256);
-        LocalKeyMaterial bob = crypto.generateLocalKeys("bob", "bob-uuid", KemAlgorithm.ML_KEM_512,
+                SignatureAlgorithm.SLH_DSA_SHA2_256F_ED448);
+        LocalKeyMaterial bob = crypto.generateLocalKeys("bob", "bob-uuid", KemAlgorithm.HQC_HQC256_X448,
                 SignatureAlgorithm.FALCON_512);
         PublicIdentity alicePublic = publicIdentity(alice);
         PublicIdentity bobPublic = publicIdentity(bob);
-        EncryptedPacket packet = crypto.encryptFor(bobPublic, alice, "alice", "largest SLH-DSA signature", true);
+        char[] chars = new char[CryptoService.MAX_PLAINTEXT_BYTES];
+        var random = new java.util.Random(42);
+        for (int i = 0; i < chars.length; i++) chars[i] = (char) (32 + random.nextInt(95));
+        String plaintext = new String(chars);
+        // Disable compression so the full 64 KiB ciphertext is exercised.
+        EncryptedPacket packet = crypto.encryptFor(bobPublic, alice, "alice", plaintext, true, false,
+                dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
+        assertEquals(49_982, packet.signature().length);
+        assertEquals(65_552, packet.ciphertext().length);
 
         PacketCodec codec = new PacketCodec();
         FragmentService fragmentService = new FragmentService();
         List<String> encodedFragments = fragmentService.fragment(codec.encode(packet), packet.messageId(), 180);
-        assertTrue(encodedFragments.size() > 256);
+        assertTrue(encodedFragments.size() > 512);
         assertTrue(encodedFragments.size() <= FragmentReassembler.DEFAULT_MAX_FRAGMENTS_PER_MESSAGE);
 
         FragmentReassembler reassembler = new FragmentReassembler();
@@ -70,7 +78,7 @@ final class SlhDsaSignatureAlgorithmTest {
         }
 
         EncryptedPacket decoded = codec.decode(reassembled.orElseThrow());
-        assertEquals("largest SLH-DSA signature", crypto.decrypt(decoded, bob, alicePublic));
+        assertEquals(plaintext, crypto.decrypt(decoded, bob, alicePublic));
     }
 
     @TestFactory

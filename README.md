@@ -89,14 +89,28 @@ Linux, macOS or Windows platform.
 
 ## Releases
 
-Current version: **0.28.0** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
+Encrypted chat packets can contain up to **256 KiB** of complete binary packet data and **2,048
+fragments**. A maximum-size packet uses 1,942 fragments at the default 180-character payload.
+Smaller configured slices are enlarged when needed to fit the fragment count; every chat line
+still fits Minecraft's 256-character limit. A long custom prefix may reduce usable capacity.
+
+If configured pacing would miss the fixed two-minute assembly window, the client uses an
+available chat custom-payload channel at one fragment per 50 ms. Without that channel, it fails
+before sending and reports that the relay needs updating or the message must be shortened.
+Queued waits and stalled sends also have deadlines; authenticated freshness and replay checks
+are retained. Upgrade both clients to 0.29.0 and the relay to 1.9.0; old clients cannot receive
+large four-digit fragment counts. Existing relay configs should set `max-fragments-per-message`
+to `2048`. Relay aggregate/per-player/outbox text quotas are removed; packet size, message counts,
+fixed expiry and traffic budgets still apply. Raw stream API/file protocols are unchanged.
+
+Current version: **0.29.0** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
 for the new progress HUD, sender quotas, and upgrade notes in this release.
 
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag -a v0.28.0 -m "Release 0.28.0"
-git push origin v0.28.0
+git tag -a v0.29.0 -m "Release 0.29.0"
+git push origin v0.29.0
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -110,7 +124,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.28.0.jar.sign krypt04mcg-0.28.0.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.29.0.jar.sign krypt04mcg-0.29.0.jar
 ```
 
 ## License

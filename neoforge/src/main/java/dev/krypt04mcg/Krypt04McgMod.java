@@ -147,6 +147,7 @@ public final class Krypt04McgMod {
                 sessionHandshakeService, sentMessageCacheService, cryptoService, packetCodec,
                 fragmentService, this::sendChatLine, this::system, client::getConnection);
         chatSendService.setProgressListener(transferProgress);
+        chatSendService.setCustomPayloadTransport(this::sendCustomPayload, () -> canSend(NeoChatPayload.TYPE));
         applyChatSender();
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> clearChatTransfers());
         OptionalClothConfig.registerSaveListener(updated -> {

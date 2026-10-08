@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.29.0 — 2026-10-08
+
+- Increase encrypted chat capacity to 256 KiB per complete packet and 2,048 fragments, accepting four-digit indices/totals. Enlarge small configured slices when needed without exceeding the 256-character line limit. Reject oversized binary/encoded packets before retaining an entire oversized assembly.
+- Automatically select an available custom-payload transport at 50 ms pacing for messages that cannot finish at their configured rate. Capture transport and pacing per queued batch, account for queued waits at admission, and cancel expired sends before submitting stale ciphertext. Preserve fixed receive expiry, freshness, signature and replay checks.
+- Relay 1.9.0 removes aggregate/per-player/completed-outbox buffered-text quotas as requested. Message-count admission and fixed deadlines remain; larger concurrency can retain more memory. Upgrade both clients and update existing relay fragment configuration to 2,048.
+
+Details: [large chat packet capacity](docs/security/2026-10-08-large-chat-packets.md).
+
 ## 0.28.0 — 2026-10-08
 
 ### Transfer progress
