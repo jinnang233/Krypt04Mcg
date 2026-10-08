@@ -89,11 +89,14 @@ Linux, macOS or Windows platform.
 
 ## Releases
 
+Current version: **0.27.5** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
+for the security fixes, receive deadlines, and storage migration notes in this release.
+
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag v0.19.0
-git push origin v0.19.0
+git tag -a v0.27.5 -m "Release 0.27.5"
+git push origin v0.27.5
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -107,7 +110,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.19.0.jar.sign krypt04mcg-0.19.0.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.27.5.jar.sign krypt04mcg-0.27.5.jar
 ```
 
 ## License
