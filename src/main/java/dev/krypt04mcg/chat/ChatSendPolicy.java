@@ -6,6 +6,16 @@ import dev.krypt04mcg.config.ChatSendMode;
 final class ChatSendPolicy {
     record Plan(boolean customPayload, int delayMillis, long queueBudgetMillis) {}
 
+    /**
+     * Performs the plan operation for the chat transport admission policy.
+     *
+     * @param mode the mode supplied to this operation
+     * @param configuredDelay the configured delay supplied to this operation
+     * @param maxPacketAgeSeconds the max packet age seconds supplied to this operation
+     * @param fragments the fragments supplied to this operation
+     * @param customPayloadAvailable the custom payload available supplied to this operation
+     * @return the result described above
+     */
     static Plan plan(ChatSendMode mode, int configuredDelay, int maxPacketAgeSeconds,
                      int fragments, boolean customPayloadAvailable) {
         long budget = Math.min(110_000L, Math.clamp(maxPacketAgeSeconds, 30, 3600) * 1000L - 15_000L);
@@ -28,5 +38,8 @@ final class ChatSendPolicy {
         return new Plan(custom, delay, budget);
     }
 
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private ChatSendPolicy() {}
 }

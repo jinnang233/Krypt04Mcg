@@ -13,6 +13,12 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class KemAlgorithmTest {
+    /**
+     * Verifies that serializes validates and encrypts.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @EnumSource(KemAlgorithm.class)
     void serializesValidatesAndEncrypts(KemAlgorithm algorithm) throws Exception {

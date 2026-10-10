@@ -50,6 +50,23 @@ public final class ChatReceiveHandler {
     private final BiConsumer<String, String> decryptedMessageSink;
     private Consumer<TransferProgressTracker.Update> progress = ignored -> {};
 
+    /**
+     * Creates a chat receive handler with the supplied dependencies and initial state.
+     *
+     * @param config the config supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param cryptoService the crypto service supplied to this operation
+     * @param packetCodec the packet encoding and decoding collaborator
+     * @param fragmentService the fragment service supplied to this operation
+     * @param reassembler the reassembler supplied to this operation
+     * @param decryptionHistoryService the decryption history service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param sessionHandshakeService the session handshake service supplied to this operation
+     * @param packetSender the packet sender supplied to this operation
+     * @param system the system supplied to this operation
+     * @param decryptedMessageSink the decrypted message sink supplied to this operation
+     */
     public ChatReceiveHandler(Krypt04McgConfig config, KeyStoreService keyStoreService,
                               KeyTrustService keyTrustService, CryptoService cryptoService,
                               PacketCodec packetCodec, FragmentService fragmentService,
@@ -73,18 +90,37 @@ public final class ChatReceiveHandler {
         if (reassembler != null) reassembler.setTimeoutListener(this::timedOut);
     }
 
+    /**
+     * Performs the should hide operation for the authenticated chat receive handler.
+     *
+     * @param raw the raw supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean shouldHide(String raw) {
         return config.hideEncryptedRawMessage && extractFragmentLine(raw).isPresent();
     }
 
+    /**
+     * Updates the progress listener used by the authenticated chat receive handler.
+     *
+     * @param progress the progress supplied to this operation
+     */
     public void setProgressListener(Consumer<TransferProgressTracker.Update> progress) {
         this.progress = Objects.requireNonNull(progress);
     }
 
+    /**
+     * Processes the next scheduled work and lifecycle checks for the authenticated chat receive handler.
+     */
     public void tick() {
         reassembler.cleanupTimedOut();
     }
 
+    /**
+     * Performs the timed out operation for the authenticated chat receive handler.
+     *
+     * @param timeout the configured expiry interval
+     */
     private void timedOut(FragmentProgress timeout) {
         int separator = timeout.messageId().indexOf(':');
         String peer = separator < 0 ? "unknown" : timeout.messageId().substring(0, separator);
@@ -92,15 +128,36 @@ public final class ChatReceiveHandler {
                 timeout.received(), timeout.total(), TransferProgressTracker.Status.TIMED_OUT);
     }
 
+    /**
+     * Performs the clear pending operation for the authenticated chat receive handler.
+     */
     public void clearPending() {
         reassembler.clear();
     }
 
+    /**
+     * Performs the report operation for the authenticated chat receive handler.
+     *
+     * @param id the id supplied to this operation
+     * @param peer the peer identifier associated with this operation
+     * @param completed the completed supplied to this operation
+     * @param total the total supplied to this operation
+     * @param status the status supplied to this operation
+     */
     private void report(String id, String peer, int completed, int total, TransferProgressTracker.Status status) {
         progress.accept(new TransferProgressTracker.Update(TransferProgressTracker.Direction.RECEIVE,
                 id, peer, completed, total, status));
     }
 
+    /**
+     * Extracts and validates sender-bound fragments, performs bounded reassembly, then decodes and
+     * authenticates the complete packet before marking receive progress complete. Trust, transport
+     * identity, freshness and replay/session checks are applied in their implemented order; unbound shadow
+     * chat uses one shared admission bucket.
+     *
+     * @param transportSender the source identity supplied by the transport, not the unauthenticated body
+     * @param raw the raw supplied to this operation
+     */
     public void handle(String transportSender, String raw) {
         Optional<String> fragmentLine = extractFragmentLine(raw);
         if (fragmentLine.isEmpty()) {
@@ -229,6 +286,12 @@ public final class ChatReceiveHandler {
         }
     }
 
+    /**
+     * Parses session message for the authenticated chat receive handler.
+     *
+     * @param plaintext the plaintext bytes to encrypt or process
+     * @return the result described above
+     */
     private SessionMessagePayload parseSessionMessage(String plaintext) {
         SessionMessagePayload payload = gson.fromJson(plaintext, SessionMessagePayload.class);
         if (payload == null || payload.version() != SessionMessagePayload.VERSION || payload.message() == null) {
@@ -237,6 +300,13 @@ public final class ChatReceiveHandler {
         return payload;
     }
 
+    /**
+     * Requires an authenticated timestamp layout and checks the configured bounded past/future acceptance
+     * window. A valid signature or AEAD tag on an old packet is insufficient; durable replay checks are
+     * still required independently.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     */
     private void validateFreshness(EncryptedPacket packet) {
         if (packet.protocolVersion() < EncryptedPacket.COMPACT_VERSION && !packet.signed()) {
             throw new IllegalArgumentException("Legacy unsigned packets have no authenticated timestamp");
@@ -251,6 +321,14 @@ public final class ChatReceiveHandler {
         }
     }
 
+    /**
+     * Checks packet sender claims against the server/transport-provided source when available. Unbound
+     * input requires a supported authenticated packet form; displayed player names alone are not transport
+     * identity.
+     *
+     * @param transportSender the source identity supplied by the transport, not the unauthenticated body
+     * @param packet the packet being serialized, authenticated or processed
+     */
     private static void requireTransportIdentity(String transportSender, EncryptedPacket packet) {
         if (transportSender == null || transportSender.isBlank()) {
             if (!packet.signed() && packet.type() != dev.krypt04mcg.model.PacketType.SESSION_MESSAGE) {
@@ -263,10 +341,23 @@ public final class ChatReceiveHandler {
         }
     }
 
+    /**
+     * Normalizes transport sender into the comparison/storage form used by the authenticated chat receive
+     * handler.
+     *
+     * @param sender the sender or source associated with this operation
+     * @return the result described above
+     */
     private static String normalizeTransportSender(String sender) {
         return sender == null || sender.isBlank() ? "signed-unbound" : sender.toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Performs the extract fragment line operation for the authenticated chat receive handler.
+     *
+     * @param raw the raw supplied to this operation
+     * @return the result described above
+     */
     private Optional<String> extractFragmentLine(String raw) {
         if (raw == null) {
             return Optional.empty();

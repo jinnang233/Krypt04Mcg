@@ -57,19 +57,51 @@ public final class CryptoService {
     private final PacketCodec packetCodec;
     private final int maxPlaintextBytes;
 
-    /** A separate instance for bounded optional file envelopes; chat keeps its default limit. */
+    /**
+     * Creates a cryptographic service with registered BC providers, a bounded packet codec and a validated
+     * plaintext ceiling. The default constructor keeps chat at 64 KiB; the integer overload permits
+     * separately bounded optional-file envelopes. Supplied SecureRandom and codec instances remain the
+     * dependencies used by later operations.
+     *
+     * @param maxPlaintextBytes the maximum accepted plaintext size in bytes
+     */
     public CryptoService(int maxPlaintextBytes) {
         this(new SecureRandom(), new PacketCodec(maxPlaintextBytes + 65536), maxPlaintextBytes);
     }
 
+    /**
+     * Creates a cryptographic service with registered BC providers, a bounded packet codec and a validated
+     * plaintext ceiling. The default constructor keeps chat at 64 KiB; the integer overload permits
+     * separately bounded optional-file envelopes. Supplied SecureRandom and codec instances remain the
+     * dependencies used by later operations.
+     */
     public CryptoService() {
         this(new SecureRandom(), new PacketCodec());
     }
 
+    /**
+     * Creates a cryptographic service with registered BC providers, a bounded packet codec and a validated
+     * plaintext ceiling. The default constructor keeps chat at 64 KiB; the integer overload permits
+     * separately bounded optional-file envelopes. Supplied SecureRandom and codec instances remain the
+     * dependencies used by later operations.
+     *
+     * @param secureRandom the configured cryptographic randomness source
+     * @param packetCodec the packet encoding and decoding collaborator
+     */
     public CryptoService(SecureRandom secureRandom, PacketCodec packetCodec) {
         this(secureRandom, packetCodec, MAX_PLAINTEXT_BYTES);
     }
 
+    /**
+     * Creates a cryptographic service with registered BC providers, a bounded packet codec and a validated
+     * plaintext ceiling. The default constructor keeps chat at 64 KiB; the integer overload permits
+     * separately bounded optional-file envelopes. Supplied SecureRandom and codec instances remain the
+     * dependencies used by later operations.
+     *
+     * @param secureRandom the configured cryptographic randomness source
+     * @param packetCodec the packet encoding and decoding collaborator
+     * @param maxPlaintextBytes the maximum accepted plaintext size in bytes
+     */
     private CryptoService(SecureRandom secureRandom, PacketCodec packetCodec, int maxPlaintextBytes) {
         if (maxPlaintextBytes < 1 || maxPlaintextBytes > 16 * 1024 * 1024) {
             throw new IllegalArgumentException("Invalid plaintext limit");
@@ -80,10 +112,32 @@ public final class CryptoService {
         this.maxPlaintextBytes = maxPlaintextBytes;
     }
 
+    /**
+     * Generates the selected KEM and signature key pairs through their configured providers and records
+     * their owner, UUID, encoded key material and fingerprints. Null selections use the explicit project
+     * defaults; generation does not establish trust in an externally supplied identity.
+     *
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public LocalKeyMaterial generateLocalKeys(String owner, String uuid) throws CryptoException {
         return generateLocalKeys(owner, uuid, KemAlgorithm.ML_KEM_768_X25519, SignatureAlgorithm.MLDSA65_ED25519_SHA512);
     }
 
+    /**
+     * Generates the selected KEM and signature key pairs through their configured providers and records
+     * their owner, UUID, encoded key material and fingerprints. Null selections use the explicit project
+     * defaults; generation does not establish trust in an externally supplied identity.
+     *
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @param kemAlgorithm the selected KEM suite
+     * @param signatureAlgorithm the selected signature suite
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public LocalKeyMaterial generateLocalKeys(String owner, String uuid, KemAlgorithm kemAlgorithm,
                                               SignatureAlgorithm signatureAlgorithm) throws CryptoException {
         KemAlgorithm selectedKem = kemAlgorithm == null ? KemAlgorithm.ML_KEM_768_X25519 : kemAlgorithm;
@@ -106,23 +160,76 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Draws a fresh 16-byte message identifier from the configured SecureRandom. The identifier is used
+     * for packet correlation and HKDF salt; it is not an authentication credential.
+     *
+     * @return the resulting array produced by this operation
+     */
     public byte[] randomMessageId() {
         byte[] id = new byte[MESSAGE_ID_BYTES];
+        /*
+         * Draws security-sensitive bytes from the configured SecureRandom rather than a general-purpose PRNG.
+         * Production randomness must remain unpredictable; a random nonce still depends on avoiding
+         * collisions/reuse under its key.
+         */
         secureRandom.nextBytes(id);
         return id;
     }
 
+    /**
+     * Encrypts a bounded UTF-8 message for the recipient KEM public key and optionally signs the complete
+     * packet. Overloads select the documented compression and AEAD defaults. The caller must establish
+     * recipient trust before invoking this cryptographic operation.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param senderKeys the local sender key material
+     * @param sender the sender or source associated with this operation
+     * @param message the message supplied to this operation
+     * @param sign whether a signature is added to the encrypted packet
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public EncryptedPacket encryptFor(PublicIdentity receiver, LocalKeyMaterial senderKeys, String sender, String message, boolean sign)
             throws CryptoException {
         return encryptFor(receiver, senderKeys, sender, message, sign, false);
     }
 
+    /**
+     * Encrypts a bounded UTF-8 message for the recipient KEM public key and optionally signs the complete
+     * packet. Overloads select the documented compression and AEAD defaults. The caller must establish
+     * recipient trust before invoking this cryptographic operation.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param senderKeys the local sender key material
+     * @param sender the sender or source associated with this operation
+     * @param message the message supplied to this operation
+     * @param sign whether a signature is added to the encrypted packet
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public EncryptedPacket encryptFor(PublicIdentity receiver, LocalKeyMaterial senderKeys, String sender, String message,
                                       boolean sign, boolean compress)
             throws CryptoException {
         return encryptFor(receiver, senderKeys, sender, message, sign, compress, AeadAlgorithm.AES_256_GCM);
     }
 
+    /**
+     * Encrypts a bounded UTF-8 message for the recipient KEM public key and optionally signs the complete
+     * packet. Overloads select the documented compression and AEAD defaults. The caller must establish
+     * recipient trust before invoking this cryptographic operation.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param senderKeys the local sender key material
+     * @param sender the sender or source associated with this operation
+     * @param message the message supplied to this operation
+     * @param sign whether a signature is added to the encrypted packet
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @param aeadAlgorithm the selected authenticated-encryption suite
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public EncryptedPacket encryptFor(PublicIdentity receiver, LocalKeyMaterial senderKeys, String sender, String message,
                                       boolean sign, boolean compress, AeadAlgorithm aeadAlgorithm)
             throws CryptoException {
@@ -130,6 +237,22 @@ public final class CryptoService {
                 aeadAlgorithm, sign ? PacketType.SIGNED_KEM_MESSAGE : PacketType.KEM_MESSAGE, (byte) 0);
     }
 
+    /**
+     * Builds a signed KEM-encrypted handshake envelope and marks whether it is a response. The handshake
+     * service is responsible for binding request IDs, fingerprints, predecessor epochs and durable replay
+     * state; this method only constructs the cryptographic envelope.
+     *
+     * @param receiverKem the receiver kem supplied to this operation
+     * @param receiver the intended recipient associated with this operation
+     * @param senderKeys the local sender key material
+     * @param sender the sender or source associated with this operation
+     * @param payload the payload supplied to this operation
+     * @param response the response supplied to this operation
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @param aeadAlgorithm the selected authenticated-encryption suite
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public EncryptedPacket encryptSessionExchange(KeyRecord receiverKem, String receiver, LocalKeyMaterial senderKeys,
                                                    String sender, String payload, boolean response, boolean compress,
                                                    AeadAlgorithm aeadAlgorithm) throws CryptoException {
@@ -137,6 +260,27 @@ public final class CryptoService {
                 PacketType.SESSION_EXCHANGE, response ? FLAG_SESSION_RESPONSE : 0);
     }
 
+    /**
+     * Encodes and bounds plaintext before optional compression, validates the recipient KEM selection, and
+     * encapsulates a fresh secret through KemCrypto. HKDF-SHA256 derives a separate AEAD key using the
+     * random message ID as salt and a message-specific domain label. A fresh 96-bit nonce protects the
+     * AEAD operation; canonical packet metadata is supplied as AAD, and optional signatures cover the
+     * canonical signature input including the ciphertext. The temporary derived key is overwritten in
+     * finally; Java/provider copies are not guaranteed to be erasable.
+     *
+     * @param receiverKem the receiver kem supplied to this operation
+     * @param receiver the intended recipient associated with this operation
+     * @param senderKeys the local sender key material
+     * @param sender the sender or source associated with this operation
+     * @param message the message supplied to this operation
+     * @param sign whether a signature is added to the encrypted packet
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @param aeadAlgorithm the selected authenticated-encryption suite
+     * @param packetType the packet type supplied to this operation
+     * @param extraFlags the extra flags supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private EncryptedPacket encryptForKem(KeyRecord receiverKem, String receiver, LocalKeyMaterial senderKeys,
                                           String sender, String message, boolean sign, boolean compress,
                                           AeadAlgorithm aeadAlgorithm, PacketType packetType, byte extraFlags)
@@ -179,10 +323,31 @@ public final class CryptoService {
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to encrypt message", e);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
+    /**
+     * Encrypts a session message using a per-message HKDF key derived from the 32-byte session secret and
+     * fresh message ID. Validated session ID and sequence are bound into versioned packet metadata and
+     * AEAD AAD. This method does not advance durable session counters; the session service must reserve or
+     * commit them separately.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param sender the sender or source associated with this operation
+     * @param sessionSecret the shared secret for the expected session epoch
+     * @param sessionId the identifier of the expected session epoch
+     * @param sequence the record or control sequence in the relevant replay domain
+     * @param message the message supplied to this operation
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @param aeadAlgorithm the selected authenticated-encryption suite
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public EncryptedPacket encryptWithSession(String receiver, String sender, byte[] sessionSecret,
                                               String sessionId, long sequence, String message, boolean compress,
                                               AeadAlgorithm aeadAlgorithm) throws CryptoException {
@@ -207,10 +372,26 @@ public final class CryptoService {
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to encrypt session message", e);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
+    /**
+     * Validates packet structure, recipient identity and the declared KEM against local private-key
+     * parameters before decapsulation. Signed packets must match the supplied sender identity and verify
+     * before AEAD plaintext is exposed. Transport identity, trust decisions, freshness and persistent
+     * replay admission belong to higher-level receive handlers.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param receiverKeys the local recipient key material
+     * @param claimedSender the public identity to compare with authenticated sender metadata
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public String decrypt(EncryptedPacket packet, LocalKeyMaterial receiverKeys, PublicIdentity claimedSender)
             throws CryptoException {
         validateProtocol(packet);
@@ -229,6 +410,19 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Decrypts only a flagged handshake response with the matching pending ephemeral KEM key pair. A
+     * copied private-key encoding is overwritten after decoding, and normal signature, recipient and AEAD
+     * checks still apply. The handshake service separately validates correlation fields and commits the
+     * resulting session.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param receiver the intended recipient associated with this operation
+     * @param ephemeralKeyPair the ephemeral key pair supplied to this operation
+     * @param claimedSender the public identity to compare with authenticated sender metadata
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public String decryptSessionExchangeResponse(EncryptedPacket packet, String receiver,
                                                  EphemeralKemKeyPair ephemeralKeyPair,
                                                  PublicIdentity claimedSender) throws CryptoException {
@@ -245,6 +439,10 @@ public final class CryptoService {
             try {
                 privateKey = KemCrypto.decodePrivate(packetKem, encoded);
             } finally {
+                /*
+                 * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+                 * immutable Strings, returned copies and provider/native key objects may retain other copies.
+                 */
                 Arrays.fill(encoded, (byte) 0);
             }
             KemCrypto.requireParameters(privateKey, packetKem);
@@ -254,6 +452,21 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Requires recipient and signed-sender identity consistency, validates the declared algorithms, and
+     * verifies the canonical signature before KEM decapsulation. AEAD verifies the tag with canonical AAD
+     * before plaintext decoding or bounded inflation. Unsigned KEM encryption authenticates ciphertext
+     * integrity under the derived key but does not prove a named sender. Derived-key buffers are
+     * overwritten on both success and failure.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param receiver the intended recipient associated with this operation
+     * @param packetKem the packet kem supplied to this operation
+     * @param privateKey the private key material used by the selected primitive
+     * @param claimedSender the public identity to compare with authenticated sender metadata
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private String decryptKemPacket(EncryptedPacket packet, String receiver, KemAlgorithm packetKem,
                                     PrivateKey privateKey, PublicIdentity claimedSender) throws CryptoException {
         if (!packet.receiver().equalsIgnoreCase(receiver)) {
@@ -290,10 +503,29 @@ public final class CryptoService {
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to decrypt message", e);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
+    /**
+     * Checks the expected sender, recipient, session epoch and exact sequence before deriving the message
+     * key and authenticating AEAD ciphertext. The supplied sequence is an expected value, not a replay
+     * cache update. Only authenticated plaintext is decoded or inflated; callers must durably advance
+     * receive counters after acceptance.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param receiver the intended recipient associated with this operation
+     * @param sender the sender or source associated with this operation
+     * @param sessionSecret the shared secret for the expected session epoch
+     * @param sessionId the identifier of the expected session epoch
+     * @param sequence the record or control sequence in the relevant replay domain
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public String decryptWithSession(EncryptedPacket packet, String receiver, String sender,
                                      byte[] sessionSecret, String sessionId, long sequence) throws CryptoException {
         validateProtocol(packet);
@@ -319,14 +551,39 @@ public final class CryptoService {
         } catch (GeneralSecurityException | IllegalArgumentException e) {
             throw new CryptoException("Unable to decrypt session message", e);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             if (derivedKey != null) Arrays.fill(derivedKey, (byte) 0);
         }
     }
 
+    /**
+     * Signs the supplied canonical bytes with a private key whose recorded role and selected parameters
+     * are checked. SignatureCrypto dispatches native provider suites or the project hybrid format; signing
+     * alone does not validate packet routing or establish peer trust.
+     *
+     * @param privateKeyRecord the private key record supplied to this operation
+     * @param input the input bytes or stream consumed by the operation
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public byte[] sign(KeyRecord privateKeyRecord, byte[] input) throws CryptoException {
         return sign(signatureAlgorithm(privateKeyRecord), privateKeyRecord, input);
     }
 
+    /**
+     * Signs the supplied canonical bytes with a private key whose recorded role and selected parameters
+     * are checked. SignatureCrypto dispatches native provider suites or the project hybrid format; signing
+     * alone does not validate packet routing or establish peer trust.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param privateKeyRecord the private key record supplied to this operation
+     * @param input the input bytes or stream consumed by the operation
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private byte[] sign(SignatureAlgorithm algorithm, KeyRecord privateKeyRecord, byte[] input)
             throws CryptoException {
         try {
@@ -338,10 +595,33 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Verifies supplied bytes and signature against a role-checked public-key record and exact selected
+     * parameters. Hybrid suites require both components. A valid signature authenticates those bytes under
+     * that key; trust in the owner and freshness of the message require separate checks.
+     *
+     * @param publicKeyRecord the public key record supplied to this operation
+     * @param input the input bytes or stream consumed by the operation
+     * @param signatureBytes the signature bytes to verify
+     * @return whether the condition or operation described above succeeds
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public boolean verify(KeyRecord publicKeyRecord, byte[] input, byte[] signatureBytes) throws CryptoException {
         return verify(signatureAlgorithm(publicKeyRecord), publicKeyRecord, input, signatureBytes);
     }
 
+    /**
+     * Verifies supplied bytes and signature against a role-checked public-key record and exact selected
+     * parameters. Hybrid suites require both components. A valid signature authenticates those bytes under
+     * that key; trust in the owner and freshness of the message require separate checks.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param publicKeyRecord the public key record supplied to this operation
+     * @param input the input bytes or stream consumed by the operation
+     * @param signatureBytes the signature bytes to verify
+     * @return whether the condition or operation described above succeeds
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private boolean verify(SignatureAlgorithm algorithm, KeyRecord publicKeyRecord, byte[] input,
                            byte[] signatureBytes) throws CryptoException {
         try {
@@ -353,13 +633,32 @@ public final class CryptoService {
         }
     }
 
-    /** Domain separation prevents a Data API ciphertext from authenticating as a chat message. */
+    /**
+     * Derives a 32-byte API session secret from exactly 32 bytes of session material and a 16-byte session
+     * ID using HKDF-SHA256 and the data-session domain label. The label separates API keys from chat keys;
+     * HKDF itself does not authenticate the session exchange.
+     *
+     * @param secret the shared secret used as key-derivation input
+     * @param sessionId the identifier of the expected session epoch
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public byte[] deriveDataSessionSecret(byte[] secret, byte[] sessionId) throws CryptoException {
         if (secret == null || sessionId == null || secret.length != AEAD_KEY_BYTES || sessionId.length != MESSAGE_ID_BYTES)
             throw new CryptoException("Invalid API session key material");
         return hkdf(secret, sessionId, "krypt04mcg data session v1".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
     }
 
+    /**
+     * Derives a 32-byte chat-session message key from a validated 32-byte secret and 16-byte message ID
+     * with HKDF-SHA256 and the chat-session label. Fresh message IDs prevent deliberate reuse of this key
+     * derivation context; session sequence validation is handled separately.
+     *
+     * @param secret the shared secret used as key-derivation input
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public byte[] deriveSessionSecret(byte[] secret, byte[] messageId) throws CryptoException {
         if (secret == null || secret.length != AEAD_KEY_BYTES) {
             throw new CryptoException("Session secret must contain 32 bytes");
@@ -370,8 +669,22 @@ public final class CryptoService {
         return hkdf(secret, messageId, "krypt04mcg session".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
     }
 
+    /**
+     * Hashes the supplied encoded key bytes with SHA-256 and returns the full hexadecimal digest.
+     * Public-key fingerprints are identity-comparison values, not encryption or a replacement for
+     * verification over a trusted external channel; hashing does not make private bytes safe to disclose.
+     *
+     * @param encoded the encoded bytes to parse or verify
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public String fingerprint(byte[] encoded) throws CryptoException {
         try {
+            /*
+             * Delegates the requested digest to JCA for canonical fingerprint or context binding. A plain digest
+             * is not a MAC or signature and cannot independently establish trust, freshness or secrecy of
+             * low-entropy input.
+             */
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(encoded);
             return Hex.encode(digest);
         } catch (GeneralSecurityException e) {
@@ -379,6 +692,15 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Generates temporary KEM key material for a pending session exchange and wraps encoded copies in a
+     * closeable holder. The handshake lifecycle is responsible for closing that holder after completion,
+     * expiry or cancellation.
+     *
+     * @param selectedAlgorithm the selected algorithm supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public EphemeralKemKeyPair generateEphemeralKemKeyPair(KemAlgorithm selectedAlgorithm) throws CryptoException {
         KemAlgorithm algorithm = selectedAlgorithm == null ? KemAlgorithm.ML_KEM_768_X25519 : selectedAlgorithm;
         try {
@@ -387,6 +709,10 @@ public final class CryptoService {
             try {
                 return new EphemeralKemKeyPair(algorithm, pair.getPublic().getEncoded(), privateBytes);
             } finally {
+                /*
+                 * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+                 * immutable Strings, returned copies and provider/native key objects may retain other copies.
+                 */
                 Arrays.fill(privateBytes, (byte) 0);
             }
         } catch (GeneralSecurityException e) {
@@ -394,16 +720,49 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Constructs and validates an imported ephemeral KEM public record against its declared algorithm,
+     * parameter set, owner and UUID. Structural validation cannot independently establish whether a remote
+     * player should be trusted.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @param keyData the key data supplied to this operation
+     * @param createdAt the created at supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public KeyRecord validateEphemeralKemPublicKey(String algorithm, String owner, String uuid, String keyData,
                                                     Instant createdAt) throws CryptoException {
         return validatePublicRecord(new KeyRecord(algorithm + "/public", owner, uuid, "", createdAt, keyData),
                 owner, uuid, true);
     }
 
+    /**
+     * Performs the key record operation for the packet cryptography service.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @param createdAt the created at supplied to this operation
+     * @param encoded the encoded bytes to parse or verify
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public KeyRecord keyRecord(String algorithm, String owner, String uuid, Instant createdAt, byte[] encoded) throws CryptoException {
         return new KeyRecord(algorithm, owner, uuid, fingerprint(encoded), createdAt, Base64Url.encode(encoded));
     }
 
+    /**
+     * Validates both imported public-key records, their roles, parameters, metadata and fingerprints as
+     * one identity. Provider decoding rejects incompatible encodings and parameter substitution; user
+     * verification of the complete identity remains a separate trust decision.
+     *
+     * @param identity the identity supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public PublicIdentity validatePublicIdentity(PublicIdentity identity) throws CryptoException {
         if (identity == null || isBlank(identity.owner()) || isBlank(identity.uuid())) {
             throw new CryptoException("Public identity owner or UUID is missing");
@@ -413,6 +772,17 @@ public final class CryptoService {
         return new PublicIdentity(identity.owner(), identity.uuid(), kem, signature);
     }
 
+    /**
+     * Validates local public/private roles and identity metadata and checks that each private key
+     * corresponds to its public key. Pair testing detects inconsistent stored material; it does not
+     * replace storage access controls.
+     *
+     * @param material the material supplied to this operation
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public LocalKeyMaterial validateLocalKeyMaterial(LocalKeyMaterial material, String owner, String uuid)
             throws CryptoException {
         if (material == null || isBlank(owner) || isBlank(uuid)) {
@@ -430,6 +800,17 @@ public final class CryptoService {
         return new LocalKeyMaterial(kemPublic, kemPrivate, signaturePublic, signaturePrivate);
     }
 
+    /**
+     * Decodes the declared public-key suite, checks exact parameters and recomputes the fingerprint over
+     * the encoded bytes. Metadata and public role are validated before the record is accepted.
+     *
+     * @param record the record supplied to this operation
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @param kem the kem supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private KeyRecord validatePublicRecord(KeyRecord record, String owner, String uuid, boolean kem)
             throws CryptoException {
         validateRecordIdentity(record, owner, uuid);
@@ -452,6 +833,17 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Decodes a private-key record using its declared suite and checks its role, identity metadata and
+     * parameters. Encoded private-key copies are handled by the decoding helpers and must not be logged.
+     *
+     * @param record the record supplied to this operation
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @param kem the kem supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private KeyRecord validatePrivateRecord(KeyRecord record, String owner, String uuid, boolean kem)
             throws CryptoException {
         validateRecordIdentity(record, owner, uuid);
@@ -474,6 +866,15 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Checks that a decoded signature key uses the parameter set declared by the selected suite, including
+     * the supported composite forms. An algorithm family name alone is insufficient to prevent parameter
+     * substitution.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     static void requireSignatureKeyParameters(java.security.Key key, SignatureAlgorithm algorithm)
             throws CryptoException {
         if (!algorithm.nativeHybrid()) {
@@ -494,6 +895,15 @@ public final class CryptoService {
 
     // Generic JCA key factories accept multiple parameter sets. The record label must match
     // the parameters in the decoded key, including for an ephemeral handshake key.
+    /**
+     * Compares the actual decoded key parameter specification with the expected specification. Unsupported
+     * key/specification types and mismatched parameter names fail closed rather than silently selecting a
+     * fallback suite.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param expected the expected supplied to this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     static void requireKeyParameters(java.security.Key key,
                                              java.security.spec.AlgorithmParameterSpec expected) throws CryptoException {
         java.security.spec.AlgorithmParameterSpec actual = switch (key) {
@@ -523,6 +933,13 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Performs the parameter name operation for the packet cryptography service.
+     *
+     * @param spec the spec supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static String parameterName(java.security.spec.AlgorithmParameterSpec spec) throws CryptoException {
         return switch (spec) {
             case org.bouncycastle.jcajce.spec.MLKEMParameterSpec p -> p.getName();
@@ -547,9 +964,25 @@ public final class CryptoService {
         };
     }
 
+    /**
+     * Exercises KEM encapsulation/decapsulation and signature sign/verify to detect mismatched local
+     * public/private pairs. This is a consistency check performed through the selected providers, not a
+     * proof of key-generation entropy or an independent cryptographic audit.
+     *
+     * @param kemPublic the kem public supplied to this operation
+     * @param kemPrivate the kem private supplied to this operation
+     * @param signaturePublic the signature public supplied to this operation
+     * @param signaturePrivate the signature private supplied to this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private void verifyLocalKeyPairs(KeyRecord kemPublic, KeyRecord kemPrivate, KeyRecord signaturePublic,
                                      KeyRecord signaturePrivate) throws CryptoException {
         byte[] challenge = new byte[32];
+        /*
+         * Draws security-sensitive bytes from the configured SecureRandom rather than a general-purpose PRNG.
+         * Production randomness must remain unpredictable; a random nonce still depends on avoiding
+         * collisions/reuse under its key.
+         */
         secureRandom.nextBytes(challenge);
         byte[] signature = sign(signaturePrivate, challenge);
         if (!verify(signaturePublic, challenge, signature)) {
@@ -561,17 +994,39 @@ public final class CryptoService {
             PrivateKey privateKey = decodeKemPrivateKey(algorithm, kemPrivate.keyData());
             SecretKeyWithEncapsulation generated = KemCrypto.encapsulate(algorithm, publicKey, secureRandom);
             SecretKeyWithEncapsulation extracted = KemCrypto.extract(algorithm, privateKey, generated.getEncapsulation());
+            /*
+             * Compares digest/tag bytes with the JDK authentication-oriented byte comparison rather than
+             * converting them to Strings. Equality still depends on the supplied key/context and does not replace
+             * identity or replay checks.
+             */
             if (!MessageDigest.isEqual(generated.getEncoded(), extracted.getEncoded())) {
                 throw new CryptoException("Local KEM public and private keys do not match");
             }
         } catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
             throw new CryptoException("Unable to validate local KEM key pair", e);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             Arrays.fill(challenge, (byte) 0);
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             Arrays.fill(signature, (byte) 0);
         }
     }
 
+    /**
+     * Checks the record identity required by the packet cryptography service and rejects invalid state
+     * instead of continuing.
+     *
+     * @param record the record supplied to this operation
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static void validateRecordIdentity(KeyRecord record, String owner, String uuid) throws CryptoException {
         if (record == null || isBlank(record.algorithm()) || isBlank(record.owner()) || isBlank(record.uuid())
                 || record.createdAt() == null || isBlank(record.keyData())) {
@@ -582,16 +1037,35 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Checks the role required by the packet cryptography service and rejects invalid state instead of
+     * continuing.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param role the role supplied to this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static void requireRole(String algorithm, String role) throws CryptoException {
         if (algorithm == null || !algorithm.toLowerCase(java.util.Locale.ROOT).endsWith(role)) {
             throw new CryptoException("Key algorithm has the wrong role: " + algorithm);
         }
     }
 
+    /**
+     * Reports whether blank holds for the packet cryptography service.
+     *
+     * @param value the value supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
 
+    /**
+     * Registers the Bouncy Castle general and post-quantum providers only when missing. Provider
+     * registration makes implementations available; suite selection and parameter checks still occur at
+     * each cryptographic boundary.
+     */
     private static void ensureProviders() {
         if (Security.getProvider(BCPQC) == null) {
             Security.addProvider(new BouncyCastlePQCProvider());
@@ -601,18 +1075,45 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Draws a fresh 12-byte nonce from SecureRandom for message AEAD operations. Nonce uniqueness under a
+     * reused key is essential; this helper relies on random generation rather than a persisted counter.
+     *
+     * @return the resulting array produced by this operation
+     */
     private byte[] randomNonce() {
         byte[] nonce = new byte[NONCE_BYTES];
+        /*
+         * Draws security-sensitive bytes from the configured SecureRandom rather than a general-purpose PRNG.
+         * Production randomness must remain unpredictable; a random nonce still depends on avoiding
+         * collisions/reuse under its key.
+         */
         secureRandom.nextBytes(nonce);
         return nonce;
     }
 
+    /**
+     * Checks the plaintext size required by the packet cryptography service and rejects invalid state
+     * instead of continuing.
+     *
+     * @param plaintext the plaintext bytes to encrypt or process
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private void ensurePlaintextSize(byte[] plaintext) throws CryptoException {
         if (plaintext.length > maxPlaintextBytes) {
             throw new CryptoException("Plaintext message is too large: " + plaintext.length);
         }
     }
 
+    /**
+     * Strictly encodes the message as UTF-8 and enforces the configured plaintext-byte limit before
+     * compression. Rejecting malformed Unicode avoids different byte representations entering signatures
+     * or authenticated payloads.
+     *
+     * @param message the message supplied to this operation
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private byte[] encodePlaintext(String message) throws CryptoException {
         if (message == null) {
             throw new CryptoException("Plaintext message is missing");
@@ -638,6 +1139,14 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Strictly decodes bounded UTF-8 plaintext after cryptographic authentication. Malformed or unmappable
+     * input is rejected rather than replaced with characters that could hide a wire-level mismatch.
+     *
+     * @param plaintext the plaintext bytes to encrypt or process
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private String decodePlaintext(byte[] plaintext) throws CryptoException {
         ensurePlaintextSize(plaintext);
         try {
@@ -650,6 +1159,15 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Checks protocol version, type, flags, required fields, nonce and ciphertext layout before
+     * cryptographic work. Compression allowances bound inputs, while PacketCodec validates
+     * version-specific field combinations. These structural checks are not signature, trust, freshness or
+     * replay validation.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private void validateProtocol(EncryptedPacket packet) throws CryptoException {
         if (packet == null || packet.type() == null || packet.ciphertext() == null
                 || packet.ciphertext().length < GCM_TAG_BITS / 8
@@ -712,6 +1230,15 @@ public final class CryptoService {
 
     }
 
+    /**
+     * Requires a correctly encoded 16-byte session identifier and a usable nonnegative sequence below
+     * counter exhaustion. This establishes structural validity, not whether the session epoch or sequence
+     * is currently authorized.
+     *
+     * @param sessionId the identifier of the expected session epoch
+     * @param sequence the record or control sequence in the relevant replay domain
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static void validateSessionMetadata(String sessionId, long sequence) throws CryptoException {
         try {
             if (sessionId == null || Base64Url.decode(sessionId).length != 16 || sequence < 0
@@ -723,6 +1250,13 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Performs the kem algorithm operation for the packet cryptography service.
+     *
+     * @param record the record supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static KemAlgorithm kemAlgorithm(KeyRecord record) throws CryptoException {
         if (record == null) {
             throw new CryptoException("KEM key record is missing");
@@ -730,6 +1264,13 @@ public final class CryptoService {
         return kemAlgorithm(record.algorithm());
     }
 
+    /**
+     * Performs the kem algorithm operation for the packet cryptography service.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static KemAlgorithm kemAlgorithm(String value) throws CryptoException {
         try {
             return KemAlgorithm.fromIdentifier(value);
@@ -738,6 +1279,13 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Performs the signature algorithm operation for the packet cryptography service.
+     *
+     * @param record the record supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static SignatureAlgorithm signatureAlgorithm(KeyRecord record) throws CryptoException {
         if (record == null) {
             throw new CryptoException("Signature key record is missing");
@@ -745,6 +1293,13 @@ public final class CryptoService {
         return signatureAlgorithm(record.algorithm());
     }
 
+    /**
+     * Performs the signature algorithm operation for the packet cryptography service.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static SignatureAlgorithm signatureAlgorithm(String value) throws CryptoException {
         try {
             return SignatureAlgorithm.fromIdentifier(value);
@@ -753,6 +1308,13 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Performs the aead algorithm operation for the packet cryptography service.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static AeadAlgorithm aeadAlgorithm(String value) throws CryptoException {
         try {
             return AeadAlgorithm.fromIdentifier(value);
@@ -761,12 +1323,28 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Checks the hkdf required by the packet cryptography service and rejects invalid state instead of
+     * continuing.
+     *
+     * @param value the value supplied to this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static void validateHkdf(String value) throws CryptoException {
         if (!AlgorithmSuite.HKDF_SHA256.equalsIgnoreCase(value)) {
             throw new CryptoException("Unsupported HKDF algorithm: " + value);
         }
     }
 
+    /**
+     * Checks the same algorithm required by the packet cryptography service and rejects invalid state
+     * instead of continuing.
+     *
+     * @param type the type supplied to this operation
+     * @param packetAlgorithm the packet algorithm supplied to this operation
+     * @param keyAlgorithm the key algorithm supplied to this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static void requireSameAlgorithm(String type, String packetAlgorithm, String keyAlgorithm)
             throws CryptoException {
         if (!packetAlgorithm.equalsIgnoreCase(keyAlgorithm)) {
@@ -775,52 +1353,164 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Decodes Base64URL private material through KemCrypto with the exact selected suite and overwrites
+     * the temporary decoded encoding in finally. Provider-owned key objects and immutable source strings
+     * may retain copies.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param base64 the base64 supplied to this operation
+     * @return the result described above
+     * @throws GeneralSecurityException if the selected cryptographic provider cannot perform the operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static PrivateKey decodeKemPrivateKey(KemAlgorithm algorithm, String base64)
             throws GeneralSecurityException, CryptoException {
         byte[] encoded = Base64Url.decode(base64);
         try {
             return KemCrypto.decodePrivate(algorithm, encoded);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             Arrays.fill(encoded, (byte) 0);
         }
     }
 
+    /**
+     * Decodes Base64URL private material through SignatureCrypto using the exact suite and overwrites the
+     * temporary decoded encoding in finally. This is best-effort buffer cleanup, not guaranteed erasure of
+     * provider or String storage.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param base64 the base64 supplied to this operation
+     * @return the result described above
+     * @throws GeneralSecurityException if the selected cryptographic provider cannot perform the operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static PrivateKey decodeSignaturePrivateKey(SignatureAlgorithm algorithm, String base64)
             throws GeneralSecurityException, CryptoException {
         byte[] encoded = Base64Url.decode(base64);
         try {
             return SignatureCrypto.decodePrivate(algorithm, encoded);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             Arrays.fill(encoded, (byte) 0);
         }
     }
 
+    /**
+     * Initializes the selected AEAD with its required key and nonce parameters, supplies canonical
+     * metadata as AAD, and returns ciphertext with its authentication tag. The same nonce must not be
+     * reused with the same key.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param key the cryptographic key material for this operation
+     * @param nonce the nonce associated with this cryptographic operation
+     * @param aad the additional authenticated data bound to the ciphertext
+     * @param plaintext the plaintext bytes to encrypt or process
+     * @return the resulting array produced by this operation
+     * @throws GeneralSecurityException if the selected cryptographic provider cannot perform the operation
+     */
     private static byte[] aeadEncrypt(AeadAlgorithm algorithm, byte[] key, byte[] nonce, byte[] aad,
                                       byte[] plaintext) throws GeneralSecurityException {
         Cipher cipher = aeadCipher(algorithm);
         initAeadCipher(cipher, Cipher.ENCRYPT_MODE, algorithm, key, nonce);
+        /*
+         * Authenticates these canonical metadata bytes without encrypting them. Both sides must reproduce
+         * identical AAD; changing an identity, epoch or other covered field invalidates the authentication
+         * tag.
+         */
         cipher.updateAAD(aad);
+        /*
+         * Finalizes the authenticated cipher operation. Decryption must not expose its result before tag
+         * verification succeeds; streaming adapters can already hold tentative plaintext and must erase that
+         * output when finalization fails.
+         */
         return cipher.doFinal(plaintext);
     }
 
+    /**
+     * Initializes the selected AEAD and authenticates the supplied canonical metadata and ciphertext. JCA
+     * doFinal verifies the authentication tag before this method returns plaintext; authentication
+     * failures propagate without an unauthenticated fallback.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param key the cryptographic key material for this operation
+     * @param nonce the nonce associated with this cryptographic operation
+     * @param aad the additional authenticated data bound to the ciphertext
+     * @param ciphertext the encoded ciphertext to authenticate or decode
+     * @return the resulting array produced by this operation
+     * @throws GeneralSecurityException if the selected cryptographic provider cannot perform the operation
+     */
     private static byte[] aeadDecrypt(AeadAlgorithm algorithm, byte[] key, byte[] nonce, byte[] aad,
                                       byte[] ciphertext) throws GeneralSecurityException {
         Cipher cipher = aeadCipher(algorithm);
         initAeadCipher(cipher, Cipher.DECRYPT_MODE, algorithm, key, nonce);
+        /*
+         * Authenticates these canonical metadata bytes without encrypting them. Both sides must reproduce
+         * identical AAD; changing an identity, epoch or other covered field invalidates the authentication
+         * tag.
+         */
         cipher.updateAAD(aad);
+        /*
+         * Finalizes the authenticated cipher operation. Decryption must not expose its result before tag
+         * verification succeeds; streaming adapters can already hold tentative plaintext and must erase that
+         * output when finalization fails.
+         */
         return cipher.doFinal(ciphertext);
     }
 
+    /**
+     * Obtains the explicit AES/GCM/NoPadding or ChaCha20-Poly1305 transformation from JCA. There is no
+     * ECB, unauthenticated mode or silent algorithm downgrade; the installed providers supply the actual
+     * primitive implementation.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @return the result described above
+     * @throws GeneralSecurityException if the selected cryptographic provider cannot perform the operation
+     */
     private static Cipher aeadCipher(AeadAlgorithm algorithm) throws GeneralSecurityException {
         return switch (algorithm) {
+            /*
+             * Requests the explicit authenticated-encryption transformation from JCA. Mode-specific key/nonce
+             * parameters and AAD are supplied before finalization; there is no unauthenticated-mode fallback on
+             * provider or tag failure.
+             */
             case AES_256_GCM -> Cipher.getInstance("AES/GCM/NoPadding");
+            /*
+             * Requests the explicit authenticated-encryption transformation from JCA. Mode-specific key/nonce
+             * parameters and AAD are supplied before finalization; there is no unauthenticated-mode fallback on
+             * provider or tag failure.
+             */
             case CHACHA20_POLY1305 -> Cipher.getInstance("ChaCha20-Poly1305");
         };
     }
 
+    /**
+     * Configures AES-GCM with a 128-bit tag and the supplied nonce, or ChaCha20-Poly1305 with its nonce
+     * and named key. JCA validates the parameter combination. Callers must provide the appropriate nonce
+     * length and avoid reuse under a key.
+     *
+     * @param cipher the cipher supplied to this operation
+     * @param mode the mode supplied to this operation
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param key the cryptographic key material for this operation
+     * @param nonce the nonce associated with this cryptographic operation
+     * @throws GeneralSecurityException if the selected cryptographic provider cannot perform the operation
+     */
     private static void initAeadCipher(Cipher cipher, int mode, AeadAlgorithm algorithm, byte[] key, byte[] nonce)
             throws GeneralSecurityException {
         switch (algorithm) {
+            /*
+             * Supplies the explicit AES-GCM tag length and nonce to JCA. Nonce uniqueness under a key is a caller
+             * responsibility; constructing a parameter object neither generates a nonce nor validates peer
+             * identity.
+             */
             case AES_256_GCM -> cipher.init(mode, new SecretKeySpec(key, "AES"),
                     new GCMParameterSpec(GCM_TAG_BITS, nonce));
             case CHACHA20_POLY1305 -> cipher.init(mode, new SecretKeySpec(key, "ChaCha20"),
@@ -828,6 +1518,16 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Extracts KEM secret bytes and derives a separate 32-byte AEAD key with HKDF-SHA256, using message ID
+     * salt and the message-AEAD domain label. The secret copy is overwritten in finally rather than used
+     * directly as an encryption key.
+     *
+     * @param secret the shared secret used as key-derivation input
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static byte[] deriveMessageKey(SecretKeyWithEncapsulation secret, byte[] messageId)
             throws CryptoException {
         byte[] encoded = secret.getEncoded();
@@ -835,12 +1535,34 @@ public final class CryptoService {
             return hkdf(encoded, messageId,
                     "krypt04mcg message aead".getBytes(StandardCharsets.UTF_8), AEAD_KEY_BYTES);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             Arrays.fill(encoded, (byte) 0);
         }
     }
 
+    /**
+     * Delegates RFC 5869 extract-and-expand to Bouncy Castle using HMAC-SHA256. Input key material
+     * supplies entropy, salt identifies the extraction context, and info provides protocol/purpose
+     * separation. Output length is explicit; HKDF does not add entropy to a weak secret or authenticate
+     * metadata by itself.
+     *
+     * @param ikm the input key material supplied to HKDF
+     * @param salt the HKDF extraction salt
+     * @param info the HKDF domain/context information
+     * @param length the requested or declared byte count
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static byte[] hkdf(byte[] ikm, byte[] salt, byte[] info, int length) throws CryptoException {
         try {
+            /*
+             * Delegates RFC 5869 extract-and-expand to Bouncy Castle with SHA-256. Input secret entropy, salt and
+             * purpose-specific info have distinct roles; HKDF does not authenticate those context fields by
+             * itself.
+             */
             var hkdf = new HKDFBytesGenerator(new SHA256Digest());
             hkdf.init(new HKDFParameters(ikm, salt, info));
             byte[] key = new byte[length];
@@ -851,7 +1573,20 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Compresses already-bounded plaintext with the JDK DEFLATE implementation and releases native
+     * compressor resources. Compression precedes encryption and can reveal length-dependent information;
+     * it is not a security transformation.
+     *
+     * @param plaintext the plaintext bytes to encrypt or process
+     * @return the resulting array produced by this operation
+     */
     private static byte[] deflate(byte[] plaintext) {
+        /*
+         * Uses JDK DEFLATE after plaintext size admission and releases compressor resources in the surrounding
+         * lifecycle. Compression changes visible ciphertext length and is not an authentication or
+         * confidentiality primitive.
+         */
         Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
         try {
             deflater.setInput(plaintext);
@@ -868,7 +1603,21 @@ public final class CryptoService {
         }
     }
 
+    /**
+     * Inflates authenticated compressed data under the configured plaintext ceiling and rejects malformed,
+     * truncated or excessive output. The limit prevents unlimited decompression allocation; it does not
+     * guarantee negligible CPU cost for every compressed input.
+     *
+     * @param compressed the compressed supplied to this operation
+     * @return the resulting array produced by this operation
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private byte[] inflate(byte[] compressed) throws CryptoException {
+        /*
+         * Uses JDK inflation only for authenticated payloads in the decrypt path, with a bounded output loop.
+         * Truncation, malformed streams and expansion beyond the configured plaintext limit must fail;
+         * bounding output does not imply constant CPU cost.
+         */
         Inflater inflater = new Inflater(true);
         inflater.setInput(compressed);
         byte[] buffer = new byte[512];

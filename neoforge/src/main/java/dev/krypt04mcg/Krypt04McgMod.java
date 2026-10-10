@@ -83,10 +83,21 @@ public final class Krypt04McgMod {
     private TransferProgressHud transferProgressHud;
     private dev.krypt04mcg.service.DataTransferService dataApi;
 
+    /**
+     * Returns the recorded instance for the krypt04 mcg mod.
+     *
+     * @return the result described above
+     */
     public static Krypt04McgMod instance() {
         return instance;
     }
 
+    /**
+     * Creates a krypt04 mcg mod with the supplied dependencies and initial state.
+     *
+     * @param modBus the mod bus supplied to this operation
+     * @param container the container supplied to this operation
+     */
     public Krypt04McgMod(IEventBus modBus, ModContainer container) {
         instance = this;
         modBus.addListener(this::registerPayloads);
@@ -102,6 +113,9 @@ public final class Krypt04McgMod {
         });
     }
 
+    /**
+     * Handles the initialize client callback for the krypt04 mcg mod.
+     */
     private void onInitializeClient() {
         instance = this;
         config = OptionalClothConfig.loadOrDefault();
@@ -204,6 +218,9 @@ public final class Krypt04McgMod {
         LOGGER.info("Krypt04Mcg initialized");
     }
 
+    /**
+     * Performs the open key manager screen operation for the krypt04 mcg mod.
+     */
     public void openKeyManagerScreen() {
         Minecraft client = Minecraft.getInstance();
         if (chatSendService == null || keyStoreService == null) {
@@ -213,6 +230,9 @@ public final class Krypt04McgMod {
                 sessionService, config));
     }
 
+    /**
+     * Performs the open chat screen operation for the krypt04 mcg mod.
+     */
     public void openChatScreen() {
         Minecraft client = Minecraft.getInstance();
         if (chatSendService == null || keyStoreService == null || client.player == null) {
@@ -221,6 +241,12 @@ public final class Krypt04McgMod {
         client.gui.setScreen(new Krypt04McgChatScreen(chatSendService, keyStoreService, groupService, conversationStore));
     }
 
+    /**
+     * Submits chat line through the krypt04 mcg mod path. Local submission does not by itself acknowledge
+     * remote receipt.
+     *
+     * @param chatSendFragment the chat send fragment supplied to this operation
+     */
     private void sendChatLine(ChatSendFragment chatSendFragment) {
         Minecraft client = Minecraft.getInstance();
         String line = chatSendFragment.fragment();
@@ -231,6 +257,12 @@ public final class Krypt04McgMod {
         client.getConnection().sendChat(line);
     }
 
+    /**
+     * Submits server command through the krypt04 mcg mod path. Local submission does not by itself
+     * acknowledge remote receipt.
+     *
+     * @param chatSendFragment the chat send fragment supplied to this operation
+     */
     private void sendServerCommand(ChatSendFragment chatSendFragment) {
         Minecraft client = Minecraft.getInstance();
         String fragment = chatSendFragment.fragment();
@@ -241,6 +273,9 @@ public final class Krypt04McgMod {
         client.getConnection().sendCommand(formatServerCommand(config.serverCommandTemplate, chatSendFragment));
     }
 
+    /**
+     * Performs the apply chat sender operation for the krypt04 mcg mod.
+     */
     private void applyChatSender() {
         if (chatSendService == null) {
             return;
@@ -255,6 +290,12 @@ public final class Krypt04McgMod {
         }
     }
 
+    /**
+     * Submits custom payload through the krypt04 mcg mod path. Local submission does not by itself
+     * acknowledge remote receipt.
+     *
+     * @param chatSendFragment the chat send fragment supplied to this operation
+     */
     private void sendCustomPayload(ChatSendFragment chatSendFragment) {
         String fragment = chatSendFragment.fragment();
         if (!fragmentService.isFragment(fragment, config.packetPrefix)) {
@@ -268,16 +309,29 @@ public final class Krypt04McgMod {
         }
     }
 
+    /**
+     * Performs the clear chat transfers operation for the krypt04 mcg mod.
+     */
     private void clearChatTransfers() {
         chatSendService.clearPending();
         if (chatReceiveHandler != null) chatReceiveHandler.clearPending();
         transferProgress.clear();
     }
 
+    /**
+     * Draws transfer progress from the available client state.
+     *
+     * @param graphics the graphics supplied to this operation
+     */
     public void renderTransferProgress(net.minecraft.client.gui.GuiGraphicsExtractor graphics) {
         if (transferProgressHud != null) transferProgressHud.render(graphics);
     }
 
+    /**
+     * Registers payloads for the krypt04 mcg mod.
+     *
+     * @param event the event supplied to this operation
+     */
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
         var registrar = event.registrar("1").optional();
         registrar.playBidirectional(NeoChatPayload.TYPE, NeoChatPayload.CODEC, (payload, context) -> {});
@@ -289,6 +343,11 @@ public final class Krypt04McgMod {
         dev.krypt04mcg.client.OptionalSharing.registerPayloads(registrar);
     }
 
+    /**
+     * Registers client payloads for the krypt04 mcg mod.
+     *
+     * @param event the event supplied to this operation
+     */
     private void registerClientPayloads(RegisterClientPayloadHandlersEvent event) {
         event.register(NeoChatPayload.TYPE, (payload, context) -> {
             if (chatReceiveHandler == null) return;
@@ -307,10 +366,23 @@ public final class Krypt04McgMod {
         dev.krypt04mcg.client.OptionalSharing.registerClientPayloads(event);
     }
 
+    /**
+     * Performs the can send operation for the krypt04 mcg mod.
+     *
+     * @param type the type supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean canSend(net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type) {
         var connection = Minecraft.getInstance().getConnection();
         return connection != null && NetworkRegistry.hasChannel(connection, type.id());
     }
+    /**
+     * Performs the format server command operation for the krypt04 mcg mod.
+     *
+     * @param template the template supplied to this operation
+     * @param fragment the individual fragment or delivery record
+     * @return the result described above
+     */
     static String formatServerCommand(String template, ChatSendFragment fragment) {
         String command = template == null || template.isBlank() ? "/msg <receiver> <fragment>" : template;
         command = command.replace("<receiver>", fragment.receiver())
@@ -318,6 +390,11 @@ public final class Krypt04McgMod {
         return command.startsWith("/") ? command.substring(1) : command;
     }
 
+    /**
+     * Performs the system operation for the krypt04 mcg mod.
+     *
+     * @param message the message supplied to this operation
+     */
     private void system(String message) {
         Minecraft client = Minecraft.getInstance();
         client.execute(() -> {
@@ -327,6 +404,11 @@ public final class Krypt04McgMod {
         });
     }
 
+    /**
+     * Performs the show disclaimer operation for the krypt04 mcg mod.
+     *
+     * @param client the client supplied to this operation
+     */
     private void showDisclaimer(Minecraft client) {
         if (!config.showDisclaimerWarning) {
             return;
@@ -341,6 +423,12 @@ public final class Krypt04McgMod {
         });
     }
 
+    /**
+     * Performs the extract shadow message operation for the krypt04 mcg mod.
+     *
+     * @param raw the raw supplied to this operation
+     * @return the result described above
+     */
     private Optional<ShadowMessage> extractShadowMessage(String raw) {
         if (!config.shadowListenMode || raw == null || raw.isBlank()) {
             return Optional.empty();
@@ -364,6 +452,11 @@ public final class Krypt04McgMod {
         return Optional.empty();
     }
 
+    /**
+     * Performs the shadow listen regexes operation for the krypt04 mcg mod.
+     *
+     * @return the result described above
+     */
     private List<String> shadowListenRegexes() {
         if (config.shadowListenRegexes != null && !config.shadowListenRegexes.isEmpty()) {
             return config.shadowListenRegexes;
@@ -371,6 +464,13 @@ public final class Krypt04McgMod {
         return List.of(config.shadowListenRegex);
     }
 
+    /**
+     * Reports whether local sender holds for the krypt04 mcg mod.
+     *
+     * @param senderName the sender name supplied to this operation
+     * @param localName the local name supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean isLocalSender(String senderName, String localName) {
         return senderName != null && localName != null && senderName.equalsIgnoreCase(localName);
     }

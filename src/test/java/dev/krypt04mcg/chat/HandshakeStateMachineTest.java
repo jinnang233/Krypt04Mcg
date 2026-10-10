@@ -33,6 +33,11 @@ final class HandshakeStateMachineTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that failed chat response can retry without burning replay history.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void failedChatResponseCanRetryWithoutBurningReplayHistory() throws Exception {
         var failSend = new java.util.concurrent.atomic.AtomicBoolean(true);
         Fixture f = fixture(new Krypt04McgConfig(), failSend);
@@ -56,6 +61,11 @@ final class HandshakeStateMachineTest {
         }
     }
 
+    /**
+     * Verifies that signed session handshake accepts once and rejects replay.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void signedSessionHandshakeAcceptsOnceAndRejectsReplay() throws Exception {
         Fixture fixture = fixture();
@@ -93,6 +103,11 @@ final class HandshakeStateMachineTest {
         assertEquals(1, fixture.responses.size());
     }
 
+    /**
+     * Verifies that out of order and duplicate fragments still produce single plaintext.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void outOfOrderAndDuplicateFragmentsStillProduceSinglePlaintext() throws Exception {
         Fixture fixture = fixture();
@@ -110,6 +125,11 @@ final class HandshakeStateMachineTest {
         assertEquals(List.of("hello state machine"), fixture.decryptedMessages);
     }
 
+    /**
+     * Verifies that missing fragments do not advance state machine.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void missingFragmentsDoNotAdvanceStateMachine() throws Exception {
         Fixture fixture = fixture();
@@ -125,6 +145,11 @@ final class HandshakeStateMachineTest {
         assertTrue(fixture.sessionService.find("alice").isEmpty());
     }
 
+    /**
+     * Verifies that distrusted and transport sender mismatched packets are rejected before display.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void distrustedAndTransportSenderMismatchedPacketsAreRejectedBeforeDisplay() throws Exception {
         Fixture fixture = fixture();
@@ -150,6 +175,11 @@ final class HandshakeStateMachineTest {
         assertTrue(mismatchFixture.decryptedMessages.isEmpty());
     }
 
+    /**
+     * Verifies that decryption history rejects duplicate message id or nonce.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void decryptionHistoryRejectsDuplicateMessageIdOrNonce() throws Exception {
         DecryptionHistoryService history = new DecryptionHistoryService(tempDir);
@@ -162,6 +192,11 @@ final class HandshakeStateMachineTest {
         assertTrue(history.recordAcceptedPacket("bob", messageId, nonce));
     }
 
+    /**
+     * Verifies that simultaneous exchanges converge on one session.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void simultaneousExchangesConvergeOnOneSession() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -198,14 +233,38 @@ final class HandshakeStateMachineTest {
                 bobSessions.find("alice").orElseThrow().secret());
     }
 
+    /**
+     * Provides the fixture fixture operation used by the handshake state machine test regression
+     * scenarios.
+     *
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private Fixture fixture() throws Exception {
         return fixture(new Krypt04McgConfig());
     }
 
+    /**
+     * Provides the fixture fixture operation used by the handshake state machine test regression
+     * scenarios.
+     *
+     * @param config the config supplied to this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private Fixture fixture(Krypt04McgConfig config) throws Exception {
         return fixture(config, new java.util.concurrent.atomic.AtomicBoolean(false));
     }
 
+    /**
+     * Provides the fixture fixture operation used by the handshake state machine test regression
+     * scenarios.
+     *
+     * @param config the config supplied to this operation
+     * @param failSend the fail send supplied to this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private Fixture fixture(Krypt04McgConfig config, java.util.concurrent.atomic.AtomicBoolean failSend) throws Exception {
         CryptoService crypto = new CryptoService();
         KeyStoreService bobKeys = new KeyStoreService(tempDir.resolve("bob"), crypto);
@@ -233,11 +292,23 @@ final class HandshakeStateMachineTest {
                 decryptedMessages, responses, handler);
     }
 
+    /**
+     * Provides the public identity fixture operation used by the handshake state machine test regression
+     * scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());
     }
 
+    /**
+     * Verifies that expired sessions reject fresh authenticated messages without advancing state.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void expiredSessionsRejectFreshAuthenticatedMessagesWithoutAdvancingState() throws Exception {
         Krypt04McgConfig config = new Krypt04McgConfig();
@@ -277,12 +348,24 @@ final class HandshakeStateMachineTest {
         assertEquals(List.of("active session"), f.decryptedMessages);
     }
 
+    /**
+     * Provides the random bytes fixture operation used by the handshake state machine test regression
+     * scenarios.
+     *
+     * @param length the requested or declared byte count
+     * @return the resulting array produced by this operation
+     */
     private static byte[] randomBytes(int length) {
         byte[] bytes = new byte[length];
         new SecureRandom().nextBytes(bytes);
         return bytes;
     }
 
+    /**
+     * Verifies that unauthenticated transport requires valid signature.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void unauthenticatedTransportRequiresValidSignature() throws Exception {
         Fixture fixture = fixture();

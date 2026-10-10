@@ -8,6 +8,12 @@ import java.nio.file.*;
 /** Client channel pool count without Cloth Config; restart required. */
 public final class ChannelPoolConfig {
     public int apiChannelCount = 16;
+    /**
+     * Performs the load operation for the registered raw-channel pool configuration.
+     *
+     * @param configDirectory the directory containing the persisted configuration
+     * @return the result described above
+     */
     public static int load(Path configDirectory) {
         Path file = configDirectory.resolve("krypt04mcg-stream.json");
         try {

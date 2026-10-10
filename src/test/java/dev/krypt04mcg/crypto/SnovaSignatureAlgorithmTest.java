@@ -35,6 +35,11 @@ final class SnovaSignatureAlgorithmTest {
     @TempDir
     Path tempDir;
 
+    /**
+     * Verifies that exposes every bouncy castle snova parameter set.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void exposesEveryBouncyCastleSnovaParameterSet() throws Exception {
         var supported = Arrays.stream(SignatureAlgorithm.values())
@@ -49,6 +54,12 @@ final class SnovaSignatureAlgorithmTest {
         assertTrue(supported.isEmpty());
     }
 
+    /**
+     * Verifies that persists signs verifies and transports every parameter set.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @EnumSource(value = SignatureAlgorithm.class, names = "SNOVA_.*", mode = EnumSource.Mode.MATCH_ALL)
     void persistsSignsVerifiesAndTransportsEveryParameterSet(SignatureAlgorithm algorithm) throws Exception {

@@ -5,6 +5,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class Krypt04McgApiTest {
+    /**
+     * Verifies that sender aware receiver shares replacement and unregistration with legacy receiver.
+     */
     @Test void senderAwareReceiverSharesReplacementAndUnregistrationWithLegacyReceiver() {
         var sender = new AtomicReference<String>();
         var received = new AtomicReference<byte[]>();
@@ -31,6 +34,9 @@ class Krypt04McgApiTest {
         } finally { Krypt04McgApi.unregisterReceiver("test:sender"); }
     }
 
+    /**
+     * Verifies that dispatches only to exact channel and allows replacing and removing receivers.
+     */
     @Test void dispatchesOnlyToExactChannelAndAllowsReplacingAndRemovingReceivers() {
         var received = new AtomicReference<byte[]>();
         byte[] input = {0, -1, 42};

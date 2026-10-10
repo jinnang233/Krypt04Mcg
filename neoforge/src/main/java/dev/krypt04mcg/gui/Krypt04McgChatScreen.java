@@ -54,6 +54,14 @@ public final class Krypt04McgChatScreen extends Screen {
     private int listWidth;
     private int listScrollOffset;
 
+    /**
+     * Creates a krypt04 mcg chat screen with the supplied dependencies and initial state.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param groupService the group service supplied to this operation
+     * @param conversationStore the conversation store supplied to this operation
+     */
     public Krypt04McgChatScreen(ChatSendService chatSendService, KeyStoreService keyStoreService,
                                 GroupService groupService,
                                 ChatConversationStore conversationStore) {
@@ -64,6 +72,9 @@ public final class Krypt04McgChatScreen extends Screen {
         this.conversationStore = conversationStore;
     }
 
+    /**
+     * Performs the init operation for the krypt04 mcg chat screen.
+     */
     @Override
     protected void init() {
         loadTargets();
@@ -110,6 +121,14 @@ public final class Krypt04McgChatScreen extends Screen {
                 .build());
     }
 
+    /**
+     * Performs the extract render state operation for the krypt04 mcg chat screen.
+     *
+     * @param graphics the graphics supplied to this operation
+     * @param mouseX the mouse x supplied to this operation
+     * @param mouseY the mouse y supplied to this operation
+     * @param partialTick the partial tick supplied to this operation
+     */
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, PANEL_COLOR);
@@ -144,6 +163,12 @@ public final class Krypt04McgChatScreen extends Screen {
         }
     }
 
+    /**
+     * Returns the recorded true for the krypt04 mcg chat screen.
+     *
+     * @param event the event supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.key() == 257 || event.key() == 335) {
@@ -153,6 +178,15 @@ public final class Krypt04McgChatScreen extends Screen {
         return super.keyPressed(event);
     }
 
+    /**
+     * Returns the recorded true for the krypt04 mcg chat screen.
+     *
+     * @param mouseX the mouse x supplied to this operation
+     * @param mouseY the mouse y supplied to this operation
+     * @param scrollX the scroll x supplied to this operation
+     * @param scrollY the scroll y supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mouseX >= panelX && mouseX <= panelX + listWidth
@@ -165,11 +199,19 @@ public final class Krypt04McgChatScreen extends Screen {
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
+    /**
+     * Reports whether pause screen holds for the krypt04 mcg chat screen.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     @Override
     public boolean isPauseScreen() {
         return false;
     }
 
+    /**
+     * Performs the add target rows operation for the krypt04 mcg chat screen.
+     */
     private void addTargetRows() {
         targetRows.clear();
         int rowHeight = 20;
@@ -182,10 +224,22 @@ public final class Krypt04McgChatScreen extends Screen {
         }
     }
 
+    /**
+     * Performs the visible target rows operation for the krypt04 mcg chat screen.
+     *
+     * @return the result described above
+     */
     private int visibleTargetRows() {
         return Math.max(0, (panelHeight - 64) / 20);
     }
 
+    /**
+     * Performs the button layout operation for the krypt04 mcg chat screen.
+     *
+     * @param rightX the right x supplied to this operation
+     * @param rightWidth the right width supplied to this operation
+     * @return the result described above
+     */
     private ButtonLayout buttonLayout(int rightX, int rightWidth) {
         int columns;
         if (rightWidth >= BUTTON_MIN_WIDTH * 4 + BUTTON_GAP * 3) {
@@ -201,6 +255,11 @@ public final class Krypt04McgChatScreen extends Screen {
         return new ButtonLayout(rightX, buttonY, buttonWidth, columns);
     }
 
+    /**
+     * Performs the select target operation for the krypt04 mcg chat screen.
+     *
+     * @param index the index supplied to this operation
+     */
     private void selectTarget(int index) {
         if (index < 0 || index >= targets.size()) {
             return;
@@ -211,6 +270,10 @@ public final class Krypt04McgChatScreen extends Screen {
         playerBox.setValue(targets.get(selectedTarget).inputName());
     }
 
+    /**
+     * Checks the selected target visible required by the krypt04 mcg chat screen and rejects invalid state
+     * instead of continuing.
+     */
     private void ensureSelectedTargetVisible() {
         int visibleRows = visibleTargetRows();
         if (selectedTarget < listScrollOffset) {
@@ -222,12 +285,25 @@ public final class Krypt04McgChatScreen extends Screen {
         refreshTargetRows();
     }
 
+    /**
+     * Performs the refresh target rows operation for the krypt04 mcg chat screen.
+     */
     private void refreshTargetRows() {
         for (TargetRowWidget row : targetRows) {
             row.refresh();
         }
     }
 
+    /**
+     * Performs the draw history operation for the krypt04 mcg chat screen.
+     *
+     * @param graphics the graphics supplied to this operation
+     * @param receiver the intended recipient associated with this operation
+     * @param x the x supplied to this operation
+     * @param y the y supplied to this operation
+     * @param width the width supplied to this operation
+     * @param height the height supplied to this operation
+     */
     private void drawHistory(GuiGraphicsExtractor graphics, String receiver, int x, int y, int width, int height) {
         if (receiver.isEmpty()) {
             graphics.text(font, Component.translatable("text.krypt04mcg.gui.empty_conversation"), x, y, 0xFF8899A6, false);
@@ -244,6 +320,13 @@ public final class Krypt04McgChatScreen extends Screen {
         }
     }
 
+    /**
+     * Returns the recorded lines for the krypt04 mcg chat screen.
+     *
+     * @param target the target supplied to this operation
+     * @param width the width supplied to this operation
+     * @return the result described above
+     */
     private List<String> historyLines(Target target, int width) {
         List<String> lines = new ArrayList<>();
         List<ChatConversationStore.Entry> entries = target.group()
@@ -258,6 +341,13 @@ public final class Krypt04McgChatScreen extends Screen {
         return lines;
     }
 
+    /**
+     * Returns the recorded lines for the krypt04 mcg chat screen.
+     *
+     * @param text the text supplied to this operation
+     * @param maxWidth the max width supplied to this operation
+     * @return the result described above
+     */
     private List<String> wrap(String text, int maxWidth) {
         List<String> lines = new ArrayList<>();
         String remaining = text;
@@ -281,6 +371,13 @@ public final class Krypt04McgChatScreen extends Screen {
         return lines;
     }
 
+    /**
+     * Returns the recorded text for the krypt04 mcg chat screen.
+     *
+     * @param text the text supplied to this operation
+     * @param maxWidth the max width supplied to this operation
+     * @return the result described above
+     */
     private String truncate(String text, int maxWidth) {
         if (font.width(text) <= maxWidth) {
             return text;
@@ -289,14 +386,28 @@ public final class Krypt04McgChatScreen extends Screen {
         return font.plainSubstrByWidth(text, Math.max(1, maxWidth - font.width(suffix))) + suffix;
     }
 
+    /**
+     * Submits signed through the krypt04 mcg chat screen path. Local submission does not by itself
+     * acknowledge remote receipt.
+     */
     private void sendSigned() {
         sendKem(true);
     }
 
+    /**
+     * Submits unsigned through the krypt04 mcg chat screen path. Local submission does not by itself
+     * acknowledge remote receipt.
+     */
     private void sendUnsigned() {
         sendKem(false);
     }
 
+    /**
+     * Submits kem through the krypt04 mcg chat screen path. Local submission does not by itself
+     * acknowledge remote receipt.
+     *
+     * @param sign whether a signature is added to the encrypted packet
+     */
     private void sendKem(boolean sign) {
         Target target = currentTarget();
         String message = messageBox.getValue().trim();
@@ -319,6 +430,10 @@ public final class Krypt04McgChatScreen extends Screen {
         messageBox.setFocused(true);
     }
 
+    /**
+     * Submits session through the krypt04 mcg chat screen path. Local submission does not by itself
+     * acknowledge remote receipt.
+     */
     private void sendSession() {
         Target target = currentTarget();
         String message = messageBox.getValue().trim();
@@ -333,6 +448,9 @@ public final class Krypt04McgChatScreen extends Screen {
         messageBox.setFocused(true);
     }
 
+    /**
+     * Performs the exchange operation for the krypt04 mcg chat screen.
+     */
     private void exchange() {
         Target target = currentTarget();
         if (!target.group() && !target.name().isEmpty()) {
@@ -342,6 +460,11 @@ public final class Krypt04McgChatScreen extends Screen {
         }
     }
 
+    /**
+     * Returns the recorded selected for the krypt04 mcg chat screen.
+     *
+     * @return the result described above
+     */
     private Target currentTarget() {
         String value = playerBox == null ? "" : playerBox.getValue().trim();
         if (value.startsWith("#")) {
@@ -357,6 +480,11 @@ public final class Krypt04McgChatScreen extends Screen {
         return new Target(value, false, List.of());
     }
 
+    /**
+     * Performs the remember target operation for the krypt04 mcg chat screen.
+     *
+     * @param target the target supplied to this operation
+     */
     private void rememberTarget(Target target) {
         if (target.name().isEmpty()) {
             return;
@@ -368,6 +496,9 @@ public final class Krypt04McgChatScreen extends Screen {
         }
     }
 
+    /**
+     * Performs the load targets operation for the krypt04 mcg chat screen.
+     */
     private void loadTargets() {
         targets.clear();
         try {
@@ -397,6 +528,12 @@ public final class Krypt04McgChatScreen extends Screen {
         }
     }
 
+    /**
+     * Looks up group target in the krypt04 mcg chat screen without creating a replacement.
+     *
+     * @param groupName the group name supplied to this operation
+     * @return the result described above
+     */
     private Optional<Target> findGroupTarget(String groupName) {
         try {
             return groupService.find(groupName)
@@ -407,11 +544,23 @@ public final class Krypt04McgChatScreen extends Screen {
     }
 
     private record ButtonLayout(int left, int y, int buttonWidth, int columns) {
+        /**
+         * Performs the x operation for the krypt04 mcg chat screen.
+         *
+         * @param index the index supplied to this operation
+         * @return the result described above
+         */
         private int x(int index) {
             int column = index % columns;
             return left + column * (buttonWidth + BUTTON_GAP);
         }
 
+        /**
+         * Performs the y operation for the krypt04 mcg chat screen.
+         *
+         * @param index the index supplied to this operation
+         * @return the result described above
+         */
         private int y(int index) {
             int row = index / columns;
             return y + row * (BUTTON_HEIGHT + BUTTON_ROW_GAP);
@@ -419,18 +568,40 @@ public final class Krypt04McgChatScreen extends Screen {
     }
 
     private record Target(String name, boolean group, List<String> members) implements Comparable<Target> {
+        /**
+         * Performs the input name operation for the krypt04 mcg chat screen.
+         *
+         * @return the result described above
+         */
         private String inputName() {
             return group ? "#" + name : name;
         }
 
+        /**
+         * Performs the display name operation for the krypt04 mcg chat screen.
+         *
+         * @return the result described above
+         */
         private String displayName() {
             return inputName();
         }
 
+        /**
+         * Performs the same target operation for the krypt04 mcg chat screen.
+         *
+         * @param other the other supplied to this operation
+         * @return whether the condition or operation described above succeeds
+         */
         private boolean sameTarget(Target other) {
             return group == other.group && name.equalsIgnoreCase(other.name);
         }
 
+        /**
+         * Performs the compare to operation for the krypt04 mcg chat screen.
+         *
+         * @param other the other supplied to this operation
+         * @return the result described above
+         */
         @Override
         public int compareTo(Target other) {
             if (group != other.group) {
@@ -443,12 +614,29 @@ public final class Krypt04McgChatScreen extends Screen {
     private final class TargetRowWidget extends AbstractWidget {
         private final int visibleIndex;
 
+        /**
+         * Creates a target row widget with the supplied dependencies and initial state.
+         *
+         * @param visibleIndex the visible index supplied to this operation
+         * @param x the x supplied to this operation
+         * @param y the y supplied to this operation
+         * @param width the width supplied to this operation
+         * @param height the height supplied to this operation
+         */
         private TargetRowWidget(int visibleIndex, int x, int y, int width, int height) {
             super(x, y, width, height, Component.empty());
             this.visibleIndex = visibleIndex;
             refresh();
         }
 
+        /**
+         * Performs the extract widget render state operation for the krypt04 mcg chat screen.
+         *
+         * @param graphics the graphics supplied to this operation
+         * @param mouseX the mouse x supplied to this operation
+         * @param mouseY the mouse y supplied to this operation
+         * @param partialTick the partial tick supplied to this operation
+         */
         @Override
         protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             int targetIndex = targetIndex();
@@ -464,6 +652,12 @@ public final class Krypt04McgChatScreen extends Screen {
                     getX() + 6, getY() + 5, 0xFFFFFFFF, false);
         }
 
+        /**
+         * Handles the click callback for the krypt04 mcg chat screen.
+         *
+         * @param event the event supplied to this operation
+         * @param doubleClick the double click supplied to this operation
+         */
         @Override
         public void onClick(MouseButtonEvent event, boolean doubleClick) {
             int targetIndex = targetIndex();
@@ -472,11 +666,19 @@ public final class Krypt04McgChatScreen extends Screen {
             }
         }
 
+        /**
+         * Performs the update widget narration operation for the krypt04 mcg chat screen.
+         *
+         * @param narrationElementOutput the narration element output supplied to this operation
+         */
         @Override
         protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
             defaultButtonNarrationText(narrationElementOutput);
         }
 
+        /**
+         * Performs the refresh operation for the krypt04 mcg chat screen.
+         */
         private void refresh() {
             int targetIndex = targetIndex();
             visible = targetIndex < targets.size();
@@ -485,6 +687,11 @@ public final class Krypt04McgChatScreen extends Screen {
                     : Component.empty());
         }
 
+        /**
+         * Performs the target index operation for the krypt04 mcg chat screen.
+         *
+         * @return the result described above
+         */
         private int targetIndex() {
             return listScrollOffset + visibleIndex;
         }

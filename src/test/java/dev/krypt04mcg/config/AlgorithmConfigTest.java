@@ -16,6 +16,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 final class AlgorithmConfigTest {
+    /**
+     * Verifies that every algorithm has localized dropdown labels.
+     *
+     * @param locale the locale supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @ValueSource(strings = {"en_us", "zh_cn", "zh_tw", "de_de", "es_es", "fr_fr", "ja_jp", "ko_kr"})
     void everyAlgorithmHasLocalizedDropdownLabels(String locale) throws Exception {
@@ -42,6 +48,11 @@ final class AlgorithmConfigTest {
         }
     }
 
+    /**
+     * Verifies that removed config selections migrate to ml kem768.
+     *
+     * @param selection the selection supplied to this operation
+     */
     @ParameterizedTest
     @ValueSource(strings = {"CMCE/mceliece348864", "CMCE/mceliece348864f",
             "CMCE_MCELIECE348864", "CMCE_MCELIECE348864F"})
@@ -63,6 +74,9 @@ final class AlgorithmConfigTest {
         assertEquals(AeadAlgorithm.AES_256_GCM, config.aeadAlgorithm);
     }
 
+    /**
+     * Verifies that new configs and default suite use hybrid algorithms.
+     */
     @Test
     void newConfigsAndDefaultSuiteUseHybridAlgorithms() {
         Krypt04McgConfig config = JsonSupport.prettyGson().fromJson("{}", Krypt04McgConfig.class);
@@ -73,6 +87,11 @@ final class AlgorithmConfigTest {
         assertEquals("ML-KEM-768+X25519", AlgorithmSuite.defaults().kem());
     }
 
+    /**
+     * Verifies that removed algorithms are rejected in key and packet identifiers.
+     *
+     * @param identifier the identifier supplied to this operation
+     */
     @ParameterizedTest
     @ValueSource(strings = {"CMCE/mceliece348864", "CMCE/mceliece348864f"})
     void removedAlgorithmsAreRejectedInKeyAndPacketIdentifiers(String identifier) {
@@ -81,6 +100,9 @@ final class AlgorithmConfigTest {
         assertThrows(IllegalArgumentException.class, () -> KemAlgorithm.fromIdentifier(identifier + "/private"));
     }
 
+    /**
+     * Verifies that every key identifier resolves with stored key role suffixes.
+     */
     @Test
     void everyKeyIdentifierResolvesWithStoredKeyRoleSuffixes() {
         for (KemAlgorithm algorithm : KemAlgorithm.values()) {

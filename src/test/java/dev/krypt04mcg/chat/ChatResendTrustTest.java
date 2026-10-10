@@ -16,6 +16,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class ChatResendTrustTest {
     @TempDir Path root;
 
+    /**
+     * Verifies that large default chat selects available payload and fails early without it.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void largeDefaultChatSelectsAvailablePayloadAndFailsEarlyWithoutIt() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root, crypto);
@@ -44,6 +49,11 @@ class ChatResendTrustTest {
         assertTrue(errors.size() > noticesBeforeFailure);
     }
 
+    /**
+     * Verifies that new ciphertext persists recipient binding and can be resent.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void newCiphertextPersistsRecipientBindingAndCanBeResent() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root, crypto);
@@ -70,6 +80,11 @@ class ChatResendTrustTest {
         assertEquals(cached.fragments(), sent.stream().map(ChatSendFragment::fragment).toList());
     }
 
+    /**
+     * Verifies that cached resend rechecks current trust.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void cachedResendRechecksCurrentTrust() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root, crypto);
@@ -97,6 +112,11 @@ class ChatResendTrustTest {
         assertEquals(1, sent.size(), "Distrusted cached recipients must not be queued");
     }
 
+    /**
+     * Verifies that pending fragments recheck revocation deletion and replacement.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void pendingFragmentsRecheckRevocationDeletionAndReplacement() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root, crypto);
@@ -144,6 +164,11 @@ class ChatResendTrustTest {
         assertEquals(1, sent.size(), "Replacement keys must reject both queued and cached old ciphertext");
     }
 
+    /**
+     * Verifies that legacy cache without fingerprint cannot be resent.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void legacyCacheWithoutFingerprintCannotBeResent() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root, crypto);

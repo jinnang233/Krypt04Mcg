@@ -1,3 +1,6 @@
+/**
+ * Loads the build plugins that supply Minecraft integration and artifact tasks.
+ */
 plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.148'
@@ -20,12 +23,18 @@ sourceSets.main.resources {
     exclude('fabric.mod.json')
 }
 
+/**
+ * Declares dependency repositories used by the build tool.
+ */
 repositories {
     maven { url = 'https://maven.shedaniel.me/' }
     maven { url = 'https://maven.architectury.dev/' }
     mavenCentral()
 }
 
+/**
+ * Declares external libraries and test dependencies; cryptographic behavior belongs to runtime code.
+ */
 dependencies {
     compileOnly "me.shedaniel.cloth:cloth-config-neoforge:${cloth_config_version}"
     implementation(jarJar("org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"))
@@ -37,16 +46,28 @@ dependencies {
     testImplementation 'com.google.code.gson:gson:2.14.0'
 }
 
+/**
+ * Configures the named build task with the existing compilation, verification or packaging settings.
+ */
 tasks.withType(JavaCompile).configureEach { options.release = 25 }
+/**
+ * Expands build metadata in resources without changing runtime protocol settings.
+ */
 processResources {
     inputs.property('mod_version', mod_version)
     filesMatching('META-INF/neoforge.mods.toml') {
         expand(mod_version: mod_version)
     }
 }
+/**
+ * Runs the configured tests through the JUnit Platform.
+ */
 test { useJUnitPlatform() }
 
 // Exercise shared handshake regressions against this loader's chat entry point too.
+/**
+ * Configures the named build task with the existing compilation, verification or packaging settings.
+ */
 tasks.named('compileTestJava') {
     classpath += tasks.named('compileJava').get().classpath
     source(fileTree('../src/test/java') {
@@ -65,6 +86,9 @@ tasks.named('compileTestJava') {
         include 'dev/krypt04mcg/service/FileReceiveTaskTest.java'
     })
 }
+/**
+ * Configures the named build task with the existing compilation, verification or packaging settings.
+ */
 tasks.named('test') {
     classpath += tasks.named('compileJava').get().classpath
 }

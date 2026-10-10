@@ -14,6 +14,11 @@ final class ChatConversationStoreTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that persists and reloads conversation history.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void persistsAndReloadsConversationHistory() throws Exception {
         ChatConversationStore first = new ChatConversationStore(tempDir);
@@ -34,6 +39,9 @@ final class ChatConversationStoreTest {
         assertEquals(1, second.groups().stream().filter("team"::equalsIgnoreCase).count());
     }
 
+    /**
+     * Verifies that keeps player and group histories separate when names match.
+     */
     @Test
     void keepsPlayerAndGroupHistoriesSeparateWhenNamesMatch() {
         ChatConversationStore store = new ChatConversationStore(tempDir);
@@ -45,6 +53,9 @@ final class ChatConversationStoreTest {
         assertEquals("group message", store.messagesForGroup("party").getFirst().message());
     }
 
+    /**
+     * Verifies that trims history to bounded cache.
+     */
     @Test
     void trimsHistoryToBoundedCache() {
         ChatConversationStore store = new ChatConversationStore(tempDir);
@@ -59,6 +70,11 @@ final class ChatConversationStoreTest {
         assertEquals("message-349", reloaded.messagesFor("alice").getLast().message());
     }
 
+    /**
+     * Verifies that ignores corrupt history file.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void ignoresCorruptHistoryFile() throws Exception {
         Path file = tempDir.resolve("cache").resolve("conversations.json");
@@ -71,6 +87,11 @@ final class ChatConversationStoreTest {
         assertTrue(store.groups().isEmpty());
     }
 
+    /**
+     * Verifies that disabled history keeps live messages without loading or saving history.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void disabledHistoryKeepsLiveMessagesWithoutLoadingOrSavingHistory() throws Exception {
         ChatConversationStore enabled = new ChatConversationStore(tempDir);
@@ -97,6 +118,9 @@ final class ChatConversationStoreTest {
         assertTrue(reloaded.messagesForGroup("team").isEmpty());
     }
 
+    /**
+     * Verifies that disabled history remains bounded without creating files.
+     */
     @Test
     void disabledHistoryRemainsBoundedWithoutCreatingFiles() {
         ChatConversationStore store = new ChatConversationStore(tempDir, false);
@@ -109,6 +133,9 @@ final class ChatConversationStoreTest {
         assertTrue(new ChatConversationStore(tempDir, false).peers().isEmpty());
     }
 
+    /**
+     * Verifies that enabling history places saved messages before live messages.
+     */
     @Test
     void enablingHistoryPlacesSavedMessagesBeforeLiveMessages() {
         new ChatConversationStore(tempDir).incoming("alice", "saved");

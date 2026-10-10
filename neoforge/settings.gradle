@@ -1,3 +1,6 @@
+/**
+ * Configures resolution of build plugins before project evaluation.
+ */
 pluginManagement {
     repositories { gradlePluginPortal() }
 }

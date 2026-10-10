@@ -17,6 +17,11 @@ import static org.junit.jupiter.api.Assertions.*;
 final class CryptoBoundaryTest {
     private static final String SESSION_ID = "AAAAAAAAAAAAAAAAAAAAAA";
 
+    /**
+     * Verifies that compression respects configured limit.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void compressionRespectsConfiguredLimit() throws Exception {
         CryptoService large = new CryptoService(128 * 1024);
@@ -29,6 +34,9 @@ final class CryptoBoundaryTest {
                 .decryptWithSession(packet, "bob", "alice", secret, SESSION_ID, 0));
     }
 
+    /**
+     * Verifies that rejects missing and wrong sized session secrets.
+     */
     @Test
     void rejectsMissingAndWrongSizedSessionSecrets() {
         CryptoService crypto = new CryptoService();
@@ -40,6 +48,11 @@ final class CryptoBoundaryTest {
         assertThrows(CryptoException.class, () -> crypto.deriveSessionSecret(new byte[32], new byte[15]));
     }
 
+    /**
+     * Verifies that operational apis reject relabeled keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void operationalApisRejectRelabeledKeys() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -56,6 +69,9 @@ final class CryptoBoundaryTest {
         assertThrows(CryptoException.class, () -> crypto.encryptFor(receiver, keys, "alice", "message", false));
     }
 
+    /**
+     * Verifies that ephemeral key owns its arrays and returns snapshots.
+     */
     @Test
     void ephemeralKeyOwnsItsArraysAndReturnsSnapshots() {
         byte[] publicBytes = {1, 2};
@@ -75,18 +91,38 @@ final class CryptoBoundaryTest {
         }
     }
 
+    /**
+     * Verifies that rejects authenticated compressed payload with trailing bytes.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsAuthenticatedCompressedPayloadWithTrailingBytes() throws Exception {
         CryptoService crypto = new CryptoService();
         byte[] secret = new byte[32];
         var template = crypto.encryptWithSession("bob", "alice", secret, SESSION_ID, 0,
                 "", true, AeadAlgorithm.AES_256_GCM);
+        /*
+         * Requests the explicit authenticated-encryption transformation from JCA. Mode-specific key/nonce
+         * parameters and AAD are supplied before finalization; there is no unauthenticated-mode fallback on
+         * provider or tag failure.
+         */
         var cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,
                 new javax.crypto.spec.SecretKeySpec(crypto.deriveSessionSecret(secret, template.messageId()), "AES"),
                 new javax.crypto.spec.GCMParameterSpec(128, template.nonce()));
+        /*
+         * Authenticates these canonical metadata bytes without encrypting them. Both sides must reproduce
+         * identical AAD; changing an identity, epoch or other covered field invalidates the authentication
+         * tag.
+         */
         cipher.updateAAD(new PacketCodec().aadFor(template));
         // A complete empty raw DEFLATE stream followed by an extra byte.
+        /*
+         * Finalizes the authenticated cipher operation. Decryption must not expose its result before tag
+         * verification succeeds; streaming adapters can already hold tentative plaintext and must erase that
+         * output when finalization fails.
+         */
         byte[] ciphertext = cipher.doFinal(new byte[] {3, 0, 42});
         var packet = new EncryptedPacket(template.protocolVersion(), template.type(), template.flags(),
                 template.sender(), template.receiver(), template.timestampMillis(), template.messageId(),
@@ -97,11 +133,21 @@ final class CryptoBoundaryTest {
         assertEquals("", crypto.decryptWithSession(template, "bob", "alice", secret, SESSION_ID, 0));
     }
 
+    /**
+     * Verifies that missing packet is reported as crypto exception.
+     */
     @Test
     void missingPacketIsReportedAsCryptoException() {
         assertThrows(CryptoException.class, () -> new CryptoService().decrypt(null, null, null));
     }
 
+    /**
+     * Provides the relabel fixture operation used by the crypto boundary test regression scenarios.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @return the result described above
+     */
     private static KeyRecord relabel(KeyRecord key, String algorithm) {
         return new KeyRecord(algorithm, key.owner(), key.uuid(), key.fingerprint(), key.createdAt(), key.keyData());
     }

@@ -35,6 +35,11 @@ final class SqiSignSignatureAlgorithmTest {
     @TempDir
     Path tempDir;
 
+    /**
+     * Verifies that exposes every bouncy castle sqi sign parameter set.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void exposesEveryBouncyCastleSqiSignParameterSet() throws Exception {
         var supported = Arrays.stream(SignatureAlgorithm.values())
@@ -49,6 +54,12 @@ final class SqiSignSignatureAlgorithmTest {
         assertTrue(supported.isEmpty());
     }
 
+    /**
+     * Verifies that persists signs verifies and transports every parameter set.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @EnumSource(value = SignatureAlgorithm.class, names = "SQISIGN_.*", mode = EnumSource.Mode.MATCH_ALL)
     void persistsSignsVerifiesAndTransportsEveryParameterSet(SignatureAlgorithm algorithm) throws Exception {

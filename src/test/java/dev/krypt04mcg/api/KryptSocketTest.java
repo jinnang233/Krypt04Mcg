@@ -7,6 +7,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KryptSocketTest {
+    /**
+     * Verifies that stream boundaries half close and backpressure.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void streamBoundariesHalfCloseAndBackpressure() throws Exception {
         var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
         byte[] bytes = new byte[33000];
@@ -21,6 +26,11 @@ class KryptSocketTest {
         assertTrue(socket.isClosed());
         assertThrows(IOException.class, () -> socket.getOutputStream().write(1));
     }
+    /**
+     * Verifies that failure wakes blocked read and does not become eof.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void failureWakesBlockedReadAndDoesNotBecomeEof() throws Exception {
         var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
         try (var executor = Executors.newSingleThreadExecutor()) {
@@ -30,6 +40,11 @@ class KryptSocketTest {
             assertInstanceOf(IOException.class, error.getCause());
         }
     }
+    /**
+     * Verifies that coalesces tiny writes and handles ring wrap.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void coalescesTinyWritesAndHandlesRingWrap() throws Exception {
         var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
         for (int i = 0; i < 5000; i++) socket.getOutputStream().write(i);
@@ -45,6 +60,11 @@ class KryptSocketTest {
         byte[] rest = socket.getInputStream().readAllBytes(); assertEquals(7000, rest.length);
         for (int i = 0; i < rest.length; i++) assertEquals((byte) (i + 3000), rest[i]);
     }
+    /**
+     * Verifies that queue limits do not partially accept writes.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void queueLimitsDoNotPartiallyAcceptWrites() throws Exception {
         var socket = new KryptSocket("Bob", "test:stream", UUID.randomUUID());
         assertThrows(IOException.class, () -> socket.getOutputStream().write(new byte[KryptSocket.MAX_BUFFERED_BYTES + 1]));

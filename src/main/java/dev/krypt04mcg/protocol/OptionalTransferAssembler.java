@@ -13,7 +13,16 @@ public final class OptionalTransferAssembler {
     private final int maxChunks;
     private final int maxTransfers;
 
+    /**
+     * Creates a optional transfer assembler with the supplied dependencies and initial state.
+     */
     public OptionalTransferAssembler() { this(MAX_CHUNKS, 4); }
+    /**
+     * Creates a optional transfer assembler with the supplied dependencies and initial state.
+     *
+     * @param maxChunks the max chunks supplied to this operation
+     * @param maxTransfers the max transfers supplied to this operation
+     */
     public OptionalTransferAssembler(int maxChunks, int maxTransfers) {
         if (maxChunks < 1 || maxChunks > 2048 || maxTransfers < 1 || maxTransfers > 4)
             throw new IllegalArgumentException("Invalid transfer limits");
@@ -21,10 +30,27 @@ public final class OptionalTransferAssembler {
         this.maxTransfers = maxTransfers;
     }
 
+    /**
+     * Splits encoded optional-transfer data into bounded versioned chunks with a transfer UUID, index and
+     * total count. This transport framing does not itself encrypt or authenticate the supplied business
+     * data.
+     *
+     * @param data the data supplied to this operation
+     * @return the result described above
+     */
     public static List<String> split(String data) {
         return split(data, MAX_CHUNKS);
     }
 
+    /**
+     * Splits encoded optional-transfer data into bounded versioned chunks with a transfer UUID, index and
+     * total count. This transport framing does not itself encrypt or authenticate the supplied business
+     * data.
+     *
+     * @param data the data supplied to this operation
+     * @param maxChunks the max chunks supplied to this operation
+     * @return the result described above
+     */
     public static List<String> split(String data, int maxChunks) {
         if (maxChunks < 1 || maxChunks > 2048) throw new IllegalArgumentException("Invalid chunk limit");
         int total = (data.length() + CHUNK - 1) / CHUNK;
@@ -36,11 +62,35 @@ public final class OptionalTransferAssembler {
         return result;
     }
 
+    /**
+     * Admits sender-bound optional-transfer chunks under configured count/size limits and fixed expiry,
+     * ignoring duplicate indices. The canonical UUID, decimal indices, total count and chunk lengths are
+     * checked. Conflicting duplicates retire the transfer ID, while identical duplicates are ignored;
+     * completion joins the text chunks. This framing contains no cryptographic checksum or signature, so
+     * caller transport and key-import validation remain required.
+     *
+     * @param sender the sender or source associated with this operation
+     * @param fragment the individual fragment or delivery record
+     * @param now the now supplied to this operation
+     * @return the result described above
+     */
     public Optional<String> accept(String sender, String fragment, long now) {
         return accept(sender, fragment, now, () -> true);
     }
 
-    /** Admission is checked before reserving storage, only for a new transfer. */
+    /**
+     * Admits sender-bound optional-transfer chunks under configured count/size limits and fixed expiry,
+     * ignoring duplicate indices. The canonical UUID, decimal indices, total count and chunk lengths are
+     * checked. Conflicting duplicates retire the transfer ID, while identical duplicates are ignored;
+     * completion joins the text chunks. This framing contains no cryptographic checksum or signature, so
+     * caller transport and key-import validation remain required.
+     *
+     * @param sender the sender or source associated with this operation
+     * @param fragment the individual fragment or delivery record
+     * @param now the now supplied to this operation
+     * @param admission the admission supplied to this operation
+     * @return the result described above
+     */
     public Optional<String> accept(String sender, String fragment, long now, BooleanSupplier admission) {
         expire(now);
         if (sender == null || !sender.matches("[A-Za-z0-9_]{1,16}") || fragment == null
@@ -79,7 +129,12 @@ public final class OptionalTransferAssembler {
         return Optional.of(String.join("", entry.parts));
     }
 
-    /** Called by the client tick as well as receive, so idle connections release payloads. */
+    /**
+     * Drops optional-transfer state after its original admission lifetime without renewing it on duplicate
+     * chunks.
+     *
+     * @param now the now supplied to this operation
+     */
     public void expire(long now) {
         retired.values().removeIf(time -> now - time > 60000);
         var iterator = entries.entrySet().iterator();
@@ -92,12 +147,21 @@ public final class OptionalTransferAssembler {
         }
     }
 
+    /**
+     * Clears retained state in the optional transfer assembly.
+     */
     public void clear() { entries.clear(); retired.clear(); }
     private static final class Entry {
         final long created;
         final String[] parts;
         int received;
 
+        /**
+         * Creates a entry with the supplied dependencies and initial state.
+         *
+         * @param created the created supplied to this operation
+         * @param parts the parts supplied to this operation
+         */
         Entry(long created, String[] parts) { this.created = created; this.parts = parts; }
     }
 }

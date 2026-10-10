@@ -42,6 +42,15 @@ public final class OptionalSharing {
     private boolean wasSending, wasReceiving;
     private ChatSendMode previousMode;
 
+    /**
+     * Creates a optional sharing with the supplied dependencies and initial state.
+     *
+     * @param config the config supplied to this operation
+     * @param keys the keys supplied to this operation
+     * @param trust the trust supplied to this operation
+     * @param crypto the crypto supplied to this operation
+     * @param root the account or configuration storage root
+     */
     public OptionalSharing(Krypt04McgConfig config, KeyStoreService keys, KeyTrustService trust,
                            CryptoService crypto, Path root) {
         this.config = config; this.keys = keys; this.trust = trust; this.crypto = crypto; this.root = root;
@@ -50,6 +59,9 @@ public final class OptionalSharing {
         applySettings();
     }
 
+    /**
+     * Performs the apply settings operation for the optional sharing.
+     */
     public void applySettings() {
         if (receiving != null && receiving.expire()) receiving = null;
         if (wasSending != config.enableFileSending || wasReceiving != config.enableFileReceiving
@@ -70,6 +82,9 @@ public final class OptionalSharing {
         }
     }
 
+    /**
+     * Registers the supported callbacks and channels for the optional sharing.
+     */
     public void register() {
         PayloadTypeRegistry.serverboundPlay().register(PublicKeyPayload.TYPE, PublicKeyPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(PublicKeyPayload.TYPE, PublicKeyPayload.CODEC);
@@ -117,10 +132,20 @@ public final class OptionalSharing {
                 })))));
     }
 
+    /**
+     * Checks the mode required by the optional sharing and rejects invalid state instead of continuing.
+     */
     private void requireMode() {
         if (config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD) throw problem("mode");
     }
 
+    /**
+     * Submits key through the optional sharing path. Local submission does not by itself acknowledge
+     * remote receipt.
+     *
+     * @param player the player supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void sendKey(String player) throws Exception {
         requireMode();
         if (!ClientPlayNetworking.canSend(PublicKeyPayload.TYPE)) throw problem("key_channel");
@@ -129,12 +154,27 @@ public final class OptionalSharing {
             outgoingKeys.addLast(new PublicKeyPayload(player, part, 1));
     }
 
+    /**
+     * Returns the recorded identity for the optional sharing.
+     *
+     * @param player the player supplied to this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private PublicIdentity trusted(String player) throws Exception {
         PublicIdentity identity = keys.findPublicIdentity(player).orElseThrow(() -> problem("key_required"));
         if (trust.trustState(player, identity) == TrustState.DISTRUSTED) throw problem("distrusted");
         return identity;
     }
 
+    /**
+     * Submits file through the optional sharing path. Local submission does not by itself acknowledge
+     * remote receipt.
+     *
+     * @param player the player supplied to this operation
+     * @param path the filesystem path used by this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void sendFile(String player, String path) throws Exception {
         requireMode(); applySettings();
         if (fileLock.locked() || !config.enableFileSending) throw problem("sending_off");
@@ -150,6 +190,9 @@ public final class OptionalSharing {
         });
     }
 
+    /**
+     * Performs the pump file operation for the optional sharing.
+     */
     private void pumpFile() {
         if (outgoing == null) return;
         FileSend current = outgoing;
@@ -168,13 +211,31 @@ public final class OptionalSharing {
             }
         } catch (Exception e) { cancelOutgoing(); message(tr("text.krypt04mcg.share.failed")); }
     }
+    /**
+     * Performs the cancel outgoing operation for the optional sharing.
+     */
     private void cancelOutgoing() { if (outgoing != null) { outgoing.socket.fail("File send cancelled"); outgoing = null; } }
+    /**
+     * Performs the cancel receiving operation for the optional sharing.
+     */
     private void cancelReceiving() { if (receiving != null) { receiving.cancel(); receiving = null; } }
+    /**
+     * Performs the file identity operation for the optional sharing.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private String fileIdentity(String peer) throws Exception {
         var local = keys.local();
         return KeyTrustService.fingerprintPair(trusted(peer)) + "/" + local.kemPublicKey().fingerprint()
                 + ":" + local.signaturePublicKey().fingerprint();
     }
+    /**
+     * Performs the receive file operation for the optional sharing.
+     *
+     * @param socket the encrypted or TCP socket participating in the operation
+     */
     private void receiveFile(KryptSocket socket) {
         applySettings(); expire();
         if (fileLock.locked() || !config.enableFileReceiving || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD
@@ -197,9 +258,23 @@ public final class OptionalSharing {
     }
     private static final class FileSend {
         final KryptSocket socket; final byte[] bytes; int offset;
+        /**
+         * Creates a file send with the supplied dependencies and initial state.
+         *
+         * @param socket the encrypted or TCP socket participating in the operation
+         * @param bytes the bytes supplied to this operation
+         */
         FileSend(KryptSocket socket, byte[] bytes) { this.socket = socket; this.bytes = bytes; }
     }
 
+    /**
+     * Performs the receive operation for the optional sharing.
+     *
+     * @param sender the sender or source associated with this operation
+     * @param fragment the individual fragment or delivery record
+     * @param version the version supplied to this operation
+     * @param file the file supplied to this operation
+     */
     private void receive(String sender, String fragment, int version, boolean file) {
         if (file || config.chatSendMode != ChatSendMode.CUSTOM_PAYLOAD || version != 1 || !sender.matches("[A-Za-z0-9_]{1,16}")) return;
         applySettings();
@@ -218,8 +293,17 @@ public final class OptionalSharing {
         } catch (Exception ignored) { }
     }
 
+    /**
+     * Expires state whose deadline has elapsed in the optional sharing.
+     */
     private void expire() { pending.values().removeIf(p -> System.currentTimeMillis() - p.created > 60000); }
 
+    /**
+     * Performs the offer operation for the optional sharing.
+     *
+     * @param request the request supplied to this operation
+     * @param text the text supplied to this operation
+     */
     private void offer(Pending request, String text) {
         String token = UUID.randomUUID().toString(); pending.put(token, request);
         var line = Component.literal(ClientMessages.messagePrefixWithSpace() + text + " ");
@@ -231,6 +315,13 @@ public final class OptionalSharing {
         Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(line);
     }
 
+    /**
+     * Performs the decide operation for the optional sharing.
+     *
+     * @param token the token supplied to this operation
+     * @param accept the accept supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void decide(String token, boolean accept) throws Exception {
         if (accept && worker.busy()) throw problem("busy");
         expire(); Pending request = pending.remove(token);
@@ -256,6 +347,12 @@ public final class OptionalSharing {
         }
     }
 
+    /**
+     * Performs the run operation for the optional sharing.
+     *
+     * @param action the action supplied to this operation
+     * @return the result described above
+     */
     private int run(Action action) {
         try { action.run(); return 1; }
         catch (SharingProblem e) { message(e.getMessage()); return 0; }
@@ -264,16 +361,51 @@ public final class OptionalSharing {
             message(tr("text.krypt04mcg.share.failed")); return 0;
         }
     }
+    /**
+     * Performs the message operation for the optional sharing.
+     *
+     * @param text the text supplied to this operation
+     */
     private static void message(String text) {
         Minecraft client = Minecraft.getInstance();
         client.execute(() -> client.gui.hud.getChat().addClientSystemMessage(Component.literal(ClientMessages.messagePrefixWithSpace() + text)));
     }
-    private interface Action { void run() throws Exception; }
-    private interface Completion<T> { void accept(T value) throws Exception; }
+    private interface Action {
+        /**
+         * Performs the run operation for the optional sharing.
+         *
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
+        void run() throws Exception; }
+    private interface Completion<T> {
+        /**
+         * Performs the accept operation for the optional sharing.
+         *
+         * @param value the value supplied to this operation
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
+        void accept(T value) throws Exception; }
+    /**
+     * Performs the submit operation for the optional sharing.
+     *
+     * @param file the file supplied to this operation
+     * @param sending the sending supplied to this operation
+     * @param work the work supplied to this operation
+     * @param completed the completed supplied to this operation
+     */
     private <T> void submit(boolean file, boolean sending, java.util.concurrent.Callable<T> work, Completion<T> completed) {
         submit(file, sending, work, completed, true);
     }
 
+    /**
+     * Performs the submit operation for the optional sharing.
+     *
+     * @param file the file supplied to this operation
+     * @param sending the sending supplied to this operation
+     * @param work the work supplied to this operation
+     * @param completed the completed supplied to this operation
+     * @param reportErrors the report errors supplied to this operation
+     */
     private <T> void submit(boolean file, boolean sending, java.util.concurrent.Callable<T> work, Completion<T> completed,
                             boolean reportErrors) {
         Minecraft client = Minecraft.getInstance();
@@ -294,10 +426,22 @@ public final class OptionalSharing {
             });
         })) throw problem("busy");
     }
+    /**
+     * Performs the problem operation for the optional sharing.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param args the args supplied to this operation
+     * @return the result described above
+     */
     private static SharingProblem problem(String key, Object... args) {
         return new SharingProblem(tr("text.krypt04mcg.share." + key, args));
     }
     private static final class SharingProblem extends RuntimeException {
+        /**
+         * Creates a sharing problem with the supplied dependencies and initial state.
+         *
+         * @param translated the translated supplied to this operation
+         */
         private SharingProblem(String translated) { super(translated); }
     }
     private record Pending(String sender, String json, FileData file, long created) {}

@@ -30,11 +30,23 @@ final class AdditionalSignatureAlgorithmTest {
             UOVParameterSpec.class, QRUOVParameterSpec.class, AIMerParameterSpec.class, FaestParameterSpec.class,
             MQOMParameterSpec.class, SDitHParameterSpec.class);
 
+    /**
+     * Provides the selections fixture operation used by the additional signature algorithm test regression
+     * scenarios.
+     *
+     * @return the result described above
+     */
     static Stream<SignatureAlgorithm> selections() {
         return Arrays.stream(SignatureAlgorithm.values())
                 .filter(a -> a.parameterSpec() != null && SPECS.contains(a.parameterSpec().getClass()));
     }
 
+    /**
+     * Provides the representatives fixture operation used by the additional signature algorithm test
+     * regression scenarios.
+     *
+     * @return the result described above
+     */
     static Stream<SignatureAlgorithm> representatives() {
         return Stream.of(SignatureAlgorithm.MAYO_1_ED25519, SignatureAlgorithm.HAETAE_2_ED448,
                 SignatureAlgorithm.UOV_IS_PKC_SKC_ED25519, SignatureAlgorithm.QRUOV_1Q127L3V156M54_ED448,
@@ -42,6 +54,11 @@ final class AdditionalSignatureAlgorithmTest {
                 SignatureAlgorithm.MQOM2_CAT1_GF2_FAST_R3_ED25519, SignatureAlgorithm.SDITH_HYPERCUBE_CAT1_GF256_ED448);
     }
 
+    /**
+     * Verifies that exposes all bc parameter sets and both ed dsa pairings.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void exposesAllBcParameterSetsAndBothEdDsaPairings() throws Exception {
         var algorithms = selections().filter(a -> !a.customHybrid()).toList();
@@ -64,6 +81,12 @@ final class AdditionalSignatureAlgorithmTest {
         }
     }
 
+    /**
+     * Verifies that every selection signs validates and transports.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @MethodSource("selections")
     void everySelectionSignsValidatesAndTransports(SignatureAlgorithm algorithm) throws Exception {
@@ -97,6 +120,12 @@ final class AdditionalSignatureAlgorithmTest {
         }
     }
 
+    /**
+     * Verifies that hybrids persist reject relabeling and complete handshakes.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @MethodSource("representatives")
     void hybridsPersistRejectRelabelingAndCompleteHandshakes(SignatureAlgorithm algorithm) throws Exception {
@@ -131,6 +160,11 @@ final class AdditionalSignatureAlgorithmTest {
         }
     }
 
+    /**
+     * Verifies that malformed signatures and component splicing are rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void malformedSignaturesAndComponentSplicingAreRejected() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -170,6 +204,11 @@ final class AdditionalSignatureAlgorithmTest {
                 keys.kemPublicKey(), keys.kemPrivateKey(), keys.signaturePublicKey(), mismatchedPrivate), "alice", "a"));
     }
 
+    /**
+     * Verifies that largest uov public identity fits optional key sharing.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void largestUovPublicIdentityFitsOptionalKeySharing() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -185,14 +224,37 @@ final class AdditionalSignatureAlgorithmTest {
         crypto.validateLocalKeyMaterial(keys, "alice", "a");
     }
 
+    /**
+     * Provides the identity fixture operation used by the additional signature algorithm test regression
+     * scenarios.
+     *
+     * @param keys the keys supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity identity(LocalKeyMaterial keys) {
         return new PublicIdentity(keys.kemPublicKey().owner(), keys.kemPublicKey().uuid(), keys.kemPublicKey(), keys.signaturePublicKey());
     }
 
+    /**
+     * Provides the relabel fixture operation used by the additional signature algorithm test regression
+     * scenarios.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @return the result described above
+     */
     private static KeyRecord relabel(KeyRecord key, String algorithm) {
         return new KeyRecord(algorithm, key.owner(), key.uuid(), key.fingerprint(), key.createdAt(), key.keyData());
     }
 
+    /**
+     * Provides the with signature fixture operation used by the additional signature algorithm test
+     * regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param signature the signature bytes or signature representation to verify
+     * @return the result described above
+     */
     private static EncryptedPacket withSignature(EncryptedPacket packet, byte[] signature) {
         return new EncryptedPacket(packet.protocolVersion(), packet.type(), packet.flags(), packet.sender(), packet.receiver(),
                 packet.timestampMillis(), packet.messageId(), packet.aadFragmentIndex(), packet.aadFragmentTotal(),

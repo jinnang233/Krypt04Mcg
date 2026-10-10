@@ -6,6 +6,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SharingWorkerTest {
+    /**
+     * Verifies that bounds work until ui completion and recovers from failure.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void boundsWorkUntilUiCompletionAndRecoversFromFailure() throws Exception {
         try (var worker = new SharingWorker()) {
             var deliveries = new ArrayBlockingQueue<Runnable>(1);

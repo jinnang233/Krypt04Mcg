@@ -10,6 +10,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class KeyParameterBindingTest {
+    /**
+     * Verifies that rejects relabeled kem public and private keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsRelabeledKemPublicAndPrivateKeys() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -27,6 +32,11 @@ final class KeyParameterBindingTest {
                 keys.kemPublicKey(), privateKey, keys.signaturePublicKey(), keys.signaturePrivateKey()), "alice", "alice-uuid"));
     }
 
+    /**
+     * Verifies that rejects relabeled signature keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsRelabeledSignatureKeys() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -40,6 +50,13 @@ final class KeyParameterBindingTest {
                 keys.kemPublicKey(), keys.kemPrivateKey(), publicKey, privateKey), "alice", "alice-uuid"));
     }
 
+    /**
+     * Provides the relabel fixture operation used by the key parameter binding test regression scenarios.
+     *
+     * @param record the record supplied to this operation
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @return the result described above
+     */
     private static KeyRecord relabel(KeyRecord record, String algorithm) {
         return new KeyRecord(algorithm, record.owner(), record.uuid(), record.fingerprint(),
                 record.createdAt(), record.keyData());

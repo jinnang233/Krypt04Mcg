@@ -33,6 +33,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 final class SlhDsaSignatureAlgorithmTest {
     private static final byte[] MESSAGE = "SLH-DSA variant test".getBytes(StandardCharsets.UTF_8);
 
+    /**
+     * Provides the install provider fixture operation used by the slh dsa signature algorithm test
+     * regression scenarios.
+     */
     @BeforeAll
     static void installProvider() {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
@@ -40,11 +44,19 @@ final class SlhDsaSignatureAlgorithmTest {
         }
     }
 
+    /**
+     * Verifies that exposes every bouncy castle slh dsa variant.
+     */
     @Test
     void exposesEveryBouncyCastleSlhDsaVariant() {
         assertEquals(24, slhDsaAlgorithms().size());
     }
 
+    /**
+     * Verifies that largest slh dsa signature survives default packet fragmentation.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void largestSlhDsaSignatureSurvivesDefaultPacketFragmentation() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -81,38 +93,98 @@ final class SlhDsaSignatureAlgorithmTest {
         assertEquals(plaintext, crypto.decrypt(decoded, bob, alicePublic));
     }
 
+    /**
+     * Verifies that every slh dsa variant generates persists signs and verifies.
+     *
+     * @return the result described above
+     */
     @TestFactory
     Stream<DynamicTest> everySlhDsaVariantGeneratesPersistsSignsAndVerifies() {
         return slhDsaAlgorithms().stream()
                 .map(algorithm -> DynamicTest.dynamicTest(algorithm.identifier(), () -> exercise(algorithm)));
     }
 
+    /**
+     * Provides the slh dsa algorithms fixture operation used by the slh dsa signature algorithm test
+     * regression scenarios.
+     *
+     * @return the result described above
+     */
     private static List<SignatureAlgorithm> slhDsaAlgorithms() {
         return Stream.of(SignatureAlgorithm.values())
                 .filter(algorithm -> !algorithm.hybrid() && algorithm.identifier().startsWith("SLH-DSA-"))
                 .toList();
     }
 
+    /**
+     * Provides the exercise fixture operation used by the slh dsa signature algorithm test regression
+     * scenarios.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private static void exercise(SignatureAlgorithm algorithm) throws Exception {
+        /*
+         * Selects the named JCA key-pair implementation and provider. The adjacent initialization supplies the
+         * exact suite parameters and randomness; the library implements the primitive, while project checks
+         * bind the resulting key to its declared suite.
+         */
         KeyPairGenerator generator = KeyPairGenerator.getInstance(algorithm.jcaName(), algorithm.provider());
+        /*
+         * Supplies the exact selected key-generation parameter specification to the provider. Where the
+         * overload includes SecureRandom it also supplies the configured cryptographic entropy source; test
+         * fixtures may select different randomness deliberately.
+         */
         generator.initialize(algorithm.parameterSpec());
         KeyPair generated = generator.generateKeyPair();
 
+        /*
+         * Uses the selected JCA provider to decode the key encoding. Successful ASN.1 decoding alone is
+         * insufficient: the decoded parameter set and recorded public/private role are checked separately
+         * before cryptographic use.
+         */
         KeyFactory keyFactory = KeyFactory.getInstance(algorithm.jcaName(), algorithm.provider());
+        /*
+         * Wraps private-key encoding for provider PKCS#8 decoding. The bytes contain secrets and may be copied
+         * by JCA/provider objects; later array overwriting is best-effort cleanup, not proof that all copies
+         * are erased.
+         */
         var privateKey = keyFactory.generatePrivate(new PKCS8EncodedKeySpec(generated.getPrivate().getEncoded()));
+        /*
+         * Wraps a SubjectPublicKeyInfo-style encoding for the selected provider. Encoded algorithm identifiers
+         * and decoded parameter sets must agree with the declared suite; parsing does not establish a trusted
+         * owner.
+         */
         var publicKey = keyFactory.generatePublic(new X509EncodedKeySpec(generated.getPublic().getEncoded()));
 
+        /*
+         * Selects the exact named signature implementation and provider, preserving suite-specific
+         * prehash/composite behavior. Key parameters are validated separately; a missing or unsupported
+         * implementation is an error, not permission to downgrade.
+         */
         Signature signer = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
         signer.initSign(privateKey);
         signer.update(MESSAGE);
         byte[] signature = signer.sign();
 
+        /*
+         * Selects the exact named signature implementation and provider, preserving suite-specific
+         * prehash/composite behavior. Key parameters are validated separately; a missing or unsupported
+         * implementation is an error, not permission to downgrade.
+         */
         Signature verifier = Signature.getInstance(algorithm.jcaName(), algorithm.provider());
         verifier.initVerify(publicKey);
         verifier.update(MESSAGE);
         assertTrue(verifier.verify(signature));
     }
 
+    /**
+     * Provides the public identity fixture operation used by the slh dsa signature algorithm test
+     * regression scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

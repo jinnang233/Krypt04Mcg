@@ -17,6 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 final class FragmentServiceTest {
+    /**
+     * Verifies that maximum packet round trips with four digit indices and rejects one extra byte.
+     */
     @Test void maximumPacketRoundTripsWithFourDigitIndicesAndRejectsOneExtraByte() {
         byte[] packet = new byte[ChatTransferLimits.MAX_PACKET_BYTES];
         new java.util.Random(42).nextBytes(packet);
@@ -31,6 +34,9 @@ final class FragmentServiceTest {
                 () -> service.fragment(new byte[packet.length + 1], fixedId(), 180));
     }
 
+    /**
+     * Verifies that oversize encoded packet is removed without evicting other messages.
+     */
     @Test void oversizeEncodedPacketIsRemovedWithoutEvictingOtherMessages() {
         var assembler = new FragmentReassembler();
         assembler.accept(new Fragment("victim", 0, 2, "AQ"), "bob");
@@ -40,6 +46,9 @@ final class FragmentServiceTest {
         assertTrue(assembler.progress("large").isEmpty());
         assertArrayEquals(new byte[]{1, 2, 3}, assembler.accept(new Fragment("victim", 1, 2, "ID"), "bob").orElseThrow());
     }
+    /**
+     * Verifies that sender flood cannot consume other senders assembly capacity.
+     */
     @Test
     void senderFloodCannotConsumeOtherSendersAssemblyCapacity() {
         FragmentReassembler reassembler = new FragmentReassembler();
@@ -52,6 +61,9 @@ final class FragmentServiceTest {
         assertArrayEquals(new byte[]{1, 2, 3}, reassembler.accept(new Fragment("alice:message", 1, 2, "ID"), "ALICE").orElseThrow());
     }
 
+    /**
+     * Verifies that sender quota is released on completion expiry and disconnect clear.
+     */
     @Test
     void senderQuotaIsReleasedOnCompletionExpiryAndDisconnectClear() {
         MutableClock clock = new MutableClock();
@@ -72,6 +84,9 @@ final class FragmentServiceTest {
                 "Fragments from a retired connection must not complete on the new one");
     }
 
+    /**
+     * Verifies that sender cannot take over another sources assembly.
+     */
     @Test
     void senderCannotTakeOverAnotherSourcesAssembly() {
         FragmentReassembler reassembler = new FragmentReassembler();
@@ -81,6 +96,9 @@ final class FragmentServiceTest {
         assertEquals(1, reassembler.progress("id").orElseThrow().received());
         assertArrayEquals(new byte[]{1, 2, 3}, reassembler.accept(new Fragment("id", 1, 2, "ID"), "Alice").orElseThrow());
     }
+    /**
+     * Verifies that new fragments cannot keep an incomplete message alive past its deadline.
+     */
     @Test
     void newFragmentsCannotKeepAnIncompleteMessageAlivePastItsDeadline() {
         MutableClock clock = new MutableClock();
@@ -93,6 +111,9 @@ final class FragmentServiceTest {
         assertEquals(0, reassembler.pendingMessages());
     }
 
+    /**
+     * Verifies that new message flood does not evict an admitted message.
+     */
     @Test
     void newMessageFloodDoesNotEvictAnAdmittedMessage() {
         FragmentReassembler reassembler = new FragmentReassembler(
@@ -106,6 +127,9 @@ final class FragmentServiceTest {
                 reassembler.accept(new Fragment("alice:message", 1, 2, "ID")).orElseThrow());
     }
 
+    /**
+     * Verifies that rejects malformed wire ids and payloads before reassembly.
+     */
     @Test
     void rejectsMalformedWireIdsAndPayloadsBeforeReassembly() {
         FragmentService service = new FragmentService();
@@ -118,6 +142,9 @@ final class FragmentServiceTest {
         }
     }
 
+    /**
+     * Verifies that duplicate fragments do not extend cache lifetime.
+     */
     @Test
     void duplicateFragmentsDoNotExtendCacheLifetime() {
         MutableClock clock = new MutableClock();
@@ -130,6 +157,9 @@ final class FragmentServiceTest {
         assertEquals(1, reassembler.cleanup());
     }
 
+    /**
+     * Verifies that rejects invalid indices and oversized payloads before caching.
+     */
     @Test
     void rejectsInvalidIndicesAndOversizedPayloadsBeforeCaching() {
         FragmentReassembler reassembler = new FragmentReassembler();
@@ -141,6 +171,9 @@ final class FragmentServiceTest {
         assertEquals(0, reassembler.pendingMessages());
     }
 
+    /**
+     * Verifies that reassembles out of order and ignores duplicate.
+     */
     @Test
     void reassemblesOutOfOrderAndIgnoresDuplicate() {
         FragmentService service = new FragmentService();
@@ -164,6 +197,9 @@ final class FragmentServiceTest {
         assertArrayEquals(packet, result.get());
     }
 
+    /**
+     * Verifies that caps fragments to minecraft chat limit.
+     */
     @Test
     void capsFragmentsToMinecraftChatLimit() {
         FragmentService service = new FragmentService();
@@ -181,6 +217,9 @@ final class FragmentServiceTest {
         }
     }
 
+    /**
+     * Verifies that supports custom prefix.
+     */
     @Test
     void supportsCustomPrefix() {
         FragmentService service = new FragmentService();
@@ -193,6 +232,9 @@ final class FragmentServiceTest {
         assertEquals(0, service.parse(lines.getFirst(), "[CUSTOM]").index());
     }
 
+    /**
+     * Verifies that rejects prefixes that cannot fit payload without hanging.
+     */
     @Test
     void rejectsPrefixesThatCannotFitPayloadWithoutHanging() {
         FragmentService service = new FragmentService();
@@ -208,6 +250,9 @@ final class FragmentServiceTest {
         });
     }
 
+    /**
+     * Verifies that round trips prefix containing spaces.
+     */
     @Test
     void roundTripsPrefixContainingSpaces() {
         FragmentService service = new FragmentService();
@@ -224,6 +269,9 @@ final class FragmentServiceTest {
         assertArrayEquals(packet, result.orElseThrow());
     }
 
+    /**
+     * Verifies that increases small configured payload for maximum packet.
+     */
     @Test
     void increasesSmallConfiguredPayloadForMaximumPacket() {
         FragmentService service = new FragmentService();
@@ -241,6 +289,9 @@ final class FragmentServiceTest {
                 () -> service.fragment(new byte[packet.length + 1], fixedId(), 32));
     }
 
+    /**
+     * Verifies that supports empty prefix.
+     */
     @Test
     void supportsEmptyPrefix() {
         FragmentService service = new FragmentService();
@@ -256,6 +307,9 @@ final class FragmentServiceTest {
         assertEquals(1, fragment.total());
     }
 
+    /**
+     * Verifies that finds empty prefix fragment inside decorated chat line.
+     */
     @Test
     void findsEmptyPrefixFragmentInsideDecoratedChatLine() {
         FragmentService service = new FragmentService();
@@ -264,6 +318,9 @@ final class FragmentServiceTest {
         assertEquals(fragment, service.findFragment("<alice> " + fragment, ""));
     }
 
+    /**
+     * Verifies that cleanup removes timed out messages.
+     */
     @Test
     void cleanupRemovesTimedOutMessages() {
         MutableClock clock = new MutableClock();
@@ -276,6 +333,11 @@ final class FragmentServiceTest {
         assertEquals(0, reassembler.pendingMessages());
     }
 
+    /**
+     * Provides the fixed id fixture operation used by the fragment service test regression scenarios.
+     *
+     * @return the resulting array produced by this operation
+     */
     private static byte[] fixedId() {
         return new byte[16];
     }
@@ -283,20 +345,41 @@ final class FragmentServiceTest {
     private static final class MutableClock extends Clock {
         private Instant now = Instant.EPOCH;
 
+        /**
+         * Provides the advance fixture operation used by the fragment service test regression scenarios.
+         *
+         * @param duration the duration supplied to this operation
+         */
         void advance(Duration duration) {
             now = now.plus(duration);
         }
 
+        /**
+         * Provides the get zone fixture operation used by the fragment service test regression scenarios.
+         *
+         * @return the result described above
+         */
         @Override
         public ZoneOffset getZone() {
             return ZoneOffset.UTC;
         }
 
+        /**
+         * Provides the with zone fixture operation used by the fragment service test regression scenarios.
+         *
+         * @param zone the zone supplied to this operation
+         * @return the result described above
+         */
         @Override
         public Clock withZone(java.time.ZoneId zone) {
             return this;
         }
 
+        /**
+         * Provides the instant fixture operation used by the fragment service test regression scenarios.
+         *
+         * @return the result described above
+         */
         @Override
         public Instant instant() {
             return now;

@@ -44,6 +44,22 @@ public final class ChatSendService {
     private final Consumer<String> system;
     private final FragmentSendQueue sendQueue;
 
+    /**
+     * Creates a chat send service with the supplied dependencies and initial state.
+     *
+     * @param config the config supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param sessionHandshakeService the session handshake service supplied to this operation
+     * @param sentMessageCacheService the sent message cache service supplied to this operation
+     * @param cryptoService the crypto service supplied to this operation
+     * @param packetCodec the packet encoding and decoding collaborator
+     * @param fragmentService the fragment service supplied to this operation
+     * @param chatSender the chat sender supplied to this operation
+     * @param system the system supplied to this operation
+     * @param connection the connection supplied to this operation
+     */
     public ChatSendService(Krypt04McgConfig config, KeyStoreService keyStoreService, KeyTrustService keyTrustService,
                            SessionService sessionService, SessionHandshakeService sessionHandshakeService,
                            SentMessageCacheService sentMessageCacheService,
@@ -64,25 +80,47 @@ public final class ChatSendService {
         this.sendQueue = new FragmentSendQueue(connection, System::nanoTime);
     }
 
+    /**
+     * Updates the chat sender used by the encrypted chat send service.
+     *
+     * @param chatSender the chat sender supplied to this operation
+     */
     public void setChatSender(Consumer<ChatSendFragment> chatSender) {
         clearPending();
         this.chatSender = Objects.requireNonNull(chatSender, "chatSender");
     }
 
+    /**
+     * Updates the custom payload transport used by the encrypted chat send service.
+     *
+     * @param sender the sender or source associated with this operation
+     * @param available the available supplied to this operation
+     */
     public void setCustomPayloadTransport(Consumer<ChatSendFragment> sender, BooleanSupplier available) {
         clearPending();
         this.customPayloadSender = Objects.requireNonNull(sender);
         this.customPayloadAvailable = Objects.requireNonNull(available);
     }
 
+    /**
+     * Performs the clear pending operation for the encrypted chat send service.
+     */
     public void clearPending() {
         sendQueue.clear();
     }
 
+    /**
+     * Updates the progress listener used by the encrypted chat send service.
+     *
+     * @param progress the progress supplied to this operation
+     */
     public void setProgressListener(Consumer<TransferProgressTracker.Update> progress) {
         sendQueue.setProgressListener(progress);
     }
 
+    /**
+     * Processes the next scheduled work and lifecycle checks for the encrypted chat send service.
+     */
     public void tick() {
         try {
             sendQueue.tick(config.chatSendMode, config.sendDelayMs);
@@ -91,6 +129,15 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Submits kem message through the encrypted chat send service path. Local submission does not by
+     * itself acknowledge remote receipt.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param message the message supplied to this operation
+     * @param sign whether a signature is added to the encrypted packet
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean sendKemMessage(String receiver, String message, boolean sign) {
         try {
             PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
@@ -108,6 +155,12 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Returns the recorded true for the encrypted chat send service.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean exchange(String receiver) {
         try {
             PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
@@ -124,6 +177,14 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Submits session message through the encrypted chat send service path. Local submission does not by
+     * itself acknowledge remote receipt.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param message the message supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean sendSessionMessage(String receiver, String message) {
         try {
             SessionRecord session = sessionService.find(receiver)
@@ -159,6 +220,14 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Submits group message through the encrypted chat send service path. Local submission does not by
+     * itself acknowledge remote receipt.
+     *
+     * @param groupName the group name supplied to this operation
+     * @param members the members supplied to this operation
+     * @param message the message supplied to this operation
+     */
     public void sendGroupMessage(String groupName, List<String> members, String message) {
         if (members.isEmpty()) {
             system.accept(ClientMessages.tr("text.krypt04mcg.error.group_empty", groupName));
@@ -170,6 +239,9 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Performs the resend latest operation for the encrypted chat send service.
+     */
     public void resendLatest() {
         try {
             CachedSentMessage cached = sentMessageCacheService.latest()
@@ -180,6 +252,11 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Performs the resend operation for the encrypted chat send service.
+     *
+     * @param messageId the message identifier used for correlation or key-derivation context
+     */
     public void resend(String messageId) {
         try {
             CachedSentMessage cached = sentMessageCacheService.find(messageId)
@@ -190,6 +267,12 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Performs the resend operation for the encrypted chat send service.
+     *
+     * @param cached the cached supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void resend(CachedSentMessage cached) throws Exception {
         PublicIdentity identity = keyStoreService.findPublicIdentity(cached.receiver())
                 .orElseThrow(() -> new IllegalStateException(
@@ -200,6 +283,14 @@ public final class ChatSendService {
         system.accept(ClientMessages.tr("text.krypt04mcg.resending", cached.receiver(), cached.messageId()));
     }
 
+    /**
+     * Submits packet through the encrypted chat send service path. Local submission does not by itself
+     * acknowledge remote receipt.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param receiver the intended recipient associated with this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     public void sendPacket(EncryptedPacket packet, String receiver) throws Exception {
         PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
                 .orElseThrow(() -> new IllegalStateException(
@@ -214,6 +305,14 @@ public final class ChatSendService {
         sendFragments(receiver, fragments, recipientFingerprint);
     }
 
+    /**
+     * Submits fragments through the encrypted chat send service path. Local submission does not by itself
+     * acknowledge remote receipt.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param fragments the fragments supplied to this operation
+     * @param recipientFingerprint the recipient fingerprint supplied to this operation
+     */
     private void sendFragments(String receiver, List<String> fragments, String recipientFingerprint) {
         ChatSendPolicy.Plan plan = ChatSendPolicy.plan(config.chatSendMode, config.sendDelayMs,
                 config.maxPacketAgeSeconds, fragments.size(), customPayloadAvailable.getAsBoolean());
@@ -234,6 +333,14 @@ public final class ChatSendService {
         }, plan.delayMillis(), plan.queueBudgetMillis());
     }
 
+    /**
+     * Checks the recipient matches required by the encrypted chat send service and rejects invalid state
+     * instead of continuing.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param identity the identity supplied to this operation
+     * @param fingerprint the fingerprint supplied to this operation
+     */
     private void ensureRecipientMatches(String receiver, PublicIdentity identity, String fingerprint) {
         // Legacy cache entries have no identity binding and cannot be safely resent.
         if (!keyTrustService.fingerprintMatches(identity, fingerprint)) {
@@ -242,6 +349,14 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Checks the send allowed required by the encrypted chat send service and rejects invalid state
+     * instead of continuing.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param identity the identity supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void ensureSendAllowed(String receiver, PublicIdentity identity) throws Exception {
         TrustState trustState = keyTrustService.trustState(receiver, identity);
         if (trustState == TrustState.DISTRUSTED) {
@@ -252,6 +367,12 @@ public final class ChatSendService {
         }
     }
 
+    /**
+     * Performs the report queued message operation for the encrypted chat send service.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param message the message supplied to this operation
+     */
     private void reportQueuedMessage(String receiver, String message) {
         system.accept(config.showSentPlaintext
                 ? ClientMessages.tr("text.krypt04mcg.sent_plaintext",
@@ -259,6 +380,11 @@ public final class ChatSendService {
                 : ClientMessages.tr("text.krypt04mcg.sent_encrypted", receiver));
     }
 
+    /**
+     * Performs the error operation for the encrypted chat send service.
+     *
+     * @param e the e supplied to this operation
+     */
     private void error(Exception e) {
         system.accept(ClientMessages.tr("text.krypt04mcg.error.generic", e.getMessage()));
     }

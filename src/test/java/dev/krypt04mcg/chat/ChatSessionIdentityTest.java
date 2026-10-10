@@ -17,6 +17,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class ChatSessionIdentityTest {
     @TempDir Path root;
 
+    /**
+     * Verifies that regenerated local keys reject old session receive without consuming state.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void regeneratedLocalKeysRejectOldSessionReceiveWithoutConsumingState() throws Exception {
         var f = fixture();
         var old = f.sessions.find("Alice").orElseThrow();
@@ -27,6 +32,11 @@ class ChatSessionIdentityTest {
         assertEquals(old, f.sessions.find("Alice").orElseThrow());
     }
 
+    /**
+     * Verifies that regenerated local keys reject old session send without queuing ciphertext.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void regeneratedLocalKeysRejectOldSessionSendWithoutQueuingCiphertext() throws Exception {
         var f = fixture();
         var old = f.sessions.find("Alice").orElseThrow();
@@ -38,6 +48,11 @@ class ChatSessionIdentityTest {
         assertEquals(old, f.sessions.find("Alice").orElseThrow());
     }
 
+    /**
+     * Verifies that sessions without local binding require a new handshake.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void sessionsWithoutLocalBindingRequireANewHandshake() throws Exception {
         var f = fixture();
         var legacy = f.sessions.find("Alice").orElseThrow().withLocalFingerprint("");
@@ -48,6 +63,11 @@ class ChatSessionIdentityTest {
         assertEquals(legacy, f.sessions.find("Alice").orElseThrow());
     }
 
+    /**
+     * Verifies that current bound session still sends and receives.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void currentBoundSessionStillSendsAndReceives() throws Exception {
         var f = fixture();
         deliver(f, f.sessions.find("Alice").orElseThrow(), "current session");
@@ -58,6 +78,14 @@ class ChatSessionIdentityTest {
         assertEquals(1, f.sessions.find("Alice").orElseThrow().nextReceiveSequence());
     }
 
+    /**
+     * Provides the deliver fixture operation used by the chat session identity test regression scenarios.
+     *
+     * @param f the f supplied to this operation
+     * @param session the session supplied to this operation
+     * @param message the message supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void deliver(Fixture f, SessionRecord session, String message) throws Exception {
         String json = JsonSupport.prettyGson().toJson(new SessionMessagePayload(SessionMessagePayload.VERSION, message));
         var packet = f.crypto.encryptWithSession("Bob", "Alice", Base64Url.decode(session.secret()),
@@ -66,6 +94,12 @@ class ChatSessionIdentityTest {
             f.receiver.handle(null, fragment);
     }
 
+    /**
+     * Provides the fixture fixture operation used by the chat session identity test regression scenarios.
+     *
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private Fixture fixture() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root.resolve("bob"), crypto);

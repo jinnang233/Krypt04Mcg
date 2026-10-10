@@ -14,9 +14,17 @@ public final class ClothConfigBridge {
     private static Krypt04McgConfig runtimeConfig;
     private static final List<Consumer<Krypt04McgConfig>> SAVE_LISTENERS = new ArrayList<>();
 
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private ClothConfigBridge() {
     }
 
+    /**
+     * Returns the recorded runtime config for the cloth config bridge.
+     *
+     * @return the result described above
+     */
     public static Krypt04McgConfig load() {
         register();
         ConfigHolder<ClothKrypt04McgConfig> holder = AutoConfig.getConfigHolder(ClothKrypt04McgConfig.class);
@@ -28,11 +36,19 @@ public final class ClothConfigBridge {
         return runtimeConfig;
     }
 
+    /**
+     * Registers save listener for the cloth config bridge.
+     *
+     * @param listener the listener supplied to this operation
+     */
     public static void registerSaveListener(Consumer<Krypt04McgConfig> listener) {
         register();
         SAVE_LISTENERS.add(listener);
     }
 
+    /**
+     * Registers the supported callbacks and channels for the cloth config bridge.
+     */
     private static void register() {
         if (registered) {
             return;

@@ -8,6 +8,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PacketLayoutTest {
+    /**
+     * Verifies that rejects fields that are absent from the authenticated wire layout.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void rejectsFieldsThatAreAbsentFromTheAuthenticatedWireLayout() throws Exception {
         var codec = new PacketCodec();
         var crypto = new CryptoService();
@@ -28,6 +33,11 @@ class PacketLayoutTest {
         }
     }
 
+    /**
+     * Verifies that decoder rejects injected kem bytes in session packet.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void decoderRejectsInjectedKemBytesInSessionPacket() throws Exception {
         var codec = new PacketCodec();
         var p = new CryptoService().encryptWithSession("Bob", "Alice", new byte[32], "AAAAAAAAAAAAAAAAAAAAAA", 0,
@@ -44,6 +54,18 @@ class PacketLayoutTest {
         assertArrayEquals(p.ciphertext(), codec.decode(valid).ciphertext());
     }
 
+    /**
+     * Provides the copy fixture operation used by the packet layout test regression scenarios.
+     *
+     * @param p the p supplied to this operation
+     * @param type the type supplied to this operation
+     * @param algorithms the algorithms supplied to this operation
+     * @param kem the kem supplied to this operation
+     * @param fragment the individual fragment or delivery record
+     * @param sessionId the identifier of the expected session epoch
+     * @param sequence the record or control sequence in the relevant replay domain
+     * @return the result described above
+     */
     private EncryptedPacket copy(EncryptedPacket p, PacketType type, AlgorithmSuite algorithms, byte[] kem,
                                  short fragment, String sessionId, long sequence) {
         return new EncryptedPacket(p.protocolVersion(), type, p.flags(), p.sender(), p.receiver(), p.timestampMillis(),

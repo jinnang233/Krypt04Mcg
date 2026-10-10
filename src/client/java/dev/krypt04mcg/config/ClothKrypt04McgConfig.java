@@ -62,12 +62,22 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     @ConfigEntry.Gui.EnumHandler(option = ConfigEntry.Gui.EnumHandler.EnumDisplayOption.DROPDOWN)
     public AeadAlgorithm aeadAlgorithm = AeadAlgorithm.AES_256_GCM;
 
+    /**
+     * Returns the recorded config for the cloth krypt04 mcg config.
+     *
+     * @return the result described above
+     */
     Krypt04McgConfig toCoreConfig() {
         Krypt04McgConfig config = new Krypt04McgConfig();
         copyTo(config);
         return config;
     }
 
+    /**
+     * Performs the copy to operation for the cloth krypt04 mcg config.
+     *
+     * @param config the config supplied to this operation
+     */
     void copyTo(Krypt04McgConfig config) {
         config.enableDataApi = enableDataApi;
         config.apiChannelCount = Math.clamp(apiChannelCount, 1, 256);

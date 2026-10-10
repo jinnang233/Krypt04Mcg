@@ -21,8 +21,16 @@ public final class PacketCodec {
     private static final int MAX_BYTES32_FIELD_BYTES = 1024 * 1024;
     private final int maxFieldBytes;
 
+    /**
+     * Creates a packet codec with the supplied dependencies and initial state.
+     */
     public PacketCodec() { this(MAX_BYTES32_FIELD_BYTES); }
 
+    /**
+     * Creates a packet codec with the supplied dependencies and initial state.
+     *
+     * @param maxFieldBytes the max field bytes supplied to this operation
+     */
     public PacketCodec(int maxFieldBytes) {
         if (maxFieldBytes < 1 || maxFieldBytes > 17 * 1024 * 1024) {
             throw new IllegalArgumentException("Invalid packet field limit");
@@ -30,6 +38,14 @@ public final class PacketCodec {
         this.maxFieldBytes = maxFieldBytes;
     }
 
+    /**
+     * Serializes the validated version-specific packet layout with explicit field lengths and fixed-width
+     * metadata. Encoding produces canonical wire bytes but does not encrypt, authenticate or establish
+     * trust in the fields.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return the resulting array produced by this operation
+     */
     public byte[] encode(EncryptedPacket packet) {
         validateLayout(packet);
         try {
@@ -70,6 +86,14 @@ public final class PacketCodec {
         }
     }
 
+    /**
+     * Parses a bounded versioned packet, validates lengths and field combinations, and rejects truncation
+     * or trailing bytes. Decoded sender/routing fields are claims until the transport and cryptographic
+     * receive paths validate them; parsing is not signature verification.
+     *
+     * @param encoded the encoded bytes to parse or verify
+     * @return the result described above
+     */
     public EncryptedPacket decode(byte[] encoded) {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
@@ -117,6 +141,14 @@ public final class PacketCodec {
         }
     }
 
+    /**
+     * Serializes canonical authenticated metadata for the packet version, including the session
+     * ID/sequence when the layout carries them. AEAD binds exactly these bytes; legacy field coverage
+     * differs from compact versions and must not be inferred from object equality.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return the resulting array produced by this operation
+     */
     public byte[] aadFor(EncryptedPacket packet) {
         validateLayout(packet);
         try {
@@ -155,6 +187,14 @@ public final class PacketCodec {
         }
     }
 
+    /**
+     * Builds canonical signature bytes from AAD, version-dependent timestamp coverage, nonce, KEM
+     * encapsulation and ciphertext. The signature field itself is omitted so signing and verification
+     * reconstruct the same input without circular dependence.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return the resulting array produced by this operation
+     */
     public byte[] signatureInput(EncryptedPacket packet) {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -172,6 +212,12 @@ public final class PacketCodec {
         }
     }
 
+    /**
+     * Returns a value with the supplied out signature while retaining the other recorded fields.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return the result described above
+     */
     public EncryptedPacket withoutSignature(EncryptedPacket packet) {
         return new EncryptedPacket(packet.protocolVersion(), packet.type(), packet.flags(), packet.sender(),
                 packet.receiver(), packet.timestampMillis(), packet.messageId(), packet.aadFragmentIndex(),
@@ -179,7 +225,13 @@ public final class PacketCodec {
                 packet.ciphertext(), new byte[0], packet.sessionId(), packet.sequence());
     }
 
-    /** Reject fields that this layout cannot carry or authenticate instead of silently dropping them. */
+    /**
+     * Rejects fields that the selected packet version/type cannot carry or authenticate rather than
+     * silently dropping them during serialization. Layout validity is distinct from trusted sender
+     * identity, freshness and replay acceptance.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     */
     public static void validateLayout(EncryptedPacket packet) {
         if (packet == null || packet.type() == null || packet.algorithms() == null)
             throw new IllegalArgumentException("Missing packet layout");
@@ -203,6 +255,13 @@ public final class PacketCodec {
         }
     }
 
+    /**
+     * Writes string to the output used by the versioned encrypted-packet codec.
+     *
+     * @param out the out supplied to this operation
+     * @param value the value supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void writeString(DataOutputStream out, String value) throws IOException {
         if (value == null || value.length() > MAX_STRING_BYTES) {
             throw new IOException("String is missing or too long");
@@ -225,6 +284,15 @@ public final class PacketCodec {
         out.write(encoded);
     }
 
+    /**
+     * Reads a bounded length-prefixed UTF-8 field. The client codec uses strict malformed-input reporting
+     * because these strings are reconstructed into AAD and signature input; callers must not assume
+     * successful parsing establishes authentication.
+     *
+     * @param in the in supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static String readString(DataInputStream in) throws IOException {
         int length = in.readUnsignedShort();
         if (length > MAX_STRING_BYTES) {
@@ -237,6 +305,13 @@ public final class PacketCodec {
                 .decode(ByteBuffer.wrap(readExact(in, length, "string"))).toString();
     }
 
+    /**
+     * Writes bytes16 to the output used by the versioned encrypted-packet codec.
+     *
+     * @param out the out supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void writeBytes16(DataOutputStream out, byte[] bytes) throws IOException {
         if (bytes == null) {
             out.writeShort(0);
@@ -249,11 +324,25 @@ public final class PacketCodec {
         out.write(bytes);
     }
 
+    /**
+     * Reads bytes16 from the input used by the versioned encrypted-packet codec.
+     *
+     * @param in the in supplied to this operation
+     * @return the resulting array produced by this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static byte[] readBytes16(DataInputStream in) throws IOException {
         int length = in.readUnsignedShort();
         return readExact(in, length, "bytes16");
     }
 
+    /**
+     * Writes bytes32 to the output used by the versioned encrypted-packet codec.
+     *
+     * @param out the out supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private void writeBytes32(DataOutputStream out, byte[] bytes) throws IOException {
         if (bytes == null) {
             out.writeInt(0);
@@ -266,6 +355,13 @@ public final class PacketCodec {
         out.write(bytes);
     }
 
+    /**
+     * Reads bytes32 from the input used by the versioned encrypted-packet codec.
+     *
+     * @param in the in supplied to this operation
+     * @return the resulting array produced by this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private byte[] readBytes32(DataInputStream in) throws IOException {
         int length = in.readInt();
         if (length < 0) {
@@ -277,6 +373,15 @@ public final class PacketCodec {
         return readExact(in, length, "bytes32");
     }
 
+    /**
+     * Writes fixed to the output used by the versioned encrypted-packet codec.
+     *
+     * @param out the out supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @param length the requested or declared byte count
+     * @param field the field supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void writeFixed(DataOutputStream out, byte[] bytes, int length, String field) throws IOException {
         if (bytes == null || bytes.length != length) {
             throw new IOException(field + " must be " + length + " bytes, got " + Arrays.toString(bytes));
@@ -284,6 +389,16 @@ public final class PacketCodec {
         out.write(bytes);
     }
 
+    /**
+     * Reads the declared bounded field length and rejects a short read instead of accepting a truncated
+     * authenticated representation.
+     *
+     * @param in the in supplied to this operation
+     * @param length the requested or declared byte count
+     * @param field the field supplied to this operation
+     * @return the resulting array produced by this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static byte[] readExact(DataInputStream in, int length, String field) throws IOException {
         byte[] bytes = in.readNBytes(length);
         if (bytes.length != length) {
@@ -292,14 +407,33 @@ public final class PacketCodec {
         return bytes;
     }
 
+    /**
+     * Reports whether session v4 holds for the versioned encrypted-packet codec.
+     *
+     * @param version the version supplied to this operation
+     * @param type the type supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean isSessionV4(byte version, PacketType type) {
         return version >= EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE;
     }
 
+    /**
+     * Performs the uses kem operation for the versioned encrypted-packet codec.
+     *
+     * @param type the type supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean usesKem(PacketType type) {
         return type != PacketType.SESSION_MESSAGE;
     }
 
+    /**
+     * Reports whether signed holds for the versioned encrypted-packet codec.
+     *
+     * @param flags the flags supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean isSigned(byte flags) {
         return (flags & dev.krypt04mcg.crypto.CryptoService.FLAG_SIGNED) != 0;
     }

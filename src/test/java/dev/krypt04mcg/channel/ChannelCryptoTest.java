@@ -9,16 +9,29 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChannelCryptoTest {
+    /**
+     * Provides the session fixture operation used by the channel crypto test regression scenarios.
+     *
+     * @return the result described above
+     */
     private SessionRecord session() {
         return new SessionRecord("Bob", "fingerprint", Base64Url.encode(new byte[16]),
                 Instant.now(), Instant.now(), Base64Url.encode(new byte[32]), 0, 0);
     }
 
+    /**
+     * Verifies that identical endpoints cannot reuse directional keys and nonces.
+     */
     @Test void identicalEndpointsCannotReuseDirectionalKeysAndNonces() {
         assertThrows(IllegalArgumentException.class, () ->
                 new ChannelCrypto(session(), UUID.randomUUID(), 0, "test:stream", "Alice", "aLiCe"));
     }
 
+    /**
+     * Verifies that reflection fails but peer can decrypt.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void reflectionFailsButPeerCanDecrypt() throws Exception {
         UUID id = UUID.randomUUID();
         try (var alice = new ChannelCrypto(session(), id, 0, "test:stream", "Alice", "Bob");
@@ -30,6 +43,11 @@ class ChannelCryptoTest {
         }
     }
 
+    /**
+     * Verifies that closed crypto cannot use erased keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void closedCryptoCannotUseErasedKeys() throws Exception {
         UUID id = UUID.randomUUID();
         var alice = new ChannelCrypto(session(), id, 0, "test:stream", "Alice", "Bob");

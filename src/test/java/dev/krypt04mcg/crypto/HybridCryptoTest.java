@@ -27,10 +27,21 @@ import static org.junit.jupiter.api.Assertions.*;
 final class HybridCryptoTest {
     @TempDir Path directory;
 
+    /**
+     * Provides the signatures fixture operation used by the hybrid crypto test regression scenarios.
+     *
+     * @return the result described above
+     */
     static Stream<SignatureAlgorithm> signatures() {
         return Arrays.stream(SignatureAlgorithm.values()).filter(SignatureAlgorithm::nativeHybrid);
     }
 
+    /**
+     * Verifies that native signatures validate round trip and reject tampering.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @MethodSource("signatures")
     void nativeSignaturesValidateRoundTripAndRejectTampering(SignatureAlgorithm algorithm) throws Exception {
@@ -41,7 +52,21 @@ final class HybridCryptoTest {
         byte[] input = {1, 2, 3};
         byte[] signature = crypto.sign(keys.signaturePrivateKey(), input);
         // Interoperability: verify directly through BC, without the mod's signature helper.
+        /*
+         * Selects the exact named signature implementation and provider, preserving suite-specific
+         * prehash/composite behavior. Key parameters are validated separately; a missing or unsupported
+         * implementation is an error, not permission to downgrade.
+         */
         var verifier = Signature.getInstance(algorithm.jcaName(), "BC");
+        /*
+         * Uses the selected JCA provider to decode the key encoding. Successful ASN.1 decoding alone is
+         * insufficient: the decoded parameter set and recorded public/private role are checked separately
+         * before cryptographic use.
+         *
+         * Wraps a SubjectPublicKeyInfo-style encoding for the selected provider. Encoded algorithm identifiers
+         * and decoded parameter sets must agree with the declared suite; parsing does not establish a trusted
+         * owner.
+         */
         verifier.initVerify(KeyFactory.getInstance(algorithm.jcaName(), "BC").generatePublic(
                 new X509EncodedKeySpec(Base64Url.decode(keys.signaturePublicKey().keyData()))));
         verifier.update(input);
@@ -55,11 +80,22 @@ final class HybridCryptoTest {
         assertFalse(crypto.verify(keys.signaturePublicKey(), input, signature));
     }
 
+    /**
+     * Provides the handshake kems fixture operation used by the hybrid crypto test regression scenarios.
+     *
+     * @return the result described above
+     */
     static Stream<KemAlgorithm> handshakeKems() {
         return Stream.of(KemAlgorithm.ML_KEM_768_X25519, KemAlgorithm.ML_KEM_1024_X448,
                 KemAlgorithm.ML_KEM_512_X25519, KemAlgorithm.SNTRUPRIME_SNTRUP653_X448);
     }
 
+    /**
+     * Verifies that hybrid handshake persists keys and creates usable session.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @MethodSource("handshakeKems")
     void hybridHandshakePersistsKeysAndCreatesUsableSession(KemAlgorithm algorithm) throws Exception {
@@ -97,6 +133,12 @@ final class HybridCryptoTest {
         }
     }
 
+    /**
+     * Verifies that tampered hybrid ciphertexts never fall back to single kem.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @MethodSource("handshakeKems")
     void tamperedHybridCiphertextsNeverFallBackToSingleKem(KemAlgorithm algorithm) throws Exception {
@@ -126,6 +168,11 @@ final class HybridCryptoTest {
         }
     }
 
+    /**
+     * Verifies that rejects low order points relabeled keys and mismatched components.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsLowOrderPointsRelabeledKeysAndMismatchedComponents() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -158,15 +205,35 @@ final class HybridCryptoTest {
         }
     }
 
+    /**
+     * Provides the identity fixture operation used by the hybrid crypto test regression scenarios.
+     *
+     * @param keys the keys supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity identity(LocalKeyMaterial keys) {
         return new PublicIdentity(keys.kemPublicKey().owner(), keys.kemPublicKey().uuid(),
                 keys.kemPublicKey(), keys.signaturePublicKey());
     }
 
+    /**
+     * Provides the relabel fixture operation used by the hybrid crypto test regression scenarios.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @return the result described above
+     */
     private static KeyRecord relabel(KeyRecord key, String algorithm) {
         return new KeyRecord(algorithm, key.owner(), key.uuid(), key.fingerprint(), key.createdAt(), key.keyData());
     }
 
+    /**
+     * Provides the with ciphertext fixture operation used by the hybrid crypto test regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param ciphertext the encoded ciphertext to authenticate or decode
+     * @return the result described above
+     */
     private static EncryptedPacket withCiphertext(EncryptedPacket packet, byte[] ciphertext) {
         return new EncryptedPacket(packet.protocolVersion(), packet.type(), packet.flags(), packet.sender(),
                 packet.receiver(), packet.timestampMillis(), packet.messageId(), packet.aadFragmentIndex(),

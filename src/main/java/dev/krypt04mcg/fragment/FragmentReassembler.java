@@ -25,10 +25,21 @@ public final class FragmentReassembler {
     private final Map<String, PartialMessage> partials = new HashMap<>();
     private Consumer<FragmentProgress> timeoutListener = ignored -> {};
 
+    /**
+     * Creates a fragment reassembler with the supplied dependencies and initial state.
+     */
     public FragmentReassembler() {
         this(Clock.systemUTC(), Duration.ofMinutes(2), 128, DEFAULT_MAX_FRAGMENTS_PER_MESSAGE);
     }
 
+    /**
+     * Creates a fragment reassembler with the supplied dependencies and initial state.
+     *
+     * @param clock the time source used for deadline or expiry checks
+     * @param timeout the configured expiry interval
+     * @param maxMessages the max messages supplied to this operation
+     * @param maxFragmentsPerMessage the max fragments per message supplied to this operation
+     */
     public FragmentReassembler(Clock clock, Duration timeout, int maxMessages, int maxFragmentsPerMessage) {
         if (clock == null || timeout == null || timeout.isNegative() || timeout.isZero()
                 || maxMessages <= 0 || maxFragmentsPerMessage <= 0) {
@@ -40,11 +51,29 @@ public final class FragmentReassembler {
         this.maxFragmentsPerMessage = maxFragmentsPerMessage;
     }
 
+    /**
+     * Validates fragment index/count/payload bounds and admits a source-bound partial message without
+     * evicting existing work. Unique indices count once; complete encoded packets are bounded before
+     * decoding. The original first-fragment deadline and transport-source binding remain fixed, and
+     * reassembly alone is not cryptographic authentication.
+     *
+     * @param fragment the individual fragment or delivery record
+     * @return the result described above
+     */
     public synchronized Optional<byte[]> accept(Fragment fragment) {
         return accept(fragment, null);
     }
 
-    /** Sender must come from the transport, never from the unauthenticated packet body. */
+    /**
+     * Validates fragment index/count/payload bounds and admits a source-bound partial message without
+     * evicting existing work. Unique indices count once; complete encoded packets are bounded before
+     * decoding. The original first-fragment deadline and transport-source binding remain fixed, and
+     * reassembly alone is not cryptographic authentication.
+     *
+     * @param fragment the individual fragment or delivery record
+     * @param transportSender the source identity supplied by the transport, not the unauthenticated body
+     * @return the result described above
+     */
     public synchronized Optional<byte[]> accept(Fragment fragment, String transportSender) {
         if (fragment == null || fragment.messageId() == null || fragment.messageId().isBlank()
                 || fragment.total() <= 0 || fragment.index() < 0 || fragment.index() >= fragment.total()
@@ -94,10 +123,21 @@ public final class FragmentReassembler {
         return Optional.of(Base64Url.decode(payload.toString()));
     }
 
+    /**
+     * Removes expired or retired state in the source-bound chat assembly.
+     *
+     * @return the result described above
+     */
     public synchronized int cleanup() {
         return cleanupTimedOut().size();
     }
 
+    /**
+     * Removes partial messages whose fixed first-fragment lifetime has elapsed and notifies the progress
+     * listener. Receiving new indices or duplicates does not extend that deadline.
+     *
+     * @return the result described above
+     */
     public synchronized List<FragmentProgress> cleanupTimedOut() {
         long cutoff = clock.millis() - timeout.toMillis();
         List<FragmentProgress> removed = partials.entrySet().stream()
@@ -112,6 +152,12 @@ public final class FragmentReassembler {
         return removed;
     }
 
+    /**
+     * Returns the progress value used by the source-bound chat assembly.
+     *
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @return the result described above
+     */
     public synchronized Optional<FragmentProgress> progress(String messageId) {
         PartialMessage partial = partials.get(messageId);
         if (partial == null) {
@@ -120,18 +166,36 @@ public final class FragmentReassembler {
         return Optional.of(new FragmentProgress(messageId, partial.fragments.size(), partial.total));
     }
 
+    /**
+     * Returns the pending messages value used by the source-bound chat assembly.
+     *
+     * @return the result described above
+     */
     public synchronized int pendingMessages() {
         return partials.size();
     }
 
+    /**
+     * Clears retained state in the source-bound chat assembly.
+     */
     public synchronized void clear() {
         partials.clear();
     }
 
+    /**
+     * Removes the selected entry in the source-bound chat assembly.
+     *
+     * @param id the id supplied to this operation
+     */
     private void remove(String id) {
         partials.remove(id);
     }
 
+    /**
+     * Updates the timeout listener used by the source-bound chat assembly.
+     *
+     * @param listener the listener supplied to this operation
+     */
     public synchronized void setTimeoutListener(Consumer<FragmentProgress> listener) {
         timeoutListener = Objects.requireNonNull(listener);
     }
@@ -143,12 +207,24 @@ public final class FragmentReassembler {
         private final Map<Integer, String> fragments = new HashMap<>();
         private int chars;
 
+        /**
+         * Creates a partial message with the supplied dependencies and initial state.
+         *
+         * @param total the total supplied to this operation
+         * @param now the now supplied to this operation
+         * @param sender the sender or source associated with this operation
+         */
         private PartialMessage(int total, long now, String sender) {
             this.total = total;
             this.createdAt = now;
             this.sender = sender;
         }
 
+        /**
+         * Returns the complete value used by the source-bound chat assembly.
+         *
+         * @return whether the condition or operation described above succeeds
+         */
         private boolean complete() {
             return fragments.size() == total;
         }

@@ -16,9 +16,21 @@ import java.util.UUID;
 public final class AccountStorage {
     private static final List<String> LEGACY_DIRECTORIES = List.of("keys", "sessions", "cache", "export", "secrets");
 
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private AccountStorage() {
     }
 
+    /**
+     * Returns the recorded account root for the account-scoped storage.
+     *
+     * @param baseRoot the base root supplied to this operation
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public static Path resolve(Path baseRoot, String owner, String uuid) throws IOException {
         String stableUuid = uuid == null || uuid.isBlank()
                 ? UUID.nameUUIDFromBytes(("OfflinePlayer:" + owner).getBytes(StandardCharsets.UTF_8)).toString()
@@ -37,6 +49,15 @@ public final class AccountStorage {
         return accountRoot;
     }
 
+    /**
+     * Returns the recorded false for the account-scoped storage.
+     *
+     * @param root the account or configuration storage root
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @return whether the condition or operation described above succeeds
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static boolean storageBelongsTo(Path root, String owner, String uuid) throws IOException {
         Path localFile = root.resolve("keys").resolve("private").resolve("local.json");
         if (!Files.isRegularFile(localFile)) {
@@ -54,6 +75,13 @@ public final class AccountStorage {
         }
     }
 
+    /**
+     * Performs the migrate legacy operation for the account-scoped storage.
+     *
+     * @param baseRoot the base root supplied to this operation
+     * @param accountRoot the account root supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void migrateLegacy(Path baseRoot, Path accountRoot) throws IOException {
         SecureFiles.createPrivateDirectories(accountRoot);
         for (String name : LEGACY_DIRECTORIES) {
@@ -70,14 +98,39 @@ public final class AccountStorage {
         }
     }
 
+    /**
+     * Performs the move operation for the account-scoped storage.
+     *
+     * @param source the source supplied to this operation
+     * @param target the target supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void move(Path source, Path target) throws IOException {
         try {
+            /*
+             * Replaces the destination through the filesystem move API. Atomic replacement depends on filesystem
+             * support; the surrounding catch path determines whether fallback is allowed. Link/permission
+             * preflight checks are separate and do not eliminate every concurrent path race.
+             */
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
+            /*
+             * Replaces the destination through the filesystem move API. Atomic replacement depends on filesystem
+             * support; the surrounding catch path determines whether fallback is allowed. Link/permission
+             * preflight checks are separate and do not eliminate every concurrent path race.
+             */
             Files.move(source, target);
         }
     }
 
+    /**
+     * Normalizes the supplied identifier into the comparison/storage form used by the account-scoped
+     * storage.
+     *
+     * @param uuid the identity UUID associated with the key records
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static String normalize(String uuid) throws IOException {
         if (!uuid.matches("[A-Za-z0-9_-]{1,64}")) {
             throw new IOException("Invalid account storage identifier");

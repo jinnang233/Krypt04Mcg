@@ -6,5 +6,8 @@ public final class ChatTransferLimits {
     public static final int MAX_ENCODED_PACKET_CHARS = (MAX_PACKET_BYTES * 4 + 2) / 3;
     public static final int MAX_FRAGMENTS = 2048;
 
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private ChatTransferLimits() {}
 }

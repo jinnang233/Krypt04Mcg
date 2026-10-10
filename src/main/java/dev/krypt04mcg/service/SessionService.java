@@ -31,10 +31,21 @@ public final class SessionService {
     private final DecryptionHistoryService exchangeHistory;
     private final LedgerWriter ledgerWriter;
 
+    /**
+     * Creates a session service with the supplied dependencies and initial state.
+     *
+     * @param root the account or configuration storage root
+     */
     public SessionService(Path root) {
         this(root, null);
     }
 
+    /**
+     * Creates a session service with the supplied dependencies and initial state.
+     *
+     * @param root the account or configuration storage root
+     * @param ledgerWriter the ledger writer supplied to this operation
+     */
     SessionService(Path root, LedgerWriter ledgerWriter) {
         this.sessionsDir = root.resolve("sessions");
         this.sensitiveFiles = new SensitiveFileStore(root);
@@ -42,6 +53,11 @@ public final class SessionService {
         this.ledgerWriter = ledgerWriter == null ? sensitiveFiles::writeDurableString : ledgerWriter;
     }
 
+    /**
+     * Performs the migrate legacy files operation for the durable session state.
+     *
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void migrateLegacyFiles() throws IOException {
         if (!Files.isDirectory(sessionsDir)) {
             return;
@@ -56,33 +72,84 @@ public final class SessionService {
         }
     }
 
+    /**
+     * Returns the recorded record for the durable session state.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param peerFingerprint the peer fingerprint supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public SessionRecord createLocalSession(String peer, String peerFingerprint) throws IOException {
         SessionRecord record = newSession(peer, peerFingerprint);
         save(record);
         return record;
     }
 
+    /**
+     * Performs the new session operation for the durable session state.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param peerFingerprint the peer fingerprint supplied to this operation
+     * @return the result described above
+     */
     public SessionRecord newSession(String peer, String peerFingerprint) {
         byte[] id = new byte[16];
+        /*
+         * Draws security-sensitive bytes from the configured SecureRandom rather than a general-purpose PRNG.
+         * Production randomness must remain unpredictable; a random nonce still depends on avoiding
+         * collisions/reuse under its key.
+         */
         random.nextBytes(id);
         try {
             return newSession(peer, peerFingerprint, Base64Url.encode(id));
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             Arrays.fill(id, (byte) 0);
         }
     }
 
+    /**
+     * Performs the new session operation for the durable session state.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param peerFingerprint the peer fingerprint supplied to this operation
+     * @param sessionId the identifier of the expected session epoch
+     * @return the result described above
+     */
     public SessionRecord newSession(String peer, String peerFingerprint, String sessionId) {
         byte[] secret = new byte[32];
+        /*
+         * Draws security-sensitive bytes from the configured SecureRandom rather than a general-purpose PRNG.
+         * Production randomness must remain unpredictable; a random nonce still depends on avoiding
+         * collisions/reuse under its key.
+         */
         random.nextBytes(secret);
         try {
             return new SessionRecord(peer, peerFingerprint, sessionId, Instant.now(), Instant.now(),
                     Base64Url.encode(secret), 0, 0L, 0L, 0L);
         } finally {
+            /*
+             * Overwrites this mutable buffer on the shown lifecycle path. Cleanup is best effort in the JVM:
+             * immutable Strings, returned copies and provider/native key objects may retain other copies.
+             */
             Arrays.fill(secret, (byte) 0);
         }
     }
 
+    /**
+     * Returns the recorded record for the durable session state.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param peerFingerprint the peer fingerprint supplied to this operation
+     * @param sessionId the identifier of the expected session epoch
+     * @param secret the shared secret used as key-derivation input
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public SessionRecord acceptRemoteSession(String peer, String peerFingerprint, String sessionId, String secret)
             throws IOException {
         SessionRecord record = new SessionRecord(peer, peerFingerprint, sessionId, Instant.now(), Instant.now(),
@@ -91,6 +158,13 @@ public final class SessionService {
         return record;
     }
 
+    /**
+     * Looks up the requested entry in the durable session state without creating a replacement.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized Optional<SessionRecord> find(String peer) throws IOException {
         Path path = pathFor(peer);
         if (!Files.exists(path)) {
@@ -108,6 +182,12 @@ public final class SessionService {
         return Optional.ofNullable(state.session);
     }
 
+    /**
+     * Performs the save operation for the durable session state.
+     *
+     * @param record the record supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void save(SessionRecord record) throws IOException {
         validate(record);
         Path path = pathFor(record.peer());
@@ -118,6 +198,12 @@ public final class SessionService {
         writeState(path, state);
     }
 
+    /**
+     * Performs the list operation for the durable session state.
+     *
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized List<SessionRecord> list() throws IOException {
         if (!Files.exists(sessionsDir)) {
             return List.of();
@@ -143,6 +229,12 @@ public final class SessionService {
         }
     }
 
+    /**
+     * Clears retained state in the durable session state.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void clear(String peer) throws IOException {
         Path path = pathFor(peer);
         State state = readState(path);
@@ -152,7 +244,15 @@ public final class SessionService {
         writeState(path, state);
     }
 
-    /** Reserve before generating/sending a request. Gaps are safe, reuse is not. */
+    /**
+     * Durably advances the outgoing request epoch and returns the current predecessor session ID before a
+     * request can be sent. Reserving an epoch first prevents retry/restart behavior from silently reusing
+     * a previously consumed handshake generation.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized OutgoingEpoch reserveHandshake(String peer) throws IOException {
         Path path = pathFor(peer);
         State state = readState(path);
@@ -170,7 +270,18 @@ public final class SessionService {
         return new OutgoingEpoch(previous, state.issuedEpoch);
     }
 
-    /** Authenticated requests may recover an uncertain delivery or supersede an abandoned request. */
+    /**
+     * Checks the signed request against durable predecessor, request-epoch and replay state, returning an
+     * already prepared matching response when recovery permits. Replayed, stale or conflicting requests
+     * fail without replacing the active session.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param payload the payload supplied to this operation
+     * @param packet the packet being serialized, authenticated or processed
+     * @param localFingerprint the local fingerprint supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized PreparedExchange checkRequest(String peer, SessionExchangePayload payload,
                                                        EncryptedPacket packet, String localFingerprint) throws IOException {
         State state = readState(pathFor(peer));
@@ -209,6 +320,17 @@ public final class SessionService {
         return null;
     }
 
+    /**
+     * Persists the candidate session and exact response with request identity, nonce and digest before
+     * transmission. This journal supports recovery/retry of the same request while preventing a different
+     * packet from borrowing a prepared response.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param prepared the prepared supplied to this operation
+     * @param payload the payload supplied to this operation
+     * @param request the request supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void prepareExchange(String peer, PreparedExchange prepared,
                                                SessionExchangePayload payload, EncryptedPacket request) throws IOException {
         validate(prepared.session());
@@ -224,7 +346,15 @@ public final class SessionService {
         writeState(pathFor(peer), state);
     }
 
-    /** One encrypted atomic replacement commits keys, predecessor, epoch, and replay records together. */
+    /**
+     * Commits only the prepared response correlated with the supplied request message ID. Session epoch
+     * and replay records are persisted together; a mismatched or absent prepared exchange is not treated
+     * as success.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void commitPrepared(String peer, String messageId) throws IOException {
         Path path = pathFor(peer);
         State state = readState(path);
@@ -234,6 +364,11 @@ public final class SessionService {
         writeState(path, state);
     }
 
+    /**
+     * Performs the apply prepared operation for the durable session state.
+     *
+     * @param state the state supplied to this operation
+     */
     private static void applyPrepared(State state) {
         PreparedExchange prepared = state.prepared;
         state.session = prepared.session();
@@ -246,6 +381,16 @@ public final class SessionService {
         state.recoveryAttempts = 0;
     }
 
+    /**
+     * Validates the predecessor and response replay state before durably committing the received session.
+     * The expected prior epoch prevents delayed valid responses from rolling an already replaced session
+     * backward.
+     *
+     * @param session the session supplied to this operation
+     * @param packet the packet being serialized, authenticated or processed
+     * @param previousSessionId the previous session id supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void commitResponse(SessionRecord session, EncryptedPacket packet,
                                              String previousSessionId) throws IOException {
         validate(session);
@@ -271,6 +416,16 @@ public final class SessionService {
         writeState(path, state);
     }
 
+    /**
+     * Rejects message-ID or nonce replays across current state, prepared exchanges and historical records,
+     * then checks replay-cache capacity. Replay records are admission evidence, not a replacement for
+     * cryptographic signature or freshness checks.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param packet the packet being serialized, authenticated or processed
+     * @param state the state supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private void requireFreshExchange(String peer, EncryptedPacket packet, State state) throws IOException {
         pruneReplay(state);
         if (state.replay.containsKey("packet:" + Hex.encode(packet.messageId()))
@@ -283,35 +438,87 @@ public final class SessionService {
         requireReplayCapacity(state);
     }
 
+    /**
+     * Refuses new exchange replay entries when bounded history is full instead of evicting still-live
+     * evidence that could allow replay acceptance.
+     *
+     * @param state the state supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void requireReplayCapacity(State state) throws IOException {
         if (state.replay.size() > 32_768 - 2) throw new IOException("Exchange replay history full");
     }
 
+    /**
+     * Requires the expected previous session epoch to match durable state and forbids selecting the
+     * already active epoch as the replacement.
+     *
+     * @param state the state supplied to this operation
+     * @param previous the previous supplied to this operation
+     * @param next the next supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void requirePredecessor(State state, String previous, String next) throws IOException {
         if (!state.epochId.equals(previous) || state.epochId.equals(next)) {
             throw new IOException("Session request predecessor changed");
         }
     }
 
+    /**
+     * Performs the prune replay operation for the durable session state.
+     *
+     * @param state the state supplied to this operation
+     */
     private static void pruneReplay(State state) {
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(65));
         state.replay.values().removeIf(time -> time.isBefore(cutoff));
     }
 
+    /**
+     * Performs the add replay operation for the durable session state.
+     *
+     * @param state the state supplied to this operation
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @param nonce the nonce associated with this cryptographic operation
+     */
     private static void addReplay(State state, String messageId, String nonce) {
         pruneReplay(state);
         state.replay.put("packet:" + messageId, Instant.now());
         state.replay.put("nonce:" + nonce, Instant.now());
     }
 
+    /**
+     * Hashes the canonical encoded exchange packet with SHA-256 for durable request correlation. The
+     * digest detects conflicting encodings; authenticity still depends on the signed exchange validation
+     * path.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     static String exchangeDigest(EncryptedPacket packet) throws IOException {
         try {
+            /*
+             * Delegates the requested digest to JCA for canonical fingerprint or context binding. A plain digest
+             * is not a MAC or signature and cannot independently establish trust, freshness or secrecy of
+             * low-entropy input.
+             */
             return Hex.encode(java.security.MessageDigest.getInstance("SHA-256").digest(new PacketCodec().encode(packet)));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 is unavailable", e);
         }
     }
 
+    /**
+     * Requires the exact expected chat-send sequence before persisting the incremented counter and usage
+     * totals. Persistence associates counters with the current session identity/epoch rather than allowing
+     * silent reuse after a failed state transition.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param expectedSequence the expected sequence supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void recordSentMessage(String peer, long expectedSequence, long bytes) throws IOException {
         SessionRecord session = find(peer)
                 .orElseThrow(() -> new IOException("No active session for " + peer));
@@ -325,6 +532,17 @@ public final class SessionService {
                 session.nextApiControlReceiveSequence()));
     }
 
+    /**
+     * Requires the active session ID and exact next receive sequence before durably recording acceptance
+     * and usage. Rejecting gaps/repeats is separate from the AEAD tag check and prevents accepted records
+     * from replaying within the epoch.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param sessionId the identifier of the expected session epoch
+     * @param sequence the record or control sequence in the relevant replay domain
+     * @param bytes the bytes supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void recordReceivedMessage(String peer, String sessionId, long sequence, long bytes)
             throws IOException {
         SessionRecord session = find(peer)
@@ -339,7 +557,18 @@ public final class SessionService {
                 session.nextApiControlReceiveSequence()));
     }
 
-    /** Reserve and persist before encryption. Gaps are safe; a failed send never reuses its sequence. */
+    /**
+     * Durably reserves the next API send position for the expected session epoch, keeping control and data
+     * counters separate. The wire value encodes parity (odd control, even data) and rejects exhaustion
+     * before doubling. The caller must not reuse an old reservation after the epoch changes.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param sessionId the identifier of the expected session epoch
+     * @param control the control supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized long reserveApiSend(String peer, String sessionId, boolean control, long bytes) throws IOException {
         SessionRecord session = requireEpoch(peer, sessionId);
         long next = control ? session.nextApiControlSendSequence() : session.nextApiSendSequence();
@@ -349,7 +578,19 @@ public final class SessionService {
         return next * 2 + (control ? 1 : 0);
     }
 
-    /** DATA and receipts have independent monotonic sequences, encoded in even/odd wire numbers. */
+    /**
+     * Validates the session epoch, nonnegative usable sequence and data/control parity, and requires the
+     * received sequence not to precede the stored next counter. This API path permits forward gaps but
+     * rejects repeated or lower sequences. It durably advances the matching counter to one past the
+     * accepted position; control and data use separate replay domains.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param sessionId the identifier of the expected session epoch
+     * @param sequence the record or control sequence in the relevant replay domain
+     * @param control the control supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized void recordApiReceived(String peer, String sessionId, long sequence, boolean control, long bytes) throws IOException {
         SessionRecord session = requireEpoch(peer, sessionId);
         long next = control ? session.nextApiControlReceiveSequence() : session.nextApiReceiveSequence();
@@ -359,12 +600,33 @@ public final class SessionService {
                 session.nextApiControlSendSequence(), control ? sequence / 2 + 1 : session.nextApiControlReceiveSequence(), control, bytes);
     }
 
+    /**
+     * Checks the epoch required by the durable session state and rejects invalid state instead of
+     * continuing.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param id the id supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private SessionRecord requireEpoch(String peer, String id) throws IOException {
         SessionRecord session = find(peer).orElseThrow(() -> new IOException("Missing session"));
         if (!session.sessionId().equals(id)) throw new IOException("Session changed");
         return session;
     }
 
+    /**
+     * Performs the save api counters operation for the durable session state.
+     *
+     * @param s the s supplied to this operation
+     * @param send the send supplied to this operation
+     * @param receive the receive supplied to this operation
+     * @param controlSend the control send supplied to this operation
+     * @param controlReceive the control receive supplied to this operation
+     * @param control the control supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private void saveApiCounters(SessionRecord s, long send, long receive, long controlSend, long controlReceive,
                                   boolean control, long bytes) throws IOException {
         save(new SessionRecord(s.peer(), s.peerFingerprint(), s.sessionId(), s.createdAt(), Instant.now(), s.secret(),
@@ -373,6 +635,17 @@ public final class SessionService {
                 s.nextSendSequence(), s.nextReceiveSequence(), s.localFingerprint(), send, receive, controlSend, controlReceive));
     }
 
+    /**
+     * Evaluates session lifetime, message-count and byte-use rotation thresholds from stored metadata.
+     * Expiry policy is separate from cryptographic verification and does not itself destroy all copies of
+     * session secrets.
+     *
+     * @param session the session supplied to this operation
+     * @param ttlMinutes the ttl minutes supplied to this operation
+     * @param maxMessages the max messages supplied to this operation
+     * @param rotateAfterBytes the rotate after bytes supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean isExpired(SessionRecord session, int ttlMinutes, int maxMessages, long rotateAfterBytes) {
         Instant expiresAt = session.createdAt().plus(Duration.ofMinutes(ttlMinutes));
         return Instant.now().isAfter(expiresAt)
@@ -380,10 +653,23 @@ public final class SessionService {
                 || session.bytesUsed() >= rotateAfterBytes;
     }
 
+    /**
+     * Performs the path for operation for the durable session state.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @return the result described above
+     */
     private Path pathFor(String peer) {
         return sessionsDir.resolve(peer.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_") + ".json");
     }
 
+    /**
+     * Reads state from the input used by the durable session state.
+     *
+     * @param path the filesystem path used by this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private State readState(Path path) throws IOException {
         if (!Files.exists(path)) return new State();
         try {
@@ -411,12 +697,26 @@ public final class SessionService {
         }
     }
 
+    /**
+     * Writes state to the output used by the durable session state.
+     *
+     * @param path the filesystem path used by this operation
+     * @param state the state supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private void writeState(Path path, State state) throws IOException {
         ledgerWriter.write(path, gson.toJson(state));
     }
 
     @FunctionalInterface
     interface LedgerWriter {
+        /**
+         * Writes the supplied value to the output used by the durable session state.
+         *
+         * @param path the filesystem path used by this operation
+         * @param value the value supplied to this operation
+         * @throws IOException if input/output, stored-state validation or resource handling fails
+         */
         void write(Path path, String value) throws IOException;
     }
 
@@ -438,6 +738,13 @@ public final class SessionService {
         PreparedExchange prepared;
     }
 
+    /**
+     * Checks the input required by the durable session state and rejects invalid state instead of
+     * continuing.
+     *
+     * @param record the record supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void validate(SessionRecord record) throws IOException {
         try {
             if (record == null || record.peer() == null || record.peer().isBlank()

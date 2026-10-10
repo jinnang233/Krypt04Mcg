@@ -18,6 +18,11 @@ final class KeyTrustServiceTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that verification requires and binds both fingerprints.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void verificationRequiresAndBindsBothFingerprints() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -37,6 +42,11 @@ final class KeyTrustServiceTest {
         assertTrue(SensitiveFileStore.isEncrypted(tempDir.resolve("keys").resolve("trust.json")));
     }
 
+    /**
+     * Verifies that corrupted trust entries do not fall back to tofu.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void corruptedTrustEntriesDoNotFallBackToTofu() throws Exception {
         Path file = tempDir.resolve("keys/trust.json");
@@ -48,6 +58,11 @@ final class KeyTrustServiceTest {
         }
     }
 
+    /**
+     * Verifies that forgetting peer persists and replacement starts with tofu trust.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void forgettingPeerPersistsAndReplacementStartsWithTofuTrust() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -69,6 +84,13 @@ final class KeyTrustServiceTest {
         assertEquals(TrustState.TOFU_TRUSTED, trust.trustState("bob", replacement));
     }
 
+    /**
+     * Provides the public identity fixture operation used by the key trust service test regression
+     * scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

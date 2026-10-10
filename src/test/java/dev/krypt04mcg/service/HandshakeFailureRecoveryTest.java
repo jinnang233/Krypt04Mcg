@@ -22,6 +22,11 @@ import static org.junit.jupiter.api.Assertions.*;
 final class HandshakeFailureRecoveryTest {
     @TempDir Path root;
 
+    /**
+     * Verifies that unseen older request cannot replace newer epoch after restart.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void unseenOlderRequestCannotReplaceNewerEpochAfterRestart() throws Exception {
         var crypto = new CryptoService();
         var alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
@@ -43,6 +48,11 @@ final class HandshakeFailureRecoveryTest {
         }
     }
 
+    /**
+     * Verifies that persistence failure must not expose an unrecoverable response.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void persistenceFailureMustNotExposeAnUnrecoverableResponse() throws Exception {
         var crypto = new CryptoService();
         var alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
@@ -67,6 +77,11 @@ final class HandshakeFailureRecoveryTest {
         }
     }
 
+    /**
+     * Verifies that established epoch rejects replay even without recorded exchange history.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void establishedEpochRejectsReplayEvenWithoutRecordedExchangeHistory() throws Exception {
         var crypto = new CryptoService();
         var alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
@@ -89,6 +104,12 @@ final class HandshakeFailureRecoveryTest {
         }
     }
 
+    /**
+     * Verifies that failed simultaneous request preserves pending response key.
+     *
+     * @param invalidKey the invalid key supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void failedSimultaneousRequestPreservesPendingResponseKey(boolean invalidKey) throws Exception {
@@ -132,6 +153,13 @@ final class HandshakeFailureRecoveryTest {
         }
     }
 
+    /**
+     * Provides the identity fixture operation used by the handshake failure recovery test regression
+     * scenarios.
+     *
+     * @param keys the keys supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity identity(LocalKeyMaterial keys) {
         return new PublicIdentity(keys.kemPublicKey().owner(), keys.kemPublicKey().uuid(),
                 keys.kemPublicKey(), keys.signaturePublicKey());

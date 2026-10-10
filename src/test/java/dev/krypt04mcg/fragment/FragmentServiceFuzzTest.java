@@ -15,6 +15,9 @@ final class FragmentServiceFuzzTest {
     private static final SecureRandom SEED_RANDOM = new SecureRandom();
     private static final int CASES = 250;
 
+    /**
+     * Verifies that randomized fragments stay within chat buffer limit and reassemble.
+     */
     @Test
     void randomizedFragmentsStayWithinChatBufferLimitAndReassemble() {
         FragmentService service = new FragmentService();
@@ -39,6 +42,9 @@ final class FragmentServiceFuzzTest {
         }
     }
 
+    /**
+     * Verifies that oversized or malformed fragments are rejected cleanly.
+     */
     @Test
     void oversizedOrMalformedFragmentsAreRejectedCleanly() {
         FragmentService service = new FragmentService();
@@ -55,6 +61,9 @@ final class FragmentServiceFuzzTest {
         }
     }
 
+    /**
+     * Verifies that reassembler rejects fragment counts above configured buffer limit.
+     */
     @Test
     void reassemblerRejectsFragmentCountsAboveConfiguredBufferLimit() {
         Random random = random("reassemblerRejectsFragmentCountsAboveConfiguredBufferLimit");
@@ -69,12 +78,26 @@ final class FragmentServiceFuzzTest {
         }
     }
 
+    /**
+     * Provides the random fixture operation used by the fragment service fuzz test regression scenarios.
+     *
+     * @param testName the test name supplied to this operation
+     * @return the result described above
+     */
     private static Random random(String testName) {
         long seed = SEED_RANDOM.nextLong();
         System.out.println(FragmentServiceFuzzTest.class.getSimpleName() + "." + testName + " seed=" + seed);
         return new Random(seed);
     }
 
+    /**
+     * Provides the random bytes fixture operation used by the fragment service fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @param length the requested or declared byte count
+     * @return the resulting array produced by this operation
+     */
     private static byte[] randomBytes(Random random, int length) {
         byte[] bytes = new byte[length];
         random.nextBytes(bytes);

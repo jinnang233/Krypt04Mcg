@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final class PacketCodecTest {
+    /**
+     * Verifies that rejects malformed unicode before authenticating or encoding.
+     */
     @Test
     void rejectsMalformedUnicodeBeforeAuthenticatingOrEncoding() {
         PacketCodec codec = new PacketCodec();
@@ -21,6 +24,9 @@ final class PacketCodecTest {
         assertThrows(IllegalArgumentException.class, () -> codec.signatureInput(packet));
     }
 
+    /**
+     * Verifies that rejects malformed utf8 instead of normalizing authenticated fields.
+     */
     @Test
     void rejectsMalformedUtf8InsteadOfNormalizingAuthenticatedFields() {
         PacketCodec codec = new PacketCodec();
@@ -36,6 +42,9 @@ final class PacketCodecTest {
         assertThrows(IllegalArgumentException.class, () -> codec.decode(encoded));
     }
 
+    /**
+     * Verifies that encoder uses the same field size limits as decoder.
+     */
     @Test
     void encoderUsesTheSameFieldSizeLimitsAsDecoder() {
         PacketCodec codec = new PacketCodec();
@@ -50,6 +59,9 @@ final class PacketCodecTest {
         }
     }
 
+    /**
+     * Verifies that packet encode decode round trip.
+     */
     @Test
     void packetEncodeDecodeRoundTrip() {
         PacketCodec codec = new PacketCodec();
@@ -67,6 +79,13 @@ final class PacketCodecTest {
         assertArrayEquals(packet.signature(), decoded.signature());
     }
 
+    /**
+     * Provides the bytes fixture operation used by the packet codec test regression scenarios.
+     *
+     * @param length the requested or declared byte count
+     * @param value the value supplied to this operation
+     * @return the resulting array produced by this operation
+     */
     private static byte[] bytes(int length, int value) {
         byte[] bytes = new byte[length];
         for (int i = 0; i < bytes.length; i++) {

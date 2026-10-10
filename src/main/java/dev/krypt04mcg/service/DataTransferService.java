@@ -34,7 +34,17 @@ public final class DataTransferService implements AutoCloseable {
     private long generation, turn;
     private boolean closed;
 
-    /** Pass a dedicated SessionService/handshake store: API exchange must not rotate chat sessions. */
+    /**
+     * Creates a data transfer service with the supplied dependencies and initial state.
+     *
+     * @param config the config supplied to this operation
+     * @param keys the keys supplied to this operation
+     * @param trust the trust supplied to this operation
+     * @param sessions the sessions supplied to this operation
+     * @param handshakes the handshakes supplied to this operation
+     * @param available the available supplied to this operation
+     * @param transport the transport supplied to this operation
+     */
     public DataTransferService(Krypt04McgConfig config, KeyStoreService keys, KeyTrustService trust,
                                SessionService sessions, SessionHandshakeService handshakes,
                                BooleanSupplier available, Consumer<CustomPacketPayload> transport) {
@@ -42,20 +52,57 @@ public final class DataTransferService implements AutoCloseable {
         this.handshakes = handshakes; this.available = available; this.transport = transport;
         slots = new Stream[RawChannelPayload.channelCount(config.apiChannelCount)];
     }
+    /**
+     * Requires the Minecraft client thread for mutable connection and stream state. This avoids races
+     * between control callbacks, session counters and channel-slot ownership; worker threads should use
+     * the supported socket abstraction instead.
+     */
     private void checkThread() {
         if (Thread.currentThread() != clientThread) throw new IllegalStateException("Open streams on the Minecraft client thread");
     }
+    /**
+     * Performs the enabled operation for the encrypted API stream service.
+     *
+     * @param channel the business or transport channel identifier
+     * @return whether the condition or operation described above succeeds
+     */
     private boolean enabled(String channel) {
         return "krypt04mcg_file:stream".equals(channel) ? config.enableFileSending || config.enableFileReceiving : config.enableDataApi;
     }
+    /**
+     * Performs the active operation for the encrypted API stream service.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     private boolean active() { return !closed && available.getAsBoolean(); }
+    /**
+     * Performs the own operation for the encrypted API stream service.
+     *
+     * @return the result described above
+     */
     private String own() { return keys.local().kemPublicKey().owner(); }
+    /**
+     * Checks the peer public identity and current trust binding before a session or stream operation.
+     * Cryptographic key parsing alone is not enough to permit traffic to a distrusted or changed identity.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private PublicIdentity trusted(String peer) throws Exception {
         if (peer == null || !peer.matches("[A-Za-z0-9_]{1,16}")) throw new IllegalArgumentException("Select a receiver player");
         PublicIdentity identity = keys.findPublicIdentity(peer).orElseThrow(() -> new IllegalStateException("Missing public key"));
         if (trust.trustState(peer, identity) == TrustState.DISTRUSTED) throw new IllegalStateException("Distrusted key");
         return identity;
     }
+    /**
+     * Returns the recorded s for the encrypted API stream service.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param expected the expected supplied to this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private SessionRecord session(String peer, String expected) throws Exception {
         PublicIdentity identity = trusted(peer);
         SessionRecord s = sessions.find(peer).orElseThrow(() -> new IllegalStateException("No API session"));
@@ -67,6 +114,14 @@ public final class DataTransferService implements AutoCloseable {
             throw new IllegalStateException("API session changed or expired");
         return s;
     }
+    /**
+     * Starts or reuses the peer encrypted API session on the client thread. Readiness and identity binding
+     * are separate from allocating a KryptSession handle; application writes must respect the resulting
+     * state.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @return the result described above
+     */
     public KryptSession connect(String peer) {
         checkThread(); Objects.requireNonNull(peer);
         if (peer.equalsIgnoreCase(own())) throw new IllegalArgumentException("Cannot open a stream to yourself");
@@ -98,6 +153,12 @@ public final class DataTransferService implements AutoCloseable {
         } catch (Exception e) { closeConnection(connection); }
         return connection.handle;
     }
+    /**
+     * Performs the begin operation for the encrypted API stream service.
+     *
+     * @param c the c supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void begin(Connection c) throws Exception {
         if (worker.busy()) throw new IllegalStateException("Exchange worker busy; retry connection later");
         var identity = trusted(c.peer); var local = keys.local(); var kem = config.ephemeralKemAlgorithm;
@@ -115,10 +176,27 @@ public final class DataTransferService implements AutoCloseable {
             } catch (Exception e) { closeConnection(c); }
         });
     }
+    /**
+     * Performs the exchange operation for the encrypted API stream service.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param packet the packet being serialized, authenticated or processed
+     */
     private void exchange(String peer, EncryptedPacket packet) {
         transport.accept(new ControlPayload(Kind.EXCHANGE, peer, UUID.randomUUID(), -1, "", "", 0, packets.encode(packet)));
     }
+    /**
+     * Performs the activate operation for the encrypted API stream service.
+     *
+     * @param c the c supplied to this operation
+     * @param s the s supplied to this operation
+     */
     private void activate(Connection c, SessionRecord s) { c.id = s.sessionId(); c.ready.complete(c.id); }
+    /**
+     * Performs the close connection operation for the encrypted API stream service.
+     *
+     * @param c the c supplied to this operation
+     */
     private void closeConnection(Connection c) {
         if (c.disposed) return;
         c.disposed = true; connections.remove(c.peer.toLowerCase(Locale.ROOT), c);
@@ -126,6 +204,15 @@ public final class DataTransferService implements AutoCloseable {
         c.ready.completeExceptionally(new IllegalStateException("API connection closed"));
         for (Stream s : List.copyOf(streams.values())) if (s.connection == c) fail(s, "Session closed", true);
     }
+    /**
+     * Allocates a stream only when API configuration, peer identity/session readiness and channel pool
+     * capacity allow it. The stream UUID and channel context feed direction-separated crypto; allocation
+     * is not a delivery receipt.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param channel the business or transport channel identifier
+     * @return the result described above
+     */
     public KryptSocket open(String peer, String channel) {
         checkThread(); Krypt04McgApi.validateChannel(channel);
         if (!enabled(channel) || !active()) throw new IllegalStateException("Stream transport disabled or disconnected");
@@ -137,6 +224,15 @@ public final class DataTransferService implements AutoCloseable {
         streams.put(socket.streamId(), new Stream(socket, c));
         return socket;
     }
+    /**
+     * Writes a bounded convenience payload to a newly opened stream and queues authenticated EOF. Larger
+     * transfers must use KryptSocket incrementally and handle backpressure; API stream portions are not
+     * atomic chat messages.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param channel the business or transport channel identifier
+     * @param bytes the bytes supplied to this operation
+     */
     public void send(String peer, String channel, byte[] bytes) {
         checkThread(); Objects.requireNonNull(bytes);
         if (bytes.length > KryptSocket.MAX_BUFFERED_BYTES) throw new IllegalArgumentException("Use a socket for larger streams");
@@ -144,6 +240,13 @@ public final class DataTransferService implements AutoCloseable {
         try { socket.getOutputStream().write(bytes); socket.close(); }
         catch (java.io.IOException e) { socket.fail(e.getMessage()); throw new IllegalStateException(e); }
     }
+    /**
+     * Processes a raw control or encrypted record using the active session, route and expected counter
+     * context. Control MAC checks and ordered record authentication occur before application delivery or
+     * durable counter acceptance; the overloads handle distinct wire types.
+     *
+     * @param p the p supplied to this operation
+     */
     public void receive(ControlPayload p) {
         checkThread(); if (!active()) return;
         if (p.kind() == Kind.EXCHANGE) {
@@ -172,6 +275,12 @@ public final class DataTransferService implements AutoCloseable {
             }
         } catch (Exception e) { if (s != null) fail(s, "Invalid stream control", true); }
     }
+    /**
+     * Performs the incoming operation for the encrypted API stream service.
+     *
+     * @param p the p supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void incoming(ControlPayload p) throws Exception {
         if (!enabled(p.channel()) || streams.containsKey(p.id()) || p.slot() < 0 || p.slot() >= slots.length || slots[p.slot()] != null
                 || streams.size() >= slots.length) return;
@@ -192,10 +301,24 @@ public final class DataTransferService implements AutoCloseable {
             if (callbacks) socket.close(); else listener.accept(socket);
         } catch (Exception e) { fail(s, "Stream listener failed", true); }
     }
+    /**
+     * Performs the bind operation for the encrypted API stream service.
+     *
+     * @param s the s supplied to this operation
+     * @param slot the slot supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void bind(Stream s, int slot) throws Exception {
         s.crypto = new ChannelCrypto(session(s.socket.peer(), s.sessionId), s.socket.streamId(), slot, s.socket.channel(), own(), s.socket.peer());
         s.slot = slot; slots[slot] = s;
     }
+    /**
+     * Processes a raw control or encrypted record using the active session, route and expected counter
+     * context. Control MAC checks and ordered record authentication occur before application delivery or
+     * durable counter acceptance; the overloads handle distinct wire types.
+     *
+     * @param p the p supplied to this operation
+     */
     public void receive(RawChannelPayload p) {
         checkThread(); if (!active() || p.slot() >= slots.length) return;
         Stream s = slots[p.slot()]; if (s == null) return;
@@ -210,6 +333,11 @@ public final class DataTransferService implements AutoCloseable {
             } else s.socket.accept(bytes);
         } catch (Exception e) { fail(s, "Encrypted stream failed", true); }
     }
+    /**
+     * Pumps bounded per-tick exchange/control/data work, authenticates ordered stream records and expires
+     * inactive connections. State is client-thread confined, and socket output must fit its bounded
+     * buffer. A local successful submit does not acknowledge remote application consumption.
+     */
     public void tick() {
         checkThread(); Runnable completion;
         while ((completion = completed.poll()) != null) completion.run();
@@ -250,6 +378,11 @@ public final class DataTransferService implements AutoCloseable {
             } catch (Exception e) { fail(s, "Stream unavailable", true); }
         }
     }
+    /**
+     * Validates and decrypts a signed API exchange, checks its timestamp/identity/replay binding and
+     * coordinates session activation. Control packets received from the relay are not trusted solely
+     * because their envelope parses.
+     */
     private void processExchange() {
         if (worker.busy() || exchanges.isEmpty()) return;
         var p = exchanges.removeFirst(); long epoch = generation;
@@ -273,42 +406,94 @@ public final class DataTransferService implements AutoCloseable {
             });
         } catch (Exception ignored) { }
     }
+    /**
+     * Performs the exchange packet operation for the encrypted API stream service.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param peer the peer identifier associated with this operation
+     */
     private void exchangePacket(EncryptedPacket packet, String peer) { exchange(peer, packet); }
+    /**
+     * Performs the signed operation for the encrypted API stream service.
+     *
+     * @param p the p supplied to this operation
+     * @param session the session supplied to this operation
+     * @return the result described above
+     */
     private ControlPayload signed(ControlPayload p, SessionRecord session) {
         return new ControlPayload(p.kind(), p.peer(), p.id(), p.slot(), p.channel(), p.sessionId(), p.sequence(),
                 ChannelCrypto.authenticate(session, p, own(), p.peer()));
     }
+    /**
+     * Performs the control operation for the encrypted API stream service.
+     *
+     * @param s the s supplied to this operation
+     * @param kind the kind supplied to this operation
+     * @param sequence the record or control sequence in the relevant replay domain
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void control(Stream s, Kind kind, long sequence) throws Exception {
         var p = new ControlPayload(kind, s.socket.peer(), s.socket.streamId(), s.slot, s.socket.channel(), s.sessionId, sequence, new byte[0]);
         transport.accept(signed(p, session(p.peer(), s.sessionId)));
     }
+    /**
+     * Performs the retire operation for the encrypted API stream service.
+     *
+     * @param s the s supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private void retire(Stream s) throws Exception {
         if (s.localEnd && s.remoteEnd) {
             sessions.reserveApiSend(s.socket.peer(), s.sessionId, false, s.bytes);
             remove(s);
         }
     }
+    /**
+     * Performs the fail operation for the encrypted API stream service.
+     *
+     * @param s the s supplied to this operation
+     * @param reason the reason supplied to this operation
+     * @param notify the notify supplied to this operation
+     */
     private void fail(Stream s, String reason, boolean notify) {
         if (!streams.containsKey(s.socket.streamId())) return;
         s.socket.fail(reason);
         if (notify && s.slot >= 0 && active()) try { control(s, Kind.RESET, 0); } catch (Exception ignored) { }
         remove(s);
     }
+    /**
+     * Removes the selected entry in the encrypted API stream service.
+     *
+     * @param s the s supplied to this operation
+     */
     private void remove(Stream s) {
         streams.remove(s.socket.streamId());
         if (s.slot >= 0 && slots[s.slot] == s) slots[s.slot] = null;
         if (s.crypto != null) s.crypto.close();
     }
+    /**
+     * Retires active connections, fails or closes associated streams and releases channel slots when the
+     * client connection/configuration lifecycle changes. Persistent long-term keys are managed by separate
+     * storage services.
+     */
     public void clear() {
         generation++; exchanges.clear(); seenExchanges.clear();
         for (Connection c : List.copyOf(connections.values())) closeConnection(c);
         for (Stream s : List.copyOf(streams.values())) fail(s, "Disconnected", false);
     }
+    /**
+     * Closes retained resources in the encrypted API stream service.
+     */
     @Override public void close() { closed = true; clear(); worker.close(); }
     private final class Connection {
         final String peer; final long created = System.currentTimeMillis();
         final CompletableFuture<String> ready = new CompletableFuture<>(); final KryptSession handle;
         String id, requestId; boolean disposed, beginQueued;
+        /**
+         * Creates a connection with the supplied dependencies and initial state.
+         *
+         * @param peer the peer identifier associated with this operation
+         */
         Connection(String peer) {
             this.peer = peer;
             handle = new KryptSession(peer, ready, (channel, bytes) -> {
@@ -322,6 +507,12 @@ public final class DataTransferService implements AutoCloseable {
         String sessionId; int slot = -1; ChannelCrypto crypto;
         boolean openSent, ready, callbacks, localEnd, remoteEnd;
         long bytes, lastActivity = System.currentTimeMillis();
+        /**
+         * Creates a stream with the supplied dependencies and initial state.
+         *
+         * @param socket the encrypted or TCP socket participating in the operation
+         * @param connection the connection supplied to this operation
+         */
         Stream(KryptSocket socket, Connection connection) { this.socket = socket; this.connection = connection; }
     }
 }

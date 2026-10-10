@@ -9,6 +9,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class FragmentSendQueueTest {
+    /**
+     * Verifies that maximum batch completes before assembly deadline at captured payload pacing.
+     */
     @Test void maximumBatchCompletesBeforeAssemblyDeadlineAtCapturedPayloadPacing() {
         queue.enqueue("bob", Collections.nCopies(2048, "part"), value -> sent.add(value.fragment()), 50, 110_000);
         for (int i = 0; i < 2048; i++) {
@@ -19,6 +22,9 @@ final class FragmentSendQueueTest {
         assertTrue(now.get() < 120_000_000_000L);
     }
 
+    /**
+     * Verifies that admission rejects queue that would miss deadline without discarding existing work.
+     */
     @Test void admissionRejectsQueueThatWouldMissDeadlineWithoutDiscardingExistingWork() {
         queue.enqueue("bob", Collections.nCopies(100, "part"), value -> sent.add(value.fragment()), 1000, 110_000);
         assertThrows(IllegalStateException.class,
@@ -31,6 +37,9 @@ final class FragmentSendQueueTest {
         assertFalse(sent.contains("overflow"));
     }
 
+    /**
+     * Verifies that stalled client cancels expired ciphertext before submission.
+     */
     @Test void stalledClientCancelsExpiredCiphertextBeforeSubmission() {
         queue.enqueue("bob", List.of("one", "two"), value -> sent.add(value.fragment()), 50, 110_000);
         assertTrue(queue.tick(0));
@@ -44,10 +53,18 @@ final class FragmentSendQueueTest {
     private final FragmentSendQueue queue = new FragmentSendQueue(connection::get, now::get);
     private final List<String> sent = new ArrayList<>();
 
+    /**
+     * Provides the enqueue fixture operation used by the fragment send queue test regression scenarios.
+     *
+     * @param fragments the fragments supplied to this operation
+     */
     private void enqueue(String... fragments) {
         queue.enqueue("bob", List.of(fragments), value -> sent.add(value.fragment()));
     }
 
+    /**
+     * Verifies that switching servers discards remaining fragments.
+     */
     @Test void switchingServersDiscardsRemainingFragments() {
         enqueue("first", "secret-old-server");
         assertTrue(queue.tick(250));
@@ -59,6 +76,9 @@ final class FragmentSendQueueTest {
         assertEquals(List.of("first", "new-server"), sent);
     }
 
+    /**
+     * Verifies that disconnect rejects new work and drops pending work.
+     */
     @Test void disconnectRejectsNewWorkAndDropsPendingWork() {
         enqueue("old");
         connection.set(null);
@@ -68,6 +88,9 @@ final class FragmentSendQueueTest {
         assertTrue(sent.isEmpty());
     }
 
+    /**
+     * Verifies that queue is bounded and admission is atomic.
+     */
     @Test void queueIsBoundedAndAdmissionIsAtomic() {
         queue.enqueue("bob", Collections.nCopies(FragmentSendQueue.MAX_PENDING_FRAGMENTS - 1, "part"),
                 value -> sent.add(value.fragment()));
@@ -79,6 +102,9 @@ final class FragmentSendQueueTest {
         assertFalse(sent.contains("overflow1"));
     }
 
+    /**
+     * Verifies that sends in order on calling thread and respects delay.
+     */
     @Test void sendsInOrderOnCallingThreadAndRespectsDelay() {
         Thread clientThread = Thread.currentThread();
         queue.enqueue("bob", List.of("one", "two"), value -> {
@@ -93,6 +119,9 @@ final class FragmentSendQueueTest {
         assertEquals(List.of("one", "two"), sent);
     }
 
+    /**
+     * Verifies that vanilla pacing survives empty queue between messages.
+     */
     @Test void vanillaPacingSurvivesEmptyQueueBetweenMessages() {
         for (var mode : List.of(dev.krypt04mcg.config.ChatSendMode.CHAT,
                 dev.krypt04mcg.config.ChatSendMode.SERVER_COMMAND)) {
@@ -107,6 +136,9 @@ final class FragmentSendQueueTest {
         }
     }
 
+    /**
+     * Verifies that custom payload retains configured pacing.
+     */
     @Test void customPayloadRetainsConfiguredPacing() {
         enqueue("one", "two");
         assertTrue(queue.tick(dev.krypt04mcg.config.ChatSendMode.CUSTOM_PAYLOAD, 250));
@@ -114,6 +146,9 @@ final class FragmentSendQueueTest {
         assertTrue(queue.tick(dev.krypt04mcg.config.ChatSendMode.CUSTOM_PAYLOAD, 250));
     }
 
+    /**
+     * Verifies that clearing or transport failure cancels remaining work.
+     */
     @Test void clearingOrTransportFailureCancelsRemainingWork() {
         enqueue("cancelled");
         queue.clear();
@@ -128,6 +163,9 @@ final class FragmentSendQueueTest {
         assertEquals(List.of("recovered"), sent);
     }
 
+    /**
+     * Verifies that progress counts only successful submissions per queued message.
+     */
     @Test void progressCountsOnlySuccessfulSubmissionsPerQueuedMessage() {
         var updates = new ArrayList<TransferProgressTracker.Update>();
         queue.setProgressListener(updates::add);
@@ -152,6 +190,9 @@ final class FragmentSendQueueTest {
         assertEquals("alice", updates.getLast().peer());
     }
 
+    /**
+     * Verifies that transport failure does not count failed submission and cancels other batches once.
+     */
     @Test void transportFailureDoesNotCountFailedSubmissionAndCancelsOtherBatchesOnce() {
         var updates = new ArrayList<TransferProgressTracker.Update>();
         queue.setProgressListener(updates::add);
@@ -170,6 +211,9 @@ final class FragmentSendQueueTest {
         assertEquals(List.of("one"), sent);
     }
 
+    /**
+     * Verifies that switching connections cancels progress for every pending batch.
+     */
     @Test void switchingConnectionsCancelsProgressForEveryPendingBatch() {
         var updates = new ArrayList<TransferProgressTracker.Update>();
         queue.setProgressListener(updates::add);

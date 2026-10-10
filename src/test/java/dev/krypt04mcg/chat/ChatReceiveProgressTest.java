@@ -24,6 +24,13 @@ class ChatReceiveProgressTest {
     private final List<Update> updates = new ArrayList<>();
     private final List<String> messages = new ArrayList<>();
 
+    /**
+     * Provides the bare receiver fixture operation used by the chat receive progress test regression
+     * scenarios.
+     *
+     * @param reassembler the reassembler supplied to this operation
+     * @return the result described above
+     */
     private ChatReceiveHandler bareReceiver(FragmentReassembler reassembler) {
         var handler = new ChatReceiveHandler(config, null, null, null, new PacketCodec(), fragments,
                 reassembler, null, null, null, (p, peer) -> {}, ignored -> {}, (peer, text) -> messages.add(text));
@@ -31,10 +38,22 @@ class ChatReceiveProgressTest {
         return handler;
     }
 
+    /**
+     * Provides the line fixture operation used by the chat receive progress test regression scenarios.
+     *
+     * @param message the message supplied to this operation
+     * @param index the index supplied to this operation
+     * @param total the total supplied to this operation
+     * @param payload the payload supplied to this operation
+     * @return the result described above
+     */
     private String line(int message, int index, int total, String payload) {
         return FragmentService.PREFIX + " " + String.format("%032x", message) + " " + index + " " + total + " " + payload;
     }
 
+    /**
+     * Verifies that duplicates do not inflate progress and hex case does not split assemblies.
+     */
     @Test void duplicatesDoNotInflateProgressAndHexCaseDoesNotSplitAssemblies() {
         var reassembler = new FragmentReassembler();
         var receiver = bareReceiver(reassembler);
@@ -49,6 +68,9 @@ class ChatReceiveProgressTest {
         assertEquals(66, updates.getLast().percent());
     }
 
+    /**
+     * Verifies that forged incomplete message flood is bounded and other peer still gets progress.
+     */
     @Test void forgedIncompleteMessageFloodIsBoundedAndOtherPeerStillGetsProgress() {
         var reassembler = new FragmentReassembler();
         var receiver = bareReceiver(reassembler);
@@ -60,6 +82,9 @@ class ChatReceiveProgressTest {
         assertEquals(17, reassembler.pendingMessages());
     }
 
+    /**
+     * Verifies that shadow chat uses one bounded unverified sender bucket.
+     */
     @Test void shadowChatUsesOneBoundedUnverifiedSenderBucket() {
         var reassembler = new FragmentReassembler();
         var receiver = bareReceiver(reassembler);
@@ -70,6 +95,9 @@ class ChatReceiveProgressTest {
         assertEquals("Alice", updates.getLast().peer());
     }
 
+    /**
+     * Verifies that malformed complete packet never reports verified completion.
+     */
     @Test void malformedCompletePacketNeverReportsVerifiedCompletion() {
         var receiver = bareReceiver(new FragmentReassembler());
         receiver.handle("Alice", line(1, 0, 1, "AQID"));
@@ -79,6 +107,9 @@ class ChatReceiveProgressTest {
         assertTrue(messages.isEmpty());
     }
 
+    /**
+     * Verifies that conflicting total does not fail or overwrite admitted progress.
+     */
     @Test void conflictingTotalDoesNotFailOrOverwriteAdmittedProgress() {
         var receiver = bareReceiver(new FragmentReassembler());
         receiver.handle("Alice", line(1, 0, 3, "AQ"));
@@ -88,6 +119,10 @@ class ChatReceiveProgressTest {
         assertEquals(Status.TRANSFERRING, updates.getLast().status());
     }
 
+    /**
+     * Verifies that idle tick expires receives without waiting for another message and attributes the
+     * correct peer.
+     */
     @Test void idleTickExpiresReceivesWithoutWaitingForAnotherMessageAndAttributesTheCorrectPeer() {
         var clock = new MutableClock();
         var reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 128, 10);
@@ -102,6 +137,9 @@ class ChatReceiveProgressTest {
         assertEquals(1, reassembler.pendingMessages());
     }
 
+    /**
+     * Verifies that clear pending prevents cross connection fragment splicing.
+     */
     @Test void clearPendingPreventsCrossConnectionFragmentSplicing() {
         var reassembler = new FragmentReassembler();
         var receiver = bareReceiver(reassembler);
@@ -113,6 +151,9 @@ class ChatReceiveProgressTest {
         assertTrue(updates.stream().noneMatch(p -> p.status() == Status.COMPLETE || p.status() == Status.VERIFYING));
     }
 
+    /**
+     * Verifies that expiry inside admission also retires the previous progress row.
+     */
     @Test void expiryInsideAdmissionAlsoRetiresThePreviousProgressRow() {
         var clock = new MutableClock();
         var reassembler = new FragmentReassembler(clock, Duration.ofSeconds(10), 128, 10);
@@ -124,6 +165,11 @@ class ChatReceiveProgressTest {
         assertEquals("alice", updates.getLast().peer());
     }
 
+    /**
+     * Verifies that verified message completes but replay fails without another plaintext delivery.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void verifiedMessageCompletesButReplayFailsWithoutAnotherPlaintextDelivery() throws Exception {
         var crypto = new CryptoService();
         var keys = new KeyStoreService(root, crypto);
@@ -156,8 +202,25 @@ class ChatReceiveProgressTest {
 
     private static final class MutableClock extends Clock {
         private Instant now = Instant.EPOCH;
+        /**
+         * Provides the get zone fixture operation used by the chat receive progress test regression scenarios.
+         *
+         * @return the result described above
+         */
         @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+        /**
+         * Provides the with zone fixture operation used by the chat receive progress test regression
+         * scenarios.
+         *
+         * @param zone the zone supplied to this operation
+         * @return the result described above
+         */
         @Override public Clock withZone(ZoneId zone) { return this; }
+        /**
+         * Provides the instant fixture operation used by the chat receive progress test regression scenarios.
+         *
+         * @return the result described above
+         */
         @Override public Instant instant() { return now; }
     }
 }

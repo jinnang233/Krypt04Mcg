@@ -13,6 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class ClothConfigModIdTest {
+    /**
+     * Verifies that optional integration detects the mod id published by cloth config.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void optionalIntegrationDetectsTheModIdPublishedByClothConfig() throws Exception {
         Path artifact = Path.of(AutoConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI());

@@ -41,11 +41,30 @@ public final class SessionHandshakeService implements AutoCloseable {
     private final Gson gson = JsonSupport.prettyGson();
     private final Map<String, PendingHandshake> pending = new LinkedHashMap<>();
 
+    /**
+     * Creates a session handshake service with the supplied dependencies and initial state.
+     *
+     * @param cryptoService the crypto service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     */
     public SessionHandshakeService(CryptoService cryptoService, SessionService sessionService) {
         this.cryptoService = cryptoService;
         this.sessionService = sessionService;
     }
 
+    /**
+     * Reserves a durable predecessor/request epoch before generating an ephemeral KEM key and signed
+     * request envelope. The pending entry binds peer identity, session ID and request message ID to the
+     * ephemeral key, with bounded fixed expiry. Failure closes newly generated ephemeral material.
+     *
+     * @param receiver the intended recipient associated with this operation
+     * @param senderKeys the local sender key material
+     * @param ephemeralAlgorithm the ephemeral algorithm supplied to this operation
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @param aeadAlgorithm the selected authenticated-encryption suite
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public synchronized EncryptedPacket begin(PublicIdentity receiver, LocalKeyMaterial senderKeys,
                                               KemAlgorithm ephemeralAlgorithm, boolean compress,
                                               AeadAlgorithm aeadAlgorithm) throws CryptoException {
@@ -80,6 +99,18 @@ public final class SessionHandshakeService implements AutoCloseable {
         }
     }
 
+    /**
+     * Requires a signed session-exchange envelope and uses the pending ephemeral key for a response or the
+     * long-term key for a request. JSON is parsed only after cryptographic decryption. Parsing does not
+     * complete the handshake; correlation, identity and durable epoch checks occur in complete.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param receiverKeys the local recipient key material
+     * @param sender the sender or source associated with this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public synchronized DecryptedExchange decrypt(EncryptedPacket packet, LocalKeyMaterial receiverKeys,
                                                    PublicIdentity sender) throws CryptoException, IOException {
         cleanupExpired();
@@ -106,6 +137,21 @@ public final class SessionHandshakeService implements AutoCloseable {
         }
     }
 
+    /**
+     * Validates authenticated exchange fields against both identities and dispatches request/response
+     * completion. Durable session preparation/commit and packet transmission are coordinated so a failed
+     * send or save does not silently advance an unrelated epoch.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param exchange the exchange supplied to this operation
+     * @param sender the sender or source associated with this operation
+     * @param receiverKeys the local recipient key material
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @param aeadAlgorithm the selected authenticated-encryption suite
+     * @param packetSender the packet sender supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     public synchronized boolean complete(EncryptedPacket packet, DecryptedExchange exchange,
                                          PublicIdentity sender, LocalKeyMaterial receiverKeys,
                                          boolean compress, AeadAlgorithm aeadAlgorithm,
@@ -121,6 +167,22 @@ public final class SessionHandshakeService implements AutoCloseable {
         }
     }
 
+    /**
+     * Checks request shape and predecessor epoch, reuses a durably prepared matching response when
+     * retrying, and resolves simultaneous requests deterministically. A new session response is encrypted
+     * to the validated ephemeral public key, journaled before sending and committed after submission.
+     * Competing pending key material is discarded only after successful exchange processing.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param payload the payload supplied to this operation
+     * @param sender the sender or source associated with this operation
+     * @param receiverKeys the local recipient key material
+     * @param compress whether the encoded plaintext is compressed before encryption
+     * @param aeadAlgorithm the selected authenticated-encryption suite
+     * @param packetSender the packet sender supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private boolean completeRequest(EncryptedPacket packet, SessionExchangePayload payload, PublicIdentity sender,
                                     LocalKeyMaterial receiverKeys, boolean compress, AeadAlgorithm aeadAlgorithm,
                                     PacketSender packetSender) throws Exception {
@@ -170,6 +232,17 @@ public final class SessionHandshakeService implements AutoCloseable {
         return true;
     }
 
+    /**
+     * Requires exact pending request, peer UUID, session ID, ephemeral suite, predecessor and epoch
+     * correlation plus a 32-byte session secret. The new session is durably committed before the pending
+     * ephemeral key is removed and closed, preserving recoverability if persistence fails.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param payload the payload supplied to this operation
+     * @param sender the sender or source associated with this operation
+     * @param receiverKeys the local recipient key material
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private void completeResponse(EncryptedPacket packet, SessionExchangePayload payload, PublicIdentity sender, LocalKeyMaterial receiverKeys)
             throws IOException {
         PendingHandshake pendingHandshake = pending.get(normalize(sender.owner()));
@@ -190,6 +263,17 @@ public final class SessionHandshakeService implements AutoCloseable {
         pendingHandshake.ephemeral().close();
     }
 
+    /**
+     * Validates version, time window, initiator/responder names and UUIDs, both fingerprints and
+     * predecessor/epoch fields against authenticated packet context. These checks prevent an otherwise
+     * valid signed envelope from being attached to a different pending identity or epoch.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param payload the payload supplied to this operation
+     * @param sender the sender or source associated with this operation
+     * @param receiverKeys the local recipient key material
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void validateCommon(EncryptedPacket packet, SessionExchangePayload payload, PublicIdentity sender,
                                        LocalKeyMaterial receiverKeys) throws IOException {
         PublicIdentity receiver = new PublicIdentity(receiverKeys.kemPublicKey().owner(),
@@ -214,6 +298,13 @@ public final class SessionHandshakeService implements AutoCloseable {
         }
     }
 
+    /**
+     * Admits a bounded pending exchange and arranges fixed key expiry. Replacing a peer entry or reaching
+     * capacity must release displaced ephemeral key material according to the implemented lifecycle.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param value the value supplied to this operation
+     */
     private void putPending(String peer, PendingHandshake value) {
         String normalized = normalize(peer);
         PendingHandshake replaced = pending.put(normalized, value);
@@ -227,11 +318,24 @@ public final class SessionHandshakeService implements AutoCloseable {
         }
     }
 
+    /**
+     * Removes the peer pending handshake and closes its ephemeral key holder, preventing further response
+     * decryption with that state.
+     *
+     * @param peer the peer identifier associated with this operation
+     */
     private void discardPending(String peer) {
         PendingHandshake previous = pending.remove(normalize(peer));
         if (previous != null) previous.ephemeral().close();
     }
 
+    /**
+     * Expires only the scheduled pending exchange still matching its identity and deadline, then closes
+     * ephemeral material. Late callbacks must not retire a replacement exchange.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param expected the expected supplied to this operation
+     */
     private synchronized void expire(String peer, PendingHandshake expected) {
         if (pending.get(peer) == expected) {
             pending.remove(peer);
@@ -239,6 +343,10 @@ public final class SessionHandshakeService implements AutoCloseable {
         }
     }
 
+    /**
+     * Removes expired pending exchanges based on their original creation times and closes their ephemeral
+     * keys. Duplicate or continued traffic does not refresh the fixed lifetime.
+     */
     private void cleanupExpired() {
         Instant cutoff = Instant.now().minus(PENDING_TTL);
         pending.entrySet().removeIf(entry -> {
@@ -250,7 +358,13 @@ public final class SessionHandshakeService implements AutoCloseable {
         });
     }
 
-    /** Cancel only the API-owned request; never discard a newer exchange started by chat. */
+    /**
+     * Cancels pending handshake state for the specified peer and releases ephemeral key material.
+     * Persisted active sessions are managed separately.
+     *
+     * @param peer the peer identifier associated with this operation
+     * @param requestMessageId the request message id supplied to this operation
+     */
     public synchronized void cancel(String peer, String requestMessageId) {
         PendingHandshake request = pending.get(normalize(peer));
         if (request != null && request.requestMessageId().equals(requestMessageId)) {
@@ -259,28 +373,64 @@ public final class SessionHandshakeService implements AutoCloseable {
         }
     }
 
+    /**
+     * Checks the signed exchange required by the session handshake state machine and rejects invalid state
+     * instead of continuing.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private static void requireSignedExchange(EncryptedPacket packet) throws CryptoException {
         if (packet.type() != PacketType.SESSION_EXCHANGE || !packet.signed()) {
             throw new CryptoException("Session exchange packets must use the signed SESSION_EXCHANGE type");
         }
     }
 
+    /**
+     * Reports whether response holds for the session handshake state machine.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean isResponse(EncryptedPacket packet) {
         return (packet.flags() & CryptoService.FLAG_SESSION_RESPONSE) != 0;
     }
 
+    /**
+     * Returns the fingerprint value used by the session handshake state machine.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static String fingerprint(LocalKeyMaterial material) {
         return material.kemPublicKey().fingerprint() + ":" + material.signaturePublicKey().fingerprint();
     }
 
+    /**
+     * Returns the fingerprint value used by the session handshake state machine.
+     *
+     * @param identity the identity supplied to this operation
+     * @return the result described above
+     */
     private static String fingerprint(PublicIdentity identity) {
         return identity.kemPublicKey().fingerprint() + ":" + identity.signaturePublicKey().fingerprint();
     }
 
+    /**
+     * Normalizes the supplied identifier into the comparison/storage form used by the session handshake
+     * state machine.
+     *
+     * @param player the player supplied to this operation
+     * @return the result described above
+     */
     private static String normalize(String player) {
         return player.toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Closes all retained pending ephemeral key holders and clears pending state. This is handshake
+     * cleanup rather than destruction of every persisted long-term or session key.
+     */
     @Override
     public synchronized void close() {
         pending.values().forEach(value -> value.ephemeral().close());
@@ -292,6 +442,14 @@ public final class SessionHandshakeService implements AutoCloseable {
 
     @FunctionalInterface
     public interface PacketSender {
+        /**
+         * Submits the supplied data through the session handshake state machine path. Local submission does
+         * not by itself acknowledge remote receipt.
+         *
+         * @param packet the packet being serialized, authenticated or processed
+         * @param receiver the intended recipient associated with this operation
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         void send(EncryptedPacket packet, String receiver) throws Exception;
     }
 

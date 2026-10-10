@@ -14,9 +14,17 @@ public final class Krypt04McgKeyBindings {
     private static KeyMapping openChatGui;
     private static KeyMapping openKeyManager;
 
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private Krypt04McgKeyBindings() {
     }
 
+    /**
+     * Registers the supported callbacks and channels for the krypt04 mcg key bindings.
+     *
+     * @param mod the mod supplied to this operation
+     */
     public static void register(Krypt04McgMod mod) {
         openChatGui = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.krypt04mcg.open_chat_gui",

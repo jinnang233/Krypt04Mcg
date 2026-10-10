@@ -36,6 +36,12 @@ public final class KeyStoreService {
     private final SensitiveFileStore sensitiveFiles;
     private LocalKeyMaterial local;
 
+    /**
+     * Creates a key store service with the supplied dependencies and initial state.
+     *
+     * @param root the account or configuration storage root
+     * @param cryptoService the crypto service supplied to this operation
+     */
     public KeyStoreService(Path root, CryptoService cryptoService) {
         this.root = root;
         this.keysDir = root.resolve("keys");
@@ -43,10 +49,34 @@ public final class KeyStoreService {
         this.sensitiveFiles = new SensitiveFileStore(root);
     }
 
+    /**
+     * Creates private account directories, loads and validates existing local key material or generates
+     * new selected KEM/signature pairs, then writes encrypted private state and exports public identity.
+     * The offline UUID fallback is deterministic metadata, not an authentication mechanism. Existing
+     * invalid private material is not silently replaced.
+     *
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public void init(String owner, String uuid) throws IOException, CryptoException {
         init(owner, uuid, KemAlgorithm.ML_KEM_768_X25519, SignatureAlgorithm.MLDSA65_ED25519_SHA512);
     }
 
+    /**
+     * Creates private account directories, loads and validates existing local key material or generates
+     * new selected KEM/signature pairs, then writes encrypted private state and exports public identity.
+     * The offline UUID fallback is deterministic metadata, not an authentication mechanism. Existing
+     * invalid private material is not silently replaced.
+     *
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @param kemAlgorithm the selected KEM suite
+     * @param signatureAlgorithm the selected signature suite
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public void init(String owner, String uuid, KemAlgorithm kemAlgorithm, SignatureAlgorithm signatureAlgorithm)
             throws IOException, CryptoException {
         SecureFiles.createPrivateDirectories(keysDir.resolve("private"));
@@ -69,6 +99,11 @@ public final class KeyStoreService {
         exportOwnPublicFile();
     }
 
+    /**
+     * Returns the recorded local for the account key store.
+     *
+     * @return the result described above
+     */
     public LocalKeyMaterial local() {
         if (local == null) {
             throw new IllegalStateException("Key store has not been initialized");
@@ -76,12 +111,23 @@ public final class KeyStoreService {
         return local;
     }
 
+    /**
+     * Performs the own public identity operation for the account key store.
+     *
+     * @return the result described above
+     */
     public PublicIdentity ownPublicIdentity() {
         LocalKeyMaterial material = local();
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());
     }
 
+    /**
+     * Performs the export own public file operation for the account key store.
+     *
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public PublicKeyExport exportOwnPublicFile() throws IOException {
         PublicIdentity identity = ownPublicIdentity();
         write(keysDir.resolve("public").resolve("self-public.json"), identity);
@@ -91,10 +137,27 @@ public final class KeyStoreService {
         return new PublicKeyExport(exportFile.toAbsolutePath().normalize(), identity);
     }
 
+    /**
+     * Performs the regeneration fingerprint operation for the account key store.
+     *
+     * @return the result described above
+     */
     public String regenerationFingerprint() {
         return local().kemPublicKey().fingerprint();
     }
 
+    /**
+     * Requires the confirmation fingerprint to match current local keys before generating and persisting a
+     * replacement pair under the same owner/UUID. Imported peer trust and active sessions must be
+     * evaluated separately when a local identity changes.
+     *
+     * @param fingerprint the fingerprint supplied to this operation
+     * @param kemAlgorithm the selected KEM suite
+     * @param signatureAlgorithm the selected signature suite
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public LocalKeyMaterial regenerate(String fingerprint, KemAlgorithm kemAlgorithm,
                                        SignatureAlgorithm signatureAlgorithm) throws IOException, CryptoException {
         if (!fingerprintMatches(regenerationFingerprint(), fingerprint)) {
@@ -109,6 +172,16 @@ public final class KeyStoreService {
         return regenerated;
     }
 
+    /**
+     * Parses and validates an imported public identity, requires its owner to match the selected player,
+     * and refuses to overwrite a different existing identity. This enforces TOFU continuity; the initial
+     * import still needs independent fingerprint verification for stronger identity assurance.
+     *
+     * @param player the player supplied to this operation
+     * @param dataOrFile the data or file supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public PublicIdentity importPublicIdentity(String player, String dataOrFile) throws IOException {
         String json = readImportData(dataOrFile);
         PublicIdentity incoming = parsePublicIdentity(json);
@@ -136,6 +209,13 @@ public final class KeyStoreService {
         return incoming;
     }
 
+    /**
+     * Looks up public identity in the account key store without creating a replacement.
+     *
+     * @param player the player supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public Optional<PublicIdentity> findPublicIdentity(String player) throws IOException {
         Path path = keysDir.resolve("public").resolve(normalize(player) + ".json");
         if (Files.exists(path)) {
@@ -159,6 +239,13 @@ public final class KeyStoreService {
         return Optional.empty();
     }
 
+    /**
+     * Returns the recorded false for the account key store.
+     *
+     * @param player the player supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public boolean removePublicIdentity(String player) throws IOException {
         if (local().kemPublicKey().owner().equalsIgnoreCase(player)) {
             throw new IOException("Cannot delete your own public key");
@@ -186,6 +273,12 @@ public final class KeyStoreService {
         return !matches.isEmpty();
     }
 
+    /**
+     * Returns the recorded result for the account key store.
+     *
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public List<PublicIdentity> listPublicIdentities() throws IOException {
         List<PublicIdentity> result = new ArrayList<>();
         if (!Files.exists(keysDir.resolve("public"))) {
@@ -199,10 +292,27 @@ public final class KeyStoreService {
         return result;
     }
 
+    /**
+     * Performs the rebuild public record operation for the account key store.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @param owner the owner identifier associated with the stored key records
+     * @param uuid the identity UUID associated with the key records
+     * @param keyData the key data supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     public KeyRecord rebuildPublicRecord(String algorithm, String owner, String uuid, String keyData) throws CryptoException {
         return cryptoService.keyRecord(algorithm, owner, uuid, Instant.now(), Base64Url.decode(keyData));
     }
 
+    /**
+     * Reads import data from the input used by the account key store.
+     *
+     * @param dataOrFile the data or file supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private String readImportData(String dataOrFile) throws IOException {
         String trimmed = stripWrappingQuotes(dataOrFile.trim());
         Optional<Path> importFile = findImportFile(trimmed);
@@ -222,6 +332,12 @@ public final class KeyStoreService {
         }
     }
 
+    /**
+     * Returns the recorded value for the account key store.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     */
     private static String stripWrappingQuotes(String value) {
         if (value.length() >= 2) {
             char first = value.charAt(0);
@@ -234,6 +350,12 @@ public final class KeyStoreService {
         return value;
     }
 
+    /**
+     * Looks up import file in the account key store without creating a replacement.
+     *
+     * @param dataOrFile the data or file supplied to this operation
+     * @return the result described above
+     */
     private Optional<Path> findImportFile(String dataOrFile) {
         Set<Path> candidates = new LinkedHashSet<>();
         try {
@@ -265,6 +387,13 @@ public final class KeyStoreService {
         return Optional.empty();
     }
 
+    /**
+     * Performs the add import candidate operation for the account key store.
+     *
+     * @param candidates the candidates supplied to this operation
+     * @param base the base supplied to this operation
+     * @param child the child supplied to this operation
+     */
     private static void addImportCandidate(Set<Path> candidates, Path base, String child) {
         try {
             candidates.add(safeResolve(base, child));
@@ -273,6 +402,12 @@ public final class KeyStoreService {
         }
     }
 
+    /**
+     * Returns the recorded normalized for the account key store.
+     *
+     * @param accountRoot the account root supplied to this operation
+     * @return the result described above
+     */
     private static Path accountBaseRoot(Path accountRoot) {
         Path normalized = accountRoot.toAbsolutePath().normalize();
         Path accounts = normalized.getParent();
@@ -284,6 +419,12 @@ public final class KeyStoreService {
         return normalized;
     }
 
+    /**
+     * Returns the recorded null for the account key store.
+     *
+     * @param baseRoot the base root supplied to this operation
+     * @return the result described above
+     */
     private static Path gameRoot(Path baseRoot) {
         Path config = baseRoot.getParent();
         if (config == null || config.getFileName() == null
@@ -293,6 +434,12 @@ public final class KeyStoreService {
         return config.getParent();
     }
 
+    /**
+     * Performs the looks like path operation for the account key store.
+     *
+     * @param value the value supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean looksLikePath(String value) {
         return value.indexOf('/') >= 0 || value.indexOf('\\') >= 0
                 || value.toLowerCase(Locale.ROOT).endsWith(".json")
@@ -300,6 +447,15 @@ public final class KeyStoreService {
                 || (value.length() >= 2 && Character.isLetter(value.charAt(0)) && value.charAt(1) == ':');
     }
 
+    /**
+     * Normalizes a candidate import path under the supplied base and rejects lexical traversal outside
+     * that base. Normalized prefix containment is distinct from symlink rejection and from
+     * operating-system file permissions.
+     *
+     * @param base the base supplied to this operation
+     * @param child the child supplied to this operation
+     * @return the result described above
+     */
     private static Path safeResolve(Path base, String child) {
         Path normalizedBase = base.toAbsolutePath().normalize();
         Path resolved = normalizedBase.resolve(child).normalize();
@@ -309,6 +465,14 @@ public final class KeyStoreService {
         return resolved;
     }
 
+    /**
+     * Parses the imported JSON identity and delegates cryptographic key/parameter/fingerprint validation
+     * before storage. Structurally valid key material is not automatically user-verified identity.
+     *
+     * @param json the json supplied to this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private PublicIdentity parsePublicIdentity(String json) throws IOException {
         try {
             return cryptoService.validatePublicIdentity(gson.fromJson(json, PublicIdentity.class));
@@ -317,33 +481,81 @@ public final class KeyStoreService {
         }
     }
 
+    /**
+     * Performs the same identity operation for the account key store.
+     *
+     * @param first the first supplied to this operation
+     * @param second the second supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean sameIdentity(PublicIdentity first, PublicIdentity second) {
         return first.owner().equalsIgnoreCase(second.owner()) && first.uuid().equalsIgnoreCase(second.uuid())
                 && first.kemPublicKey().fingerprint().equals(second.kemPublicKey().fingerprint())
                 && first.signaturePublicKey().fingerprint().equals(second.signaturePublicKey().fingerprint());
     }
 
+    /**
+     * Reads public identity from the input used by the account key store.
+     *
+     * @param path the filesystem path used by this operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private PublicIdentity readPublicIdentity(Path path) throws IOException {
         return parsePublicIdentity(Files.readString(path, StandardCharsets.UTF_8));
     }
 
+    /**
+     * Serializes validated local private-key material through encrypted account storage. The caller must
+     * not log the serialized private records or confuse the separately exported public identity with this
+     * secret document.
+     *
+     * @param path the filesystem path used by this operation
+     * @param value the value supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private void writeLocal(Path path, LocalKeyMaterial value) throws IOException {
         sensitiveFiles.writeString(path, gson.toJson(value));
     }
 
+    /**
+     * Writes the supplied value to the output used by the account key store.
+     *
+     * @param path the filesystem path used by this operation
+     * @param value the value supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private void write(Path path, Object value) throws IOException {
         SecureFiles.atomicWrite(path, gson.toJson(value).getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Returns the recorded false for the account key store.
+     *
+     * @param expected the expected supplied to this operation
+     * @param supplied the supplied supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     private static boolean fingerprintMatches(String expected, String supplied) {
         if (expected == null || supplied == null) {
             return false;
         }
         byte[] expectedBytes = expected.trim().toLowerCase(java.util.Locale.ROOT).getBytes(StandardCharsets.UTF_8);
         byte[] suppliedBytes = supplied.trim().toLowerCase(java.util.Locale.ROOT).getBytes(StandardCharsets.UTF_8);
+        /*
+         * Compares digest/tag bytes with the JDK authentication-oriented byte comparison rather than
+         * converting them to Strings. Equality still depends on the supplied key/context and does not replace
+         * identity or replay checks.
+         */
         return MessageDigest.isEqual(expectedBytes, suppliedBytes);
     }
 
+    /**
+     * Normalizes the supplied identifier into the comparison/storage form used by the account key store.
+     *
+     * @param player the player supplied to this operation
+     * @return the result described above
+     */
     private static String normalize(String player) {
         return player.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
     }

@@ -10,8 +10,21 @@ public final class SharingWorker implements AutoCloseable {
     private final ExecutorService executor = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().daemon().name("krypt04mcg-sharing").factory());
 
+    /**
+     * Performs the busy operation for the bounded sharing worker.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean busy() { return busy.get(); }
 
+    /**
+     * Returns the recorded false for the bounded sharing worker.
+     *
+     * @param operation the operation supplied to this operation
+     * @param dispatch the dispatch supplied to this operation
+     * @param completed the completed supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     public <T> boolean submit(Callable<T> operation, Consumer<Runnable> dispatch, BiConsumer<T, Exception> completed) {
         if (!busy.compareAndSet(false, true)) return false;
         try {
@@ -31,5 +44,8 @@ public final class SharingWorker implements AutoCloseable {
         return true;
     }
 
+    /**
+     * Closes retained resources in the bounded sharing worker.
+     */
     @Override public void close() { executor.shutdownNow(); }
 }

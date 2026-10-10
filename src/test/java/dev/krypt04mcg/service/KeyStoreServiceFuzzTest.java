@@ -25,6 +25,11 @@ final class KeyStoreServiceFuzzTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that randomized public identity imports round trip.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedPublicIdentityImportsRoundTrip() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -47,6 +52,11 @@ final class KeyStoreServiceFuzzTest {
         }
     }
 
+    /**
+     * Verifies that randomized config relative file imports round trip.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedConfigRelativeFileImportsRoundTrip() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -67,6 +77,11 @@ final class KeyStoreServiceFuzzTest {
         }
     }
 
+    /**
+     * Verifies that randomized malformed imports are rejected without writing public keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedMalformedImportsAreRejectedWithoutWritingPublicKeys() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -85,6 +100,11 @@ final class KeyStoreServiceFuzzTest {
         assertEquals(before, publicFileCount());
     }
 
+    /**
+     * Verifies that randomized tofu changes are rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedTofuChangesAreRejected() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -102,6 +122,11 @@ final class KeyStoreServiceFuzzTest {
                 keyStoreService.findPublicIdentity("same-player").orElseThrow().kemPublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that owner mismatches are rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void ownerMismatchesAreRejected() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -113,22 +138,48 @@ final class KeyStoreServiceFuzzTest {
         assertThrows(Exception.class, () -> keyStoreService.importPublicIdentity("bob", json));
     }
 
+    /**
+     * Provides the public file count fixture operation used by the key store service fuzz test regression
+     * scenarios.
+     *
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private int publicFileCount() throws Exception {
         try (var stream = Files.list(publicDir())) {
             return (int) stream.filter(Files::isRegularFile).count();
         }
     }
 
+    /**
+     * Provides the public dir fixture operation used by the key store service fuzz test regression
+     * scenarios.
+     *
+     * @return the result described above
+     */
     private Path publicDir() {
         return tempDir.resolve("keys").resolve("public");
     }
 
+    /**
+     * Provides the random fixture operation used by the key store service fuzz test regression scenarios.
+     *
+     * @param testName the test name supplied to this operation
+     * @return the result described above
+     */
     private static Random random(String testName) {
         long seed = SEED_RANDOM.nextLong();
         System.out.println(KeyStoreServiceFuzzTest.class.getSimpleName() + "." + testName + " seed=" + seed);
         return new Random(seed);
     }
 
+    /**
+     * Provides the random player fixture operation used by the key store service fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomPlayer(Random random) {
         int length = 1 + random.nextInt(28);
         StringBuilder builder = new StringBuilder(length);
@@ -139,6 +190,13 @@ final class KeyStoreServiceFuzzTest {
         return builder.toString();
     }
 
+    /**
+     * Provides the random safe name fixture operation used by the key store service fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomSafeName(Random random) {
         int length = 4 + random.nextInt(18);
         StringBuilder builder = new StringBuilder(length);
@@ -149,6 +207,13 @@ final class KeyStoreServiceFuzzTest {
         return builder.toString();
     }
 
+    /**
+     * Provides the random malformed input fixture operation used by the key store service fuzz test
+     * regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomMalformedInput(Random random) {
         return switch (random.nextInt(4)) {
             case 0 -> "";
@@ -158,6 +223,13 @@ final class KeyStoreServiceFuzzTest {
         };
     }
 
+    /**
+     * Provides the public identity fixture operation used by the key store service fuzz test regression
+     * scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

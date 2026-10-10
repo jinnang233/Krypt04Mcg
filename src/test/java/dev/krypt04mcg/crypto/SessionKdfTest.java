@@ -5,6 +5,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SessionKdfTest {
+    /**
+     * Verifies that existing session derivation remains compatible.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void existingSessionDerivationRemainsCompatible() throws Exception {
         byte[] secret = new byte[32], salt = new byte[16];
         for (int i = 0; i < secret.length; i++) secret[i] = (byte) i;

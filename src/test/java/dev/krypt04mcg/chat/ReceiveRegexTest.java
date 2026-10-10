@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class ReceiveRegexTest {
+    /**
+     * Verifies that invalid receive regex does not escape chat callbacks.
+     */
     @Test void invalidReceiveRegexDoesNotEscapeChatCallbacks() {
         var config = new Krypt04McgConfig();
         config.receiveRegexMode = true;

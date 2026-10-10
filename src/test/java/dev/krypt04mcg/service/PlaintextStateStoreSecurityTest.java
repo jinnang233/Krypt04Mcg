@@ -16,6 +16,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class PlaintextStateStoreSecurityTest {
     @TempDir Path root;
 
+    /**
+     * Verifies that linked state is rejected on read and write without changing target.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void linkedStateIsRejectedOnReadAndWriteWithoutChangingTarget() throws Exception {
         for (Store store : stores()) {
             Path outside = root.resolve(store.file().getFileName() + ".outside");
@@ -28,6 +33,11 @@ class PlaintextStateStoreSecurityTest {
         }
     }
 
+    /**
+     * Verifies that dangling links cannot be treated as empty state.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void danglingLinksCannotBeTreatedAsEmptyState() throws Exception {
         for (Store store : stores()) {
             Files.createDirectories(store.file().getParent());
@@ -36,6 +46,11 @@ class PlaintextStateStoreSecurityTest {
         }
     }
 
+    /**
+     * Verifies that linked parent directories cannot redirect state.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void linkedParentDirectoriesCannotRedirectState() throws Exception {
         Path outside = Files.createDirectory(root.resolve("outside"));
         Path linked = root.resolve("linked");
@@ -47,6 +62,11 @@ class PlaintextStateStoreSecurityTest {
         }
     }
 
+    /**
+     * Verifies that created state files are private and still round trip.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void createdStateFilesArePrivateAndStillRoundTrip() throws Exception {
         assumeTrue(Files.getFileStore(root).supportsFileAttributeView("posix"));
         for (Store store : stores()) {
@@ -68,10 +88,23 @@ class PlaintextStateStoreSecurityTest {
         assertFalse(new DecryptionHistoryService(root).recordAcceptedPacket("Bob", new byte[16], new byte[12]));
     }
 
+    /**
+     * Provides the stores fixture operation used by the plaintext state store security test regression
+     * scenarios.
+     *
+     * @return the result described above
+     */
     private List<Store> stores() {
         return stores(root);
     }
 
+    /**
+     * Provides the stores fixture operation used by the plaintext state store security test regression
+     * scenarios.
+     *
+     * @param directory the directory supplied to this operation
+     * @return the result described above
+     */
     private List<Store> stores(Path directory) {
         var groups = new GroupService(directory);
         var sent = new SentMessageCacheService(directory);
@@ -84,6 +117,14 @@ class PlaintextStateStoreSecurityTest {
                         () -> history.recordSuccess("Bob"), () -> history.lastSuccess("Bob")));
     }
 
+    /**
+     * Provides the create link fixture operation used by the plaintext state store security test
+     * regression scenarios.
+     *
+     * @param link the link supplied to this operation
+     * @param target the target supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void createLink(Path link, Path target) throws IOException {
         try { Files.createSymbolicLink(link, target); }
         catch (UnsupportedOperationException | IOException unavailable) {
@@ -91,6 +132,13 @@ class PlaintextStateStoreSecurityTest {
         }
     }
 
-    @FunctionalInterface private interface IoAction { void run() throws IOException; }
+    @FunctionalInterface private interface IoAction {
+        /**
+         * Provides the run fixture operation used by the plaintext state store security test regression
+         * scenarios.
+         *
+         * @throws IOException if input/output, stored-state validation or resource handling fails
+         */
+        void run() throws IOException; }
     private record Store(Path file, IoAction write, IoAction read) {}
 }

@@ -38,9 +38,23 @@ public final class CommandRegistrar {
     private static final DateTimeFormatter STATUS_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
 
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private CommandRegistrar() {
     }
 
+    /**
+     * Registers the supported callbacks and channels for the command registrar.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param decryptionHistoryService the decryption history service supplied to this operation
+     * @param groupService the group service supplied to this operation
+     * @param config the config supplied to this operation
+     */
     public static void register(ChatSendService chatSendService, KeyStoreService keyStoreService,
                                 KeyTrustService keyTrustService, SessionService sessionService,
                                 DecryptionHistoryService decryptionHistoryService, GroupService groupService,
@@ -54,18 +68,42 @@ public final class CommandRegistrar {
                     sessionService, decryptionHistoryService, groupService, config));
         });
     }
+    /**
+     * Performs the open key manager operation for the command registrar.
+     *
+     * @return the result described above
+     */
     private static int openKeyManager() {
         // Queue the screen change until the command's chat screen has closed.
         Minecraft.getInstance().schedule(() -> Krypt04McgMod.instance().openKeyManagerScreen());
         return 1;
     }
 
+    /**
+     * Performs the copyable fingerprint operation for the command registrar.
+     *
+     * @param fingerprint the fingerprint supplied to this operation
+     * @return the result described above
+     */
     private static Component copyableFingerprint(String fingerprint) {
         return Component.literal(fingerprint).withStyle(style -> style
                 .withColor(ChatFormatting.AQUA)
                 .withUnderlined(true)
                 .withClickEvent(new ClickEvent.CopyToClipboard(fingerprint)));
     }
+    /**
+     * Performs the root command operation for the command registrar.
+     *
+     * @param name the name supplied to this operation
+     * @param chatSendService the chat send service supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param decryptionHistoryService the decryption history service supplied to this operation
+     * @param groupService the group service supplied to this operation
+     * @param config the config supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> rootCommand(String name,
                                                                                  ChatSendService chatSendService,
                                                                                  KeyStoreService keyStoreService,
@@ -88,6 +126,13 @@ public final class CommandRegistrar {
                     .then(keyCommand(keyStoreService, keyTrustService, sessionService, config));
     }
 
+    /**
+     * Performs the tell command operation for the command registrar.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @param signed the signed supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> tellCommand(ChatSendService chatSendService, boolean signed) {
         return ClientCommands.literal(signed ? "stell" : "tell")
                 .then(ClientCommands.argument("receiver", EntityArgument.player())
@@ -101,6 +146,12 @@ public final class CommandRegistrar {
                                 })));
     }
 
+    /**
+     * Performs the exchange command operation for the command registrar.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> exchangeCommand(ChatSendService chatSendService) {
         return ClientCommands.literal("exchange")
                 .then(ClientCommands.argument("receiver", EntityArgument.player())
@@ -110,6 +161,12 @@ public final class CommandRegistrar {
                         }));
     }
 
+    /**
+     * Performs the etell command operation for the command registrar.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> etellCommand(ChatSendService chatSendService) {
         return ClientCommands.literal("etell")
                 .then(ClientCommands.argument("receiver", EntityArgument.player())
@@ -122,6 +179,13 @@ public final class CommandRegistrar {
                                 })));
     }
 
+    /**
+     * Performs the gtell command operation for the command registrar.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @param groupService the group service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> gtellCommand(ChatSendService chatSendService,
                                                                                  GroupService groupService) {
         return ClientCommands.literal("gtell")
@@ -143,6 +207,12 @@ public final class CommandRegistrar {
                                 })));
     }
 
+    /**
+     * Performs the group command operation for the command registrar.
+     *
+     * @param groupService the group service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> groupCommand(GroupService groupService) {
         return ClientCommands.literal("group")
                 .then(ClientCommands.literal("create")
@@ -193,6 +263,12 @@ public final class CommandRegistrar {
                                 })));
     }
 
+    /**
+     * Performs the resend command operation for the command registrar.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> resendCommand(ChatSendService chatSendService) {
         return ClientCommands.literal("resend")
                 .executes(ctx -> {
@@ -206,6 +282,14 @@ public final class CommandRegistrar {
                         }));
     }
 
+    /**
+     * Performs the session command operation for the command registrar.
+     *
+     * @param chatSendService the chat send service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param config the config supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> sessionCommand(ChatSendService chatSendService,
                                                                                    SessionService sessionService,
                                                                                    Krypt04McgConfig config) {
@@ -252,6 +336,13 @@ public final class CommandRegistrar {
                                 })));
     }
 
+    /**
+     * Performs the show algorithms command operation for the command registrar.
+     *
+     * @param config the config supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> showAlgorithmsCommand(Krypt04McgConfig config,
                                                                                            KeyStoreService keyStoreService) {
         return ClientCommands.literal("showalgs")
@@ -267,6 +358,16 @@ public final class CommandRegistrar {
                 });
     }
 
+    /**
+     * Performs the status command operation for the command registrar.
+     *
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param decryptionHistoryService the decryption history service supplied to this operation
+     * @param config the config supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> statusCommand(KeyStoreService keyStoreService,
                                                                                   KeyTrustService keyTrustService,
                                                                                   SessionService sessionService,
@@ -281,6 +382,15 @@ public final class CommandRegistrar {
                         }));
     }
 
+    /**
+     * Performs the key command operation for the command registrar.
+     *
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param config the config supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> keyCommand(KeyStoreService keyStoreService,
                                                                                KeyTrustService keyTrustService,
                                                                                SessionService sessionService,
@@ -409,6 +519,15 @@ public final class CommandRegistrar {
                 .then(trustCommand("distrust", keyStoreService, keyTrustService, TrustState.DISTRUSTED));
     }
 
+    /**
+     * Performs the remove key command operation for the command registrar.
+     *
+     * @param name the name supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> removeKeyCommand(String name,
                                                                                     KeyStoreService keyStoreService,
                                                                                     KeyTrustService keyTrustService,
@@ -435,6 +554,15 @@ public final class CommandRegistrar {
                         }));
     }
 
+    /**
+     * Performs the trust command operation for the command registrar.
+     *
+     * @param name the name supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param trustState the trust state supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> trustCommand(String name, KeyStoreService keyStoreService,
                                                                                  KeyTrustService keyTrustService,
                                                                                  TrustState trustState) {
@@ -466,6 +594,13 @@ public final class CommandRegistrar {
                         }));
     }
 
+    /**
+     * Performs the verify command operation for the command registrar.
+     *
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @return the result described above
+     */
     private static LiteralArgumentBuilder<FabricClientCommandSource> verifyCommand(KeyStoreService keyStoreService,
                                                                                   KeyTrustService keyTrustService) {
         return ClientCommands.literal("verify")
@@ -493,6 +628,17 @@ public final class CommandRegistrar {
                                 })));
     }
 
+    /**
+     * Performs the show status operation for the command registrar.
+     *
+     * @param source the source supplied to this operation
+     * @param player the player supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param decryptionHistoryService the decryption history service supplied to this operation
+     * @param config the config supplied to this operation
+     */
     private static void showStatus(FabricClientCommandSource source, String player, KeyStoreService keyStoreService,
                                    KeyTrustService keyTrustService, SessionService sessionService,
                                    DecryptionHistoryService decryptionHistoryService, Krypt04McgConfig config) {
@@ -538,6 +684,12 @@ public final class CommandRegistrar {
         }
     }
 
+    /**
+     * Parses members for the command registrar.
+     *
+     * @param raw the raw supplied to this operation
+     * @return the result described above
+     */
     private static List<String> parseMembers(String raw) {
         return Pattern.compile("[,\\s]+")
                 .splitAsStream(raw.trim())
@@ -545,6 +697,13 @@ public final class CommandRegistrar {
                 .toList();
     }
 
+    /**
+     * Returns the recorded raw for the command registrar.
+     *
+     * @param ctx the ctx supplied to this operation
+     * @param name the name supplied to this operation
+     * @return the result described above
+     */
     private static String playerName(CommandContext<FabricClientCommandSource> ctx, String name) {
         String raw = rawArgument(ctx, name);
         if ("@s".equals(raw)) {
@@ -553,6 +712,13 @@ public final class CommandRegistrar {
         return raw;
     }
 
+    /**
+     * Performs the raw argument operation for the command registrar.
+     *
+     * @param ctx the ctx supplied to this operation
+     * @param name the name supplied to this operation
+     * @return the result described above
+     */
     private static String rawArgument(CommandContext<FabricClientCommandSource> ctx, String name) {
         for (ParsedCommandNode<FabricClientCommandSource> node : ctx.getNodes()) {
             if (name.equals(node.getNode().getName())) {
@@ -563,18 +729,43 @@ public final class CommandRegistrar {
         throw new IllegalStateException(tr("text.krypt04mcg.error.generic", "Missing argument: " + name));
     }
 
+    /**
+     * Performs the feedback operation for the command registrar.
+     *
+     * @param source the source supplied to this operation
+     * @param message the message supplied to this operation
+     */
     private static void feedback(FabricClientCommandSource source, String message) {
         source.sendFeedback(Component.literal(ClientMessages.messagePrefixWithSpace() + message));
     }
 
+    /**
+     * Performs the error operation for the command registrar.
+     *
+     * @param source the source supplied to this operation
+     * @param e the e supplied to this operation
+     */
     private static void error(FabricClientCommandSource source, Exception e) {
         feedback(source, tr("text.krypt04mcg.error.generic", e.getMessage()));
     }
 
+    /**
+     * Performs the trust state label operation for the command registrar.
+     *
+     * @param trustState the trust state supplied to this operation
+     * @return the result described above
+     */
     private static String trustStateLabel(TrustState trustState) {
         return tr("text.krypt04mcg.trust." + trustState.name());
     }
 
+    /**
+     * Performs the tr operation for the command registrar.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param args the args supplied to this operation
+     * @return the result described above
+     */
     private static String tr(String key, Object... args) {
         return ClientMessages.tr(key, args);
     }

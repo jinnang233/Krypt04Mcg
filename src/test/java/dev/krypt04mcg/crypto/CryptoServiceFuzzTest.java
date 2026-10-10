@@ -23,6 +23,12 @@ final class CryptoServiceFuzzTest {
     private static LocalKeyMaterial alice;
     private static LocalKeyMaterial bob;
 
+    /**
+     * Provides the generate keys fixture operation used by the crypto service fuzz test regression
+     * scenarios.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @BeforeAll
     static void generateKeys() throws Exception {
         crypto = new CryptoService();
@@ -30,6 +36,11 @@ final class CryptoServiceFuzzTest {
         bob = crypto.generateLocalKeys("bob", "bob-uuid");
     }
 
+    /**
+     * Verifies that randomized kem messages round trip.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedKemMessagesRoundTrip() throws Exception {
         Random random = random("randomizedKemMessagesRoundTrip");
@@ -48,6 +59,11 @@ final class CryptoServiceFuzzTest {
         }
     }
 
+    /**
+     * Verifies that randomized session messages round trip.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedSessionMessagesRoundTrip() throws Exception {
         Random random = random("randomizedSessionMessagesRoundTrip");
@@ -67,6 +83,11 @@ final class CryptoServiceFuzzTest {
         }
     }
 
+    /**
+     * Verifies that randomized tampering is rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedTamperingIsRejected() throws Exception {
         Random random = random("randomizedTamperingIsRejected");
@@ -85,6 +106,11 @@ final class CryptoServiceFuzzTest {
         }
     }
 
+    /**
+     * Verifies that randomized signatures verify only original input.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void randomizedSignaturesVerifyOnlyOriginalInput() throws Exception {
         Random random = random("randomizedSignaturesVerifyOnlyOriginalInput");
@@ -105,30 +131,72 @@ final class CryptoServiceFuzzTest {
         }
     }
 
+    /**
+     * Provides the with changed ciphertext fixture operation used by the crypto service fuzz test
+     * regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static EncryptedPacket withChangedCiphertext(EncryptedPacket packet, Random random) {
         byte[] ciphertext = packet.ciphertext().clone();
         ciphertext[random.nextInt(ciphertext.length)] ^= 0x01;
         return replace(packet, packet.messageId(), packet.nonce(), ciphertext, packet.signature());
     }
 
+    /**
+     * Provides the with changed nonce fixture operation used by the crypto service fuzz test regression
+     * scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static EncryptedPacket withChangedNonce(EncryptedPacket packet, Random random) {
         byte[] nonce = packet.nonce().clone();
         nonce[random.nextInt(nonce.length)] ^= 0x01;
         return replace(packet, packet.messageId(), nonce, packet.ciphertext(), packet.signature());
     }
 
+    /**
+     * Provides the with changed message id fixture operation used by the crypto service fuzz test
+     * regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static EncryptedPacket withChangedMessageId(EncryptedPacket packet, Random random) {
         byte[] messageId = packet.messageId().clone();
         messageId[random.nextInt(messageId.length)] ^= 0x01;
         return replace(packet, messageId, packet.nonce(), packet.ciphertext(), packet.signature());
     }
 
+    /**
+     * Provides the with changed signature fixture operation used by the crypto service fuzz test
+     * regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static EncryptedPacket withChangedSignature(EncryptedPacket packet, Random random) {
         byte[] signature = packet.signature().clone();
         signature[random.nextInt(signature.length)] ^= 0x01;
         return replace(packet, packet.messageId(), packet.nonce(), packet.ciphertext(), signature);
     }
 
+    /**
+     * Provides the replace fixture operation used by the crypto service fuzz test regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @param nonce the nonce associated with this cryptographic operation
+     * @param ciphertext the encoded ciphertext to authenticate or decode
+     * @param signature the signature bytes or signature representation to verify
+     * @return the result described above
+     */
     private static EncryptedPacket replace(EncryptedPacket packet, byte[] messageId, byte[] nonce,
                                            byte[] ciphertext, byte[] signature) {
         return new EncryptedPacket(packet.protocolVersion(), packet.type(), packet.flags(), packet.sender(),
@@ -137,12 +205,25 @@ final class CryptoServiceFuzzTest {
                 signature);
     }
 
+    /**
+     * Provides the random fixture operation used by the crypto service fuzz test regression scenarios.
+     *
+     * @param testName the test name supplied to this operation
+     * @return the result described above
+     */
     private static Random random(String testName) {
         long seed = SEED_RANDOM.nextLong();
         System.out.println(CryptoServiceFuzzTest.class.getSimpleName() + "." + testName + " seed=" + seed);
         return new Random(seed);
     }
 
+    /**
+     * Provides the random message fixture operation used by the crypto service fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomMessage(Random random) {
         int length = random.nextInt(180);
         StringBuilder builder = new StringBuilder(length);
@@ -159,12 +240,27 @@ final class CryptoServiceFuzzTest {
         return builder.toString();
     }
 
+    /**
+     * Provides the random bytes fixture operation used by the crypto service fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @param length the requested or declared byte count
+     * @return the resulting array produced by this operation
+     */
     private static byte[] randomBytes(Random random, int length) {
         byte[] bytes = new byte[length];
         random.nextBytes(bytes);
         return bytes;
     }
 
+    /**
+     * Provides the public identity fixture operation used by the crypto service fuzz test regression
+     * scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

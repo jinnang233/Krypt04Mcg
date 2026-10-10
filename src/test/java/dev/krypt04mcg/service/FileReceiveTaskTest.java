@@ -18,6 +18,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(10)
 class FileReceiveTaskTest {
+    /**
+     * Verifies that slow nonempty progress cannot extend deadline and worker can be reused.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void slowNonemptyProgressCannotExtendDeadlineAndWorkerCanBeReused() throws Exception {
         var clock = new AtomicLong();
         var socket = socket();
@@ -56,6 +61,11 @@ class FileReceiveTaskTest {
         }
     }
 
+    /**
+     * Verifies that complete contents without authenticated eof still expire.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void completeContentsWithoutAuthenticatedEofStillExpire() throws Exception {
         var clock = new AtomicLong();
         var socket = socket();
@@ -74,6 +84,11 @@ class FileReceiveTaskTest {
         }
     }
 
+    /**
+     * Verifies that late complete input is rejected even before next tick.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void lateCompleteInputIsRejectedEvenBeforeNextTick() throws Exception {
         var clock = new AtomicLong();
         var socket = socket();
@@ -84,6 +99,11 @@ class FileReceiveTaskTest {
         assertTrue(socket.isFailed());
     }
 
+    /**
+     * Verifies that successful read is not expired while its ui callback waits.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void successfulReadIsNotExpiredWhileItsUiCallbackWaits() throws Exception {
         var clock = new AtomicLong();
         var socket = socket();
@@ -106,6 +126,11 @@ class FileReceiveTaskTest {
         }
     }
 
+    /**
+     * Verifies that cancellation unblocks the reader and releases the worker.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void cancellationUnblocksTheReaderAndReleasesTheWorker() throws Exception {
         var socket = socket();
         var task = new FileReceiveTask(socket);
@@ -120,8 +145,20 @@ class FileReceiveTaskTest {
         }
     }
 
+    /**
+     * Provides the socket fixture operation used by the file receive task test regression scenarios.
+     *
+     * @return the result described above
+     */
     private static KryptSocket socket() { return new KryptSocket("Bob", "krypt04mcg_file:stream", UUID.randomUUID()); }
 
+    /**
+     * Provides the header fixture operation used by the file receive task test regression scenarios.
+     *
+     * @param size the size supplied to this operation
+     * @return the resulting array produced by this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static byte[] header(int size) throws IOException {
         var bytes = new ByteArrayOutputStream();
         var out = new DataOutputStream(bytes);
@@ -129,6 +166,12 @@ class FileReceiveTaskTest {
         return bytes.toByteArray();
     }
 
+    /**
+     * Provides the complete fixture operation used by the file receive task test regression scenarios.
+     *
+     * @param completions the completions supplied to this operation
+     * @throws InterruptedException if the waiting thread is interrupted
+     */
     private static void complete(ArrayBlockingQueue<Runnable> completions) throws InterruptedException {
         Runnable completion = completions.poll(5, TimeUnit.SECONDS);
         assertNotNull(completion);

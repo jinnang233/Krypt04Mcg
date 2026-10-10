@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RawChannelPayloadTest {
+    /**
+     * Verifies that minecraft payload contains exactly ciphertext and tag.
+     */
     @Test void minecraftPayloadContainsExactlyCiphertextAndTag() {
         byte[] ciphertext = new byte[123];
         for (int i = 0; i < ciphertext.length; i++) ciphertext[i] = (byte) i;
@@ -22,6 +25,9 @@ class RawChannelPayloadTest {
             assertEquals("krypt04mcg_stream:data/7", decoded.type().id().toString());
         } finally { buffer.release(); }
     }
+    /**
+     * Verifies that rejects missing tag and oversized record before allocation.
+     */
     @Test void rejectsMissingTagAndOversizedRecordBeforeAllocation() {
         for (int size : new int[]{15, RawChannelPayload.MAX_PLAINTEXT + RawChannelPayload.TAG_BYTES + 1}) {
             var buffer = new FriendlyByteBuf(Unpooled.wrappedBuffer(new byte[size]));

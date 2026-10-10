@@ -15,6 +15,9 @@ final class Krypt04McgConfigFuzzTest {
     private static final SecureRandom SEED_RANDOM = new SecureRandom();
     private static final int CASES = 200;
 
+    /**
+     * Verifies that randomized configs json round trip.
+     */
     @Test
     void randomizedConfigsJsonRoundTrip() {
         Random random = random("randomizedConfigsJsonRoundTrip");
@@ -53,6 +56,9 @@ final class Krypt04McgConfigFuzzTest {
         }
     }
 
+    /**
+     * Verifies that randomized regex configs compile or fail cleanly.
+     */
     @Test
     void randomizedRegexConfigsCompileOrFailCleanly() {
         Random random = random("randomizedRegexConfigsCompileOrFailCleanly");
@@ -67,6 +73,12 @@ final class Krypt04McgConfigFuzzTest {
         }
     }
 
+    /**
+     * Provides the compile or reject fixture operation used by the krypt04 mcg config fuzz test regression
+     * scenarios.
+     *
+     * @param regex the regex supplied to this operation
+     */
     private static void compileOrReject(String regex) {
         try {
             Pattern.compile(regex);
@@ -75,12 +87,25 @@ final class Krypt04McgConfigFuzzTest {
         }
     }
 
+    /**
+     * Provides the random fixture operation used by the krypt04 mcg config fuzz test regression scenarios.
+     *
+     * @param testName the test name supplied to this operation
+     * @return the result described above
+     */
     private static Random random(String testName) {
         long seed = SEED_RANDOM.nextLong();
         System.out.println(Krypt04McgConfigFuzzTest.class.getSimpleName() + "." + testName + " seed=" + seed);
         return new Random(seed);
     }
 
+    /**
+     * Provides the random config fixture operation used by the krypt04 mcg config fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static Krypt04McgConfig randomConfig(Random random) {
         Krypt04McgConfig config = new Krypt04McgConfig();
         config.showProgress = random.nextBoolean();
@@ -110,6 +135,13 @@ final class Krypt04McgConfigFuzzTest {
         return config;
     }
 
+    /**
+     * Provides the random regex fixture operation used by the krypt04 mcg config fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomRegex(Random random) {
         String[] corpus = {
                 "^\\[KRYPT04MCG\\] .+",
@@ -122,6 +154,13 @@ final class Krypt04McgConfigFuzzTest {
         return corpus[random.nextInt(corpus.length)];
     }
 
+    /**
+     * Provides the random token fixture operation used by the krypt04 mcg config fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomToken(Random random) {
         int length = 1 + random.nextInt(32);
         StringBuilder builder = new StringBuilder(length);

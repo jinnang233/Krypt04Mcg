@@ -26,6 +26,11 @@ final class HandshakeEpochCommitTest {
     static final AeadAlgorithm AEAD = AeadAlgorithm.AES_256_GCM;
     static final KemAlgorithm KEM = KemAlgorithm.ML_KEM_768;
 
+    /**
+     * Verifies that prepared responder can initiate recovery after peer installed candidate.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void preparedResponderCanInitiateRecoveryAfterPeerInstalledCandidate() throws Exception {
         try (var f = new Fixture()) {
             f.exchange();
@@ -48,6 +53,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that prepared responder can recover when peer restarted before receiving response.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void preparedResponderCanRecoverWhenPeerRestartedBeforeReceivingResponse() throws Exception {
         try (var f = new Fixture()) {
             f.exchange();
@@ -78,10 +88,16 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that recovery uses request predecessor after multiple lost responses.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void recoveryUsesRequestPredecessorAfterMultipleLostResponses() throws Exception {
         try (var f = new Fixture()) {
             f.exchange();
-            f.accept(f.begin(), (packet, peer) -> {}); // committed locally, never installed by the peer
+            f.accept(f.begin(), (packet, peer) -> {});
+            // committed locally, never installed by the peer
             assertThrows(IOException.class, () -> f.accept(f.begin(), (packet, peer) -> { throw new IOException("offline"); }));
             f.ah.close();
             f.as = new SessionService(root.resolve("alice"));
@@ -107,6 +123,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that error reported after atomic replacement still leaves one consistent epoch.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void errorReportedAfterAtomicReplacementStillLeavesOneConsistentEpoch() throws Exception {
         try (var f = new Fixture()) {
             f.exchange();
@@ -137,6 +158,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that ephemeral key expiry rejects late response and allows fresh handshake.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void ephemeralKeyExpiryRejectsLateResponseAndAllowsFreshHandshake() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
@@ -169,6 +195,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that preparation failure does not send or consume replay state.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void preparationFailureDoesNotSendOrConsumeReplayState() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
@@ -186,6 +217,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that signed successor recovers an interrupted commit before rotating.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void signedSuccessorRecoversAnInterruptedCommitBeforeRotating() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
@@ -202,13 +238,19 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that interrupted delivery reuses the persisted response after restart.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void interruptedDeliveryReusesThePersistedResponseAfterRestart() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
             var responses = new ArrayList<EncryptedPacket>();
             assertThrows(SimulatedInterruption.class, () -> f.accept(request, (packet, peer) -> {
                 responses.add(packet);
-                throw new SimulatedInterruption(); // interruption after delivery, before commit
+                throw new SimulatedInterruption();
+                // interruption after delivery, before commit
             }));
             f.finish(responses.getFirst());
             f.restartResponder();
@@ -223,6 +265,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that final commit failure is recoverable and never exposes old keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void finalCommitFailureIsRecoverableAndNeverExposesOldKeys() throws Exception {
         try (var f = new Fixture()) {
             f.exchange();
@@ -245,6 +292,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that initiator save failure retains the response key and allows retry.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void initiatorSaveFailureRetainsTheResponseKeyAndAllowsRetry() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
@@ -262,10 +314,16 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that lost response and initiator restart allow fresh negotiation.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void lostResponseAndInitiatorRestartAllowFreshNegotiation() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
-            f.accept(request, (packet, peer) -> {}); // queue accepted, connection died before delivery
+            f.accept(request, (packet, peer) -> {});
+            // queue accepted, connection died before delivery
             var old = f.bs.find("alice").orElseThrow();
             f.ah.close();
             f.as = new SessionService(root.resolve("alice"));
@@ -277,6 +335,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that uncommitted response and initiator restart allow newer request.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void uncommittedResponseAndInitiatorRestartAllowNewerRequest() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
@@ -290,12 +353,18 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that stale responses cannot overwrite the winning request and rotation works both ways.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void staleResponsesCannotOverwriteTheWinningRequestAndRotationWorksBothWays() throws Exception {
         try (var f = new Fixture()) {
             var first = f.begin();
             var responses = new ArrayList<EncryptedPacket>();
             f.accept(first, (packet, peer) -> responses.add(packet));
-            f.exchange(); // supersedes the first pending request after a lost response
+            f.exchange();
+            // supersedes the first pending request after a lost response
             assertThrows(Exception.class, () -> f.finish(responses.getFirst()));
             for (int i = 0; i < 3; i++) {
                 var previous = f.as.find("bob").orElseThrow();
@@ -314,6 +383,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that identity key rotation keeps the predecessor binding.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void identityKeyRotationKeepsThePredecessorBinding() throws Exception {
         try (var f = new Fixture()) {
             f.exchange();
@@ -326,6 +400,11 @@ final class HandshakeEpochCommitTest {
         }
     }
 
+    /**
+     * Verifies that legacy payload cannot bypass epoch admission.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void legacyPayloadCannotBypassEpochAdmission() throws Exception {
         try (var f = new Fixture()) {
             var request = f.begin();
@@ -344,6 +423,13 @@ final class HandshakeEpochCommitTest {
     }
 
     private static final class SimulatedInterruption extends Error {}
+    /**
+     * Provides the identity fixture operation used by the handshake epoch commit test regression
+     * scenarios.
+     *
+     * @param keys the keys supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity identity(LocalKeyMaterial keys) {
         return new PublicIdentity(keys.kemPublicKey().owner(), keys.kemPublicKey().uuid(), keys.kemPublicKey(), keys.signaturePublicKey());
     }
@@ -353,7 +439,20 @@ final class HandshakeEpochCommitTest {
         final AtomicBoolean failAliceWrites = new AtomicBoolean(), failBobWrites = new AtomicBoolean();
         SessionService as = faultStore("alice", failAliceWrites), bs = faultStore("bob", failBobWrites);
         SessionHandshakeService ah = new SessionHandshakeService(crypto, as), bh = new SessionHandshakeService(crypto, bs);
+        /**
+         * Creates the fixture fixture with its supplied initial state.
+         *
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         Fixture() throws Exception {}
+        /**
+         * Provides the fault store fixture operation used by the handshake epoch commit test regression
+         * scenarios.
+         *
+         * @param owner the owner identifier associated with the stored key records
+         * @param failWrites the fail writes supplied to this operation
+         * @return the result described above
+         */
         SessionService faultStore(String owner, AtomicBoolean failWrites) {
             var path = root.resolve(owner);
             var files = new SensitiveFileStore(path);
@@ -362,24 +461,63 @@ final class HandshakeEpochCommitTest {
                 files.writeDurableString(destination, value);
             });
         }
+        /**
+         * Provides the begin fixture operation used by the handshake epoch commit test regression scenarios.
+         *
+         * @return the result described above
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         EncryptedPacket begin() throws Exception { return ah.begin(identity(bob), alice, KEM, false, AEAD); }
+        /**
+         * Provides the accept fixture operation used by the handshake epoch commit test regression scenarios.
+         *
+         * @param request the request supplied to this operation
+         * @param sender the sender or source associated with this operation
+         * @return whether the condition or operation described above succeeds
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         boolean accept(EncryptedPacket request, SessionHandshakeService.PacketSender sender) throws Exception {
             return bh.complete(request, bh.decrypt(request, bob, identity(alice)), identity(alice), bob, false, AEAD, sender);
         }
+        /**
+         * Provides the finish fixture operation used by the handshake epoch commit test regression scenarios.
+         *
+         * @param reply the reply supplied to this operation
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         void finish(EncryptedPacket reply) throws Exception {
             assertTrue(ah.complete(reply, ah.decrypt(reply, alice, identity(bob)), identity(bob), alice, false, AEAD, (p, peer) -> fail()));
         }
+        /**
+         * Provides the exchange fixture operation used by the handshake epoch commit test regression
+         * scenarios.
+         *
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         void exchange() throws Exception {
             var request = begin();
             var replies = new ArrayList<EncryptedPacket>();
             assertTrue(accept(request, (packet, peer) -> replies.add(packet)));
             finish(replies.getFirst());
         }
+        /**
+         * Provides the restart responder fixture operation used by the handshake epoch commit test regression
+         * scenarios.
+         */
         void restartResponder() { bh.close(); bs = new SessionService(root.resolve("bob")); bh = new SessionHandshakeService(crypto, bs); }
+        /**
+         * Provides the assert agreement fixture operation used by the handshake epoch commit test regression
+         * scenarios.
+         *
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         void assertAgreement() throws Exception {
             assertEquals(as.find("bob").orElseThrow().sessionId(), bs.find("alice").orElseThrow().sessionId());
             assertEquals(as.find("bob").orElseThrow().secret(), bs.find("alice").orElseThrow().secret());
         }
+        /**
+         * Provides the close fixture operation used by the handshake epoch commit test regression scenarios.
+         */
         @Override public void close() { ah.close(); bh.close(); }
     }
 }

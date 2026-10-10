@@ -30,20 +30,40 @@ public final class ChatConversationStore {
     private final SensitiveFileStore sensitiveFiles;
     private boolean loaded;
 
+    /**
+     * Creates a chat conversation store with the supplied dependencies and initial state.
+     */
     public ChatConversationStore() {
         this.historyFile = null;
         this.enabled = () -> true;
         this.sensitiveFiles = null;
     }
 
+    /**
+     * Creates a chat conversation store with the supplied dependencies and initial state.
+     *
+     * @param root the account or configuration storage root
+     */
     public ChatConversationStore(Path root) {
         this(root, true);
     }
 
+    /**
+     * Creates a chat conversation store with the supplied dependencies and initial state.
+     *
+     * @param root the account or configuration storage root
+     * @param enabled the enabled supplied to this operation
+     */
     public ChatConversationStore(Path root, boolean enabled) {
         this(root, () -> enabled);
     }
 
+    /**
+     * Creates a chat conversation store with the supplied dependencies and initial state.
+     *
+     * @param root the account or configuration storage root
+     * @param enabled the enabled supplied to this operation
+     */
     public ChatConversationStore(Path root, BooleanSupplier enabled) {
         this.historyFile = root.resolve("cache").resolve("conversations.json");
         this.enabled = enabled;
@@ -51,34 +71,81 @@ public final class ChatConversationStore {
         load();
     }
 
+    /**
+     * Performs the incoming operation for the encrypted conversation history.
+     *
+     * @param player the player supplied to this operation
+     * @param message the message supplied to this operation
+     */
     public synchronized void incoming(String player, String message) {
         record(player, message, false, false);
     }
 
+    /**
+     * Performs the outgoing operation for the encrypted conversation history.
+     *
+     * @param player the player supplied to this operation
+     * @param message the message supplied to this operation
+     */
     public synchronized void outgoing(String player, String message) {
         record(player, message, true, false);
     }
 
+    /**
+     * Performs the outgoing group operation for the encrypted conversation history.
+     *
+     * @param group the group supplied to this operation
+     * @param message the message supplied to this operation
+     */
     public synchronized void outgoingGroup(String group, String message) {
         record(group, message, true, true);
     }
 
+    /**
+     * Performs the messages for operation for the encrypted conversation history.
+     *
+     * @param player the player supplied to this operation
+     * @return the result described above
+     */
     public synchronized List<Entry> messagesFor(String player) {
         return messagesForTarget(player, false);
     }
 
+    /**
+     * Performs the messages for group operation for the encrypted conversation history.
+     *
+     * @param group the group supplied to this operation
+     * @return the result described above
+     */
     public synchronized List<Entry> messagesForGroup(String group) {
         return messagesForTarget(group, true);
     }
 
+    /**
+     * Performs the peers operation for the encrypted conversation history.
+     *
+     * @return the result described above
+     */
     public synchronized List<String> peers() {
         return targets(false);
     }
 
+    /**
+     * Performs the groups operation for the encrypted conversation history.
+     *
+     * @return the result described above
+     */
     public synchronized List<String> groups() {
         return targets(true);
     }
 
+    /**
+     * Performs the messages for target operation for the encrypted conversation history.
+     *
+     * @param target the target supplied to this operation
+     * @param group the group supplied to this operation
+     * @return the result described above
+     */
     private List<Entry> messagesForTarget(String target, boolean group) {
         return entries.stream()
                 .filter(entry -> entry.group() == group)
@@ -86,6 +153,12 @@ public final class ChatConversationStore {
                 .toList();
     }
 
+    /**
+     * Performs the targets operation for the encrypted conversation history.
+     *
+     * @param group the group supplied to this operation
+     * @return the result described above
+     */
     private List<String> targets(boolean group) {
         Set<String> targets = new LinkedHashSet<>();
         entries.stream()
@@ -95,6 +168,14 @@ public final class ChatConversationStore {
         return List.copyOf(targets);
     }
 
+    /**
+     * Performs the record operation for the encrypted conversation history.
+     *
+     * @param target the target supplied to this operation
+     * @param message the message supplied to this operation
+     * @param outgoing the outgoing supplied to this operation
+     * @param group the group supplied to this operation
+     */
     private void record(String target, String message, boolean outgoing, boolean group) {
         // Live conversations remain available even when persistent history is disabled.
         load();
@@ -106,6 +187,9 @@ public final class ChatConversationStore {
         save();
     }
 
+    /**
+     * Performs the load operation for the encrypted conversation history.
+     */
     private void load() {
         if (loaded) {
             return;
@@ -139,6 +223,9 @@ public final class ChatConversationStore {
         }
     }
 
+    /**
+     * Performs the save operation for the encrypted conversation history.
+     */
     private void save() {
         if (!enabled.getAsBoolean() || historyFile == null) {
             return;
@@ -150,6 +237,9 @@ public final class ChatConversationStore {
         }
     }
 
+    /**
+     * Performs the trim operation for the encrypted conversation history.
+     */
     private void trim() {
         while (entries.size() > MAX_MESSAGES) {
             entries.removeFirst();
@@ -157,6 +247,11 @@ public final class ChatConversationStore {
     }
 
     public record Entry(String target, String message, boolean outgoing, Instant createdAt, boolean group) {
+        /**
+         * Reports whether valid holds for the encrypted conversation history.
+         *
+         * @return whether the condition or operation described above succeeds
+         */
         private boolean isValid() {
             return target != null && !target.isBlank()
                     && message != null && !message.isBlank()

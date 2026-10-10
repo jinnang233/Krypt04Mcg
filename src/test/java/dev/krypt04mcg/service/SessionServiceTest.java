@@ -17,6 +17,11 @@ final class SessionServiceTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that legacy records migrate without losing counters and clear retains epoch.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void legacyRecordsMigrateWithoutLosingCountersAndClearRetainsEpoch() throws Exception {
         var sessions = new SessionService(tempDir);
         var fresh = sessions.newSession("bob", "kem:sig");
@@ -38,6 +43,11 @@ final class SessionServiceTest {
         assertTrue(next.requestEpoch() > first.requestEpoch());
     }
 
+    /**
+     * Verifies that session secrets are encrypted and sequences advance atomically.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void sessionSecretsAreEncryptedAndSequencesAdvanceAtomically() throws Exception {
         SessionService sessions = new SessionService(tempDir);
@@ -57,13 +67,19 @@ final class SessionServiceTest {
         assertEquals(12, updated.bytesUsed());
     }
 
+    /**
+     * Verifies that api sequence lanes persist without changing chat sequence and reject replays.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void apiSequenceLanesPersistWithoutChangingChatSequenceAndRejectReplays() throws Exception {
         SessionService sessions = new SessionService(tempDir);
         SessionRecord created = sessions.newSession("bob", "kem:sig").withLocalFingerprint("own:keys");
         sessions.save(created);
         assertEquals(0, sessions.reserveApiSend("bob", created.sessionId(), false, 10));
         assertEquals(1, sessions.reserveApiSend("bob", created.sessionId(), true, 0));
-        sessions.recordApiReceived("bob", created.sessionId(), 4, false, 20); // A failed encryption may leave a gap.
+        sessions.recordApiReceived("bob", created.sessionId(), 4, false, 20);
+        // A failed encryption may leave a gap.
         sessions.recordApiReceived("bob", created.sessionId(), 3, true, 0);
         sessions.recordSentMessage("bob", 0, 5);
         sessions.recordReceivedMessage("bob", created.sessionId(), 0, 7);
@@ -75,7 +91,8 @@ final class SessionServiceTest {
         assertEquals(2, restored.nextApiControlReceiveSequence());
         assertEquals(1, restored.nextSendSequence());
         assertEquals(1, restored.nextReceiveSequence());
-        assertEquals(4, restored.messageCount()); // ACKs do not consume the application rotation budget.
+        assertEquals(4, restored.messageCount());
+        // ACKs do not consume the application rotation budget.
         assertEquals(42, restored.bytesUsed());
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 4, false, 0));
         assertThrows(java.io.IOException.class, () -> sessions.recordApiReceived("bob", created.sessionId(), 2, false, 0));

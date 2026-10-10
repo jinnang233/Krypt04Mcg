@@ -18,6 +18,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class DataTransferServiceTest {
     @TempDir Path root;
     static final String CHANNEL = "test:stream";
+    /**
+     * Verifies that simultaneous api handshake converges and can rotate again.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void simultaneousApiHandshakeConvergesAndCanRotateAgain() throws Exception {
         try (var pair = new Pair()) {
             var alice = pair.alice.connect("Bob");
@@ -36,11 +41,17 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Verifies that disconnect before decryption completion does not consume request.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void disconnectBeforeDecryptionCompletionDoesNotConsumeRequest() throws Exception {
         try (var pair = new Pair()) {
             pair.alice.connect("Bob");
             pair.until(() -> !pair.controls.isEmpty());
-            pair.bob.tick(); // submit decrypt; its commit callback has not run yet
+            pair.bob.tick();
+            // submit decrypt; its commit callback has not run yet
             assertTrue(exchangeWorker(pair.bob).busy());
             pair.bob.clear();
             pair.until(() -> !exchangeWorker(pair.bob).busy());
@@ -52,6 +63,11 @@ class DataTransferServiceTest {
             assertTrue(sessions.find("Alice").isPresent());
         }
     }
+    /**
+     * Verifies that handshake timeout rejects late response and allows renegotiation.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void handshakeTimeoutRejectsLateResponseAndAllowsRenegotiation() throws Exception {
         try (var pair = new Pair()) {
             pair.dropResponse = true;
@@ -77,6 +93,11 @@ class DataTransferServiceTest {
                     new SessionService(root.resolve("alice-api")).find("Bob").orElseThrow().sessionId());
         }
     }
+    /**
+     * Verifies that failed response send can retry the same authenticated request.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void failedResponseSendCanRetryTheSameAuthenticatedRequest() throws Exception {
         try (var pair = new Pair()) {
             pair.failResponse = true;
@@ -92,6 +113,11 @@ class DataTransferServiceTest {
                     "Failed send must not burn the request's Message ID / Nonce");
         }
     }
+    /**
+     * Verifies that self connections are rejected before exchange.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void selfConnectionsAreRejectedBeforeExchange() throws Exception {
         try (var pair = new Pair()) {
             assertThrows(IllegalArgumentException.class, () -> pair.alice.connect("aLiCe"));
@@ -100,6 +126,11 @@ class DataTransferServiceTest {
             assertTrue(pair.controls.isEmpty());
         }
     }
+    /**
+     * Verifies that exchange allocation raw duplex and authenticated eof without receipts.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void exchangeAllocationRawDuplexAndAuthenticatedEofWithoutReceipts() throws Exception {
         try (var pair = new Pair()) {
             var left = pair.alice.open("Bob", CHANNEL);
@@ -114,15 +145,26 @@ class DataTransferServiceTest {
                     ControlPayload.Kind.ASSIGNED, ControlPayload.Kind.READY, ControlPayload.Kind.END).contains(p.kind())));
         }
     }
+    /**
+     * Verifies that dropped record fails at authenticated end.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void droppedRecordFailsAtAuthenticatedEnd() throws Exception {
         try (var pair = new Pair()) {
             pair.dropData = true;
             var left = pair.alice.open("Bob", CHANNEL); left.getOutputStream().write(new byte[]{1}); left.close();
             pair.until(() -> pair.right != null && pair.right.isFailed());
             assertThrows(IOException.class, () -> pair.right.getInputStream().read());
-            assertEquals(1, pair.raw.size()); // No retry or resend.
+            assertEquals(1, pair.raw.size());
+            // No retry or resend.
         }
     }
+    /**
+     * Verifies that replay and ciphertext tampering fail closed.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void replayAndCiphertextTamperingFailClosed() throws Exception {
         try (var pair = new Pair()) {
             pair.keepOpen = true;
@@ -137,6 +179,11 @@ class DataTransferServiceTest {
             pair.until(() -> pair.right != null && pair.right.isFailed());
         }
     }
+    /**
+     * Verifies that forged close cannot produce eof and disconnect unblocks reader.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void forgedCloseCannotProduceEofAndDisconnectUnblocksReader() throws Exception {
         try (var pair = new Pair()) {
             pair.keepOpen = true;
@@ -152,6 +199,11 @@ class DataTransferServiceTest {
             pair.alice.clear(); assertTrue(left.isFailed());
         }
     }
+    /**
+     * Verifies that disabled api rejects open but file stream uses own settings.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void disabledApiRejectsOpenButFileStreamUsesOwnSettings() throws Exception {
         try (var pair = new Pair()) {
             pair.config.enableDataApi = false;
@@ -161,12 +213,22 @@ class DataTransferServiceTest {
             assertFalse(socket.isFailed());
         }
     }
+    /**
+     * Verifies that channel pool and stream buffers are bounded.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void channelPoolAndStreamBuffersAreBounded() throws Exception {
         try (var pair = new Pair()) {
             for (int i = 0; i < pair.config.apiChannelCount; i++) pair.alice.open("Bob", CHANNEL);
             assertThrows(IllegalStateException.class, () -> pair.alice.open("Bob", CHANNEL));
         }
     }
+    /**
+     * Verifies that byte receiver gets stream portions and no application acknowledgements.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void byteReceiverGetsStreamPortionsAndNoApplicationAcknowledgements() throws Exception {
         try (var pair = new Pair()) {
             Krypt04McgApi.unregisterSocketReceiver(CHANNEL);
@@ -180,6 +242,11 @@ class DataTransferServiceTest {
             assertArrayEquals(bytes, received.toByteArray());
         }
     }
+    /**
+     * Verifies that paced data resumes after output buffer fills.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void pacedDataResumesAfterOutputBufferFills() throws Exception {
         try (var pair = new Pair()) {
             Krypt04McgApi.unregisterSocketReceiver(CHANNEL);
@@ -208,6 +275,11 @@ class DataTransferServiceTest {
             assertArrayEquals(bytes, received.toByteArray());
         }
     }
+    /**
+     * Verifies that unsupported server leaves transport dormant and fails only requested api work.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void unsupportedServerLeavesTransportDormantAndFailsOnlyRequestedApiWork() throws Exception {
         try (var pair = new Pair()) {
             pair.unavailable = true;
@@ -217,6 +289,11 @@ class DataTransferServiceTest {
             assertThrows(IllegalStateException.class, () -> pair.alice.connect("Bob"));
         }
     }
+    /**
+     * Verifies that slots can be reused with fresh keys and old open cannot be replayed.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void slotsCanBeReusedWithFreshKeysAndOldOpenCannotBeReplayed() throws Exception {
         try (var pair = new Pair()) {
             var first = pair.alice.open("Bob", CHANNEL); first.getOutputStream().write(1); first.close();
@@ -235,6 +312,11 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Verifies that accepted exchange cannot reset session after disconnect.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void acceptedExchangeCannotResetSessionAfterDisconnect() throws Exception {
         try (var pair = new Pair()) {
             var connected = pair.alice.connect("Bob");
@@ -260,6 +342,11 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Verifies that accepted exchange cannot reset session after service restart.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void acceptedExchangeCannotResetSessionAfterServiceRestart() throws Exception {
         ControlPayload request;
         dev.krypt04mcg.model.SessionRecord original;
@@ -281,6 +368,13 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Provides the exchange worker fixture operation used by the data transfer service test regression
+     * scenarios.
+     *
+     * @param service the service supplied to this operation
+     * @return the result described above
+     */
     private static SharingWorker exchangeWorker(DataTransferService service) {
         try {
             var field = DataTransferService.class.getDeclaredField("worker");
@@ -291,6 +385,11 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Verifies that accepted old exchange cannot replace a newer session after restart.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void acceptedOldExchangeCannotReplaceANewerSessionAfterRestart() throws Exception {
         ControlPayload request;
         String originalId;
@@ -315,6 +414,11 @@ class DataTransferServiceTest {
                     "A completed request must not roll back a newer session epoch");
         }
     }
+    /**
+     * Verifies that large file consumes socket as stream without reassembly.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void largeFileConsumesSocketAsStreamWithoutReassembly() throws Exception {
         try (var pair = new Pair(); var reader = java.util.concurrent.Executors.newSingleThreadExecutor()) {
             pair.keepOpen = true;
@@ -340,6 +444,11 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Verifies that empty authenticated record cannot keep incomplete file worker busy.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void emptyAuthenticatedRecordCannotKeepIncompleteFileWorkerBusy() throws Exception {
         try (var pair = new Pair(); var worker = new SharingWorker()) {
             pair.keepOpen = true;
@@ -379,6 +488,11 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Verifies that nonempty authenticated record refreshes stream activity.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void nonemptyAuthenticatedRecordRefreshesStreamActivity() throws Exception {
         try (var pair = new Pair()) {
             pair.keepOpen = true;
@@ -397,6 +511,14 @@ class DataTransferServiceTest {
         }
     }
 
+    /**
+     * Provides the stream fixture operation used by the data transfer service test regression scenarios.
+     *
+     * @param service the service supplied to this operation
+     * @param id the id supplied to this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private static Object stream(DataTransferService service, UUID id) throws Exception {
         var streams = DataTransferService.class.getDeclaredField("streams");
         streams.setAccessible(true);
@@ -406,7 +528,18 @@ class DataTransferServiceTest {
     private static final class TestChannels {
         private final Route[] slots = new Route[2];
         private final java.util.function.BiConsumer<String, CustomPacketPayload> delivery;
+        /**
+         * Creates the test channels fixture with its supplied initial state.
+         *
+         * @param delivery the delivery supplied to this operation
+         */
         TestChannels(java.util.function.BiConsumer<String, CustomPacketPayload> delivery) { this.delivery = delivery; }
+        /**
+         * Provides the receive fixture operation used by the data transfer service test regression scenarios.
+         *
+         * @param source the source supplied to this operation
+         * @param p the p supplied to this operation
+         */
         void receive(String source, ControlPayload p) {
             if (p.kind() == ControlPayload.Kind.EXCHANGE) { delivery.accept(p.peer(), p.routed(source, p.kind(), -1)); return; }
             if (p.kind() == ControlPayload.Kind.OPEN) {
@@ -425,12 +558,24 @@ class DataTransferServiceTest {
             delivery.accept(p.peer(), p.routed(source, p.kind(), p.slot()));
             if (p.kind() == ControlPayload.Kind.RESET || r.leftEnded && r.rightEnded) slots[p.slot()] = null;
         }
+        /**
+         * Provides the receive fixture operation used by the data transfer service test regression scenarios.
+         *
+         * @param source the source supplied to this operation
+         * @param p the p supplied to this operation
+         */
         void receive(String source, RawChannelPayload p) {
             Route r = slots[p.slot()];
             if (r != null) delivery.accept(source.equals(r.left) ? r.right : r.left, p);
         }
         private static final class Route {
             final String left, right; boolean leftEnded, rightEnded;
+            /**
+             * Creates the route fixture with its supplied initial state.
+             *
+             * @param left the left supplied to this operation
+             * @param right the right supplied to this operation
+             */
             Route(String left, String right) { this.left = left; this.right = right; }
         }
     }
@@ -444,6 +589,11 @@ class DataTransferServiceTest {
         final TestChannels relay;
         KryptSocket right; boolean dropData, tamperData, keepOpen, unavailable, failResponse, dropResponse;
         int responseFailures;
+        /**
+         * Creates the pair fixture with its supplied initial state.
+         *
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         Pair() throws Exception {
             config.enableDataApi = true; config.apiChannelCount = 2;
             var crypto = new CryptoService();
@@ -467,6 +617,12 @@ class DataTransferServiceTest {
                 catch (IOException e) { throw new UncheckedIOException(e); }
             });
         }
+        /**
+         * Provides the send fixture operation used by the data transfer service test regression scenarios.
+         *
+         * @param source the source supplied to this operation
+         * @param payload the payload supplied to this operation
+         */
         void send(String source, CustomPacketPayload payload) {
             if (failResponse && source.equals("Bob") && payload instanceof ControlPayload p
                     && p.kind() == ControlPayload.Kind.EXCHANGE) {
@@ -486,11 +642,23 @@ class DataTransferServiceTest {
                 relay.receive(source, p);
             }
         }
+        /**
+         * Provides the receive fixture operation used by the data transfer service test regression scenarios.
+         *
+         * @param peer the peer identifier associated with this operation
+         * @param p the p supplied to this operation
+         */
         void receive(String peer, CustomPacketPayload p) {
             var target = peer.equalsIgnoreCase("Alice") ? alice : bob;
             if (p instanceof ControlPayload control) target.receive(control);
             else target.receive((RawChannelPayload) p);
         }
+        /**
+         * Provides the until fixture operation used by the data transfer service test regression scenarios.
+         *
+         * @param condition the condition supplied to this operation
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         void until(BooleanSupplier condition) throws Exception {
             long deadline = System.nanoTime() + 10_000_000_000L;
             while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
@@ -500,6 +668,9 @@ class DataTransferServiceTest {
             }
             assertTrue(condition.getAsBoolean(), "Transport did not reach expected state");
         }
+        /**
+         * Provides the close fixture operation used by the data transfer service test regression scenarios.
+         */
         @Override public void close() {
             alice.close(); bob.close(); aliceHandshake.close(); bobHandshake.close();
             Krypt04McgApi.unregisterSocketReceiver(CHANNEL); Krypt04McgApi.unregisterReceiver(CHANNEL);

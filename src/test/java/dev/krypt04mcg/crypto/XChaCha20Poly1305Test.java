@@ -5,6 +5,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class XChaCha20Poly1305Test {
+    /**
+     * Verifies that invalid inputs fail through the crypto contract.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void invalidInputsFailThroughTheCryptoContract() throws Exception {
         byte[] key = new byte[32], nonce = new byte[24], empty = new byte[0];
         assertThrows(CryptoException.class, () -> XChaCha20Poly1305.encrypt(null, nonce, empty, empty));
@@ -20,6 +25,11 @@ class XChaCha20Poly1305Test {
         assertArrayEquals(empty, XChaCha20Poly1305.decrypt(key, nonce, null, ciphertext));
     }
 
+    /**
+     * Verifies that failed streaming authentication never returns plaintext or mutates caller buffers.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void failedStreamingAuthenticationNeverReturnsPlaintextOrMutatesCallerBuffers() throws Exception {
         byte[] key = new byte[32], nonce = new byte[24], plain = new byte[16384];
         java.util.Arrays.fill(plain, (byte) 42);
@@ -32,8 +42,19 @@ class XChaCha20Poly1305Test {
         assertArrayEquals(new byte[32], key);
     }
 
+    /**
+     * Provides the hex fixture operation used by the x cha cha20 poly1305 test regression scenarios.
+     *
+     * @param text the text supplied to this operation
+     * @return the resulting array produced by this operation
+     */
     private static byte[] hex(String text) { return HexFormat.of().parseHex(text); }
     // Appendix A.3.1: entire ciphertext AND Poly1305 tag, independently published.
+    /**
+     * Verifies that aead published vector and tamper rejection.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void aeadPublishedVectorAndTamperRejection() throws Exception {
         byte[] key = hex("808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f");
         byte[] nonce = hex("404142434445464748494a4b4c4d4e4f5051525354555657");

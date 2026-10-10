@@ -179,6 +179,14 @@ public enum KemAlgorithm {
     private final String classicalAlgorithm;
     private final boolean nativeHybrid;
 
+    /**
+     * Creates a kem algorithm with the supplied dependencies and initial state.
+     *
+     * @param identifier the identifier supplied to this operation
+     * @param jcaName the jca name supplied to this operation
+     * @param provider the explicitly selected JCA provider name
+     * @param parameterSpec the parameter spec supplied to this operation
+     */
     KemAlgorithm(String identifier, String jcaName, String provider, AlgorithmParameterSpec parameterSpec) {
         this.identifier = identifier;
         this.jcaName = jcaName;
@@ -189,6 +197,13 @@ public enum KemAlgorithm {
         this.nativeHybrid = false;
     }
 
+    /**
+     * Creates a kem algorithm with the supplied dependencies and initial state.
+     *
+     * @param identifier the identifier supplied to this operation
+     * @param postQuantumComponent the post quantum component supplied to this operation
+     * @param classicalAlgorithm the classical algorithm supplied to this operation
+     */
     KemAlgorithm(String identifier, KemAlgorithm postQuantumComponent, String classicalAlgorithm) {
         this.identifier = identifier;
         this.jcaName = postQuantumComponent.identifier.equals("ML-KEM-768") && classicalAlgorithm.equals("X25519")
@@ -202,38 +217,84 @@ public enum KemAlgorithm {
         this.classicalAlgorithm = classicalAlgorithm;
     }
 
+    /**
+     * Returns the classical algorithm value used by the kem algorithm.
+     *
+     * @return the result described above
+     */
     public String classicalAlgorithm() {
         return classicalAlgorithm;
     }
 
+    /**
+     * Returns the native hybrid value used by the kem algorithm.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean nativeHybrid() {
         return nativeHybrid;
     }
 
+    /**
+     * Returns the hybrid value used by the kem algorithm.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean hybrid() {
         return postQuantumComponent != null;
     }
 
+    /**
+     * Returns the post quantum component value used by the kem algorithm.
+     *
+     * @return the result described above
+     */
     public KemAlgorithm postQuantumComponent() {
         return hybrid() ? postQuantumComponent : this;
     }
 
+    /**
+     * Returns the identifier value used by the kem algorithm.
+     *
+     * @return the result described above
+     */
     public String identifier() {
         return identifier;
     }
 
+    /**
+     * Returns the jca name value used by the kem algorithm.
+     *
+     * @return the result described above
+     */
     public String jcaName() {
         return jcaName;
     }
 
+    /**
+     * Returns the provider value used by the kem algorithm.
+     *
+     * @return the result described above
+     */
     public String provider() {
         return provider;
     }
 
+    /**
+     * Returns the parameter spec value used by the kem algorithm.
+     *
+     * @return the result described above
+     */
     public AlgorithmParameterSpec parameterSpec() {
         return parameterSpec;
     }
 
+    /**
+     * Resolves the supplied values into the definition used by the kem algorithm.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     */
     public static KemAlgorithm fromIdentifier(String value) {
         String normalized = withoutKeyRole(value);
         return Arrays.stream(values())
@@ -242,6 +303,12 @@ public enum KemAlgorithm {
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported KEM algorithm: " + value));
     }
 
+    /**
+     * Returns a value with the supplied out key role while retaining the other recorded fields.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     */
     private static String withoutKeyRole(String value) {
         if (value == null) {
             throw new IllegalArgumentException("KEM algorithm is missing");

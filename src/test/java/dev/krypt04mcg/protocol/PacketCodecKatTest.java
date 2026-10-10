@@ -13,6 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class PacketCodecKatTest {
+    /**
+     * Verifies that session v4 wire and aad match manual encoding.
+     */
     @Test
     void sessionV4WireAndAadMatchManualEncoding() {
         PacketCodec codec = new PacketCodec();
@@ -28,6 +31,9 @@ final class PacketCodecKatTest {
         assertEquals(0, decoded.signature().length);
     }
 
+    /**
+     * Verifies that packet encoding matches known answer vector.
+     */
     @Test
     void packetEncodingMatchesKnownAnswerVector() {
         PacketCodec codec = new PacketCodec();
@@ -44,6 +50,9 @@ final class PacketCodecKatTest {
         assertArrayEquals(packet.signature(), decoded.signature());
     }
 
+    /**
+     * Verifies that aad encoding matches manual differential vector.
+     */
     @Test
     void aadEncodingMatchesManualDifferentialVector() {
         PacketCodec codec = new PacketCodec();
@@ -52,6 +61,9 @@ final class PacketCodecKatTest {
         assertArrayEquals(manualAad(packet), codec.aadFor(packet));
     }
 
+    /**
+     * Verifies that version three authenticates timestamp and drops fragment metadata.
+     */
     @Test
     void versionThreeAuthenticatesTimestampAndDropsFragmentMetadata() {
         PacketCodec codec = new PacketCodec();
@@ -67,6 +79,11 @@ final class PacketCodecKatTest {
         assertEquals(1, codec.decode(codec.encode(current)).aadFragmentTotal());
     }
 
+    /**
+     * Verifies that signature input appends timestamp nonce kem ciphertext without signature.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void signatureInputAppendsTimestampNonceKemCiphertextWithoutSignature() throws Exception {
         PacketCodec codec = new PacketCodec();
@@ -82,12 +99,23 @@ final class PacketCodecKatTest {
         assertArrayEquals(expected.toByteArray(), codec.signatureInput(packet));
     }
 
+    /**
+     * Provides the known packet fixture operation used by the packet codec kat test regression scenarios.
+     *
+     * @return the result described above
+     */
     private static EncryptedPacket knownPacket() {
         return new EncryptedPacket((byte) 1, PacketType.SIGNED_KEM_MESSAGE, (byte) 1,
                 "alice", "bob", 123L, bytes(16, 7), (short) 2, (short) 9, AlgorithmSuite.defaults(),
                 bytes(12, 1), bytes(32, 2), bytes(64, 3), bytes(48, 4));
     }
 
+    /**
+     * Provides the manual encode fixture operation used by the packet codec kat test regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return the resulting array produced by this operation
+     */
     private static byte[] manualEncode(EncryptedPacket packet) {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -128,6 +156,12 @@ final class PacketCodecKatTest {
         }
     }
 
+    /**
+     * Provides the manual aad fixture operation used by the packet codec kat test regression scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @return the resulting array produced by this operation
+     */
     private static byte[] manualAad(EncryptedPacket packet) {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -166,22 +200,50 @@ final class PacketCodecKatTest {
         }
     }
 
+    /**
+     * Provides the write string fixture operation used by the packet codec kat test regression scenarios.
+     *
+     * @param out the out supplied to this operation
+     * @param value the value supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private static void writeString(DataOutputStream out, String value) throws Exception {
         byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
         out.writeShort(encoded.length);
         out.write(encoded);
     }
 
+    /**
+     * Provides the write bytes16 fixture operation used by the packet codec kat test regression scenarios.
+     *
+     * @param out the out supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private static void writeBytes16(DataOutputStream out, byte[] bytes) throws Exception {
         out.writeShort(bytes.length);
         out.write(bytes);
     }
 
+    /**
+     * Provides the write bytes32 fixture operation used by the packet codec kat test regression scenarios.
+     *
+     * @param out the out supplied to this operation
+     * @param bytes the bytes supplied to this operation
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private static void writeBytes32(DataOutputStream out, byte[] bytes) throws Exception {
         out.writeInt(bytes.length);
         out.write(bytes);
     }
 
+    /**
+     * Provides the bytes fixture operation used by the packet codec kat test regression scenarios.
+     *
+     * @param length the requested or declared byte count
+     * @param value the value supplied to this operation
+     * @return the resulting array produced by this operation
+     */
     private static byte[] bytes(int length, int value) {
         byte[] bytes = new byte[length];
         java.util.Arrays.fill(bytes, (byte) value);

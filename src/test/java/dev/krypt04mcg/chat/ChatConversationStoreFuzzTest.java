@@ -19,6 +19,9 @@ final class ChatConversationStoreFuzzTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that randomized conversation history remains bounded and reloadable.
+     */
     @Test
     void randomizedConversationHistoryRemainsBoundedAndReloadable() {
         Random random = random("randomizedConversationHistoryRemainsBoundedAndReloadable");
@@ -55,6 +58,9 @@ final class ChatConversationStoreFuzzTest {
         assertTrue(totalMessages <= 300 * Math.max(1, playerTargets.size() + groupTargets.size()));
     }
 
+    /**
+     * Verifies that blank targets and messages are ignored cleanly.
+     */
     @Test
     void blankTargetsAndMessagesAreIgnoredCleanly() {
         Random random = random("blankTargetsAndMessagesAreIgnoredCleanly");
@@ -72,12 +78,27 @@ final class ChatConversationStoreFuzzTest {
         assertTrue(store.groups().isEmpty());
     }
 
+    /**
+     * Provides the random fixture operation used by the chat conversation store fuzz test regression
+     * scenarios.
+     *
+     * @param testName the test name supplied to this operation
+     * @return the result described above
+     */
     private static Random random(String testName) {
         long seed = SEED_RANDOM.nextLong();
         System.out.println(ChatConversationStoreFuzzTest.class.getSimpleName() + "." + testName + " seed=" + seed);
         return new Random(seed);
     }
 
+    /**
+     * Provides the random text fixture operation used by the chat conversation store fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @param maxLength the max length supplied to this operation
+     * @return the result described above
+     */
     private static String randomText(Random random, int maxLength) {
         String alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _.-#:/";
         int length = random.nextInt(maxLength + 1);

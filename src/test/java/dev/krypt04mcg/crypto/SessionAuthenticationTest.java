@@ -22,6 +22,11 @@ final class SessionAuthenticationTest {
     private final byte[] secret = new byte[32];
     private static final String ID = "AAAAAAAAAAAAAAAAAAAAAA";
 
+    /**
+     * Verifies that both aeads authenticate every session header field and ciphertext.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void bothAeadsAuthenticateEverySessionHeaderFieldAndCiphertext() throws Exception {
         for (AeadAlgorithm aead : AeadAlgorithm.values()) {
@@ -65,6 +70,12 @@ final class SessionAuthenticationTest {
         }
     }
 
+    /**
+     * Verifies that replay wrong epoch and out of order messages do not advance state.
+     *
+     * @param root the account or configuration storage root
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void replayWrongEpochAndOutOfOrderMessagesDoNotAdvanceState(@TempDir Path root) throws Exception {
         SessionService sessions = new SessionService(root);
@@ -83,6 +94,11 @@ final class SessionAuthenticationTest {
         assertEquals(1, sessions.find("alice").orElseThrow().messageCount());
     }
 
+    /**
+     * Verifies that exchange still requires valid pq signature.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void exchangeStillRequiresValidPqSignature() throws Exception {
         LocalKeyMaterial alice = crypto.generateLocalKeys("alice", "a", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.FALCON_512);
@@ -97,6 +113,13 @@ final class SessionAuthenticationTest {
         assertThrows(CryptoException.class, () -> crypto.decrypt(p, bob, identity));
     }
 
+    /**
+     * Provides the decrypt fixture operation used by the session authentication test regression scenarios.
+     *
+     * @param p the p supplied to this operation
+     * @return the result described above
+     * @throws CryptoException if cryptographic input validation, parameter matching or authentication fails
+     */
     private String decrypt(EncryptedPacket p) throws CryptoException {
         return crypto.decryptWithSession(p, p.receiver(), p.sender(), secret, p.sessionId(), p.sequence());
     }

@@ -13,11 +13,22 @@ public final class TransferProgressHud {
     private final TransferProgressTracker tracker;
     private final Krypt04McgConfig config;
 
+    /**
+     * Creates a transfer progress hud with the supplied dependencies and initial state.
+     *
+     * @param tracker the tracker supplied to this operation
+     * @param config the config supplied to this operation
+     */
     public TransferProgressHud(TransferProgressTracker tracker, Krypt04McgConfig config) {
         this.tracker = tracker;
         this.config = config;
     }
 
+    /**
+     * Draws the current view from the available client state.
+     *
+     * @param graphics the graphics supplied to this operation
+     */
     public void render(GuiGraphicsExtractor graphics) {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.gui.hud.isHidden()) return;

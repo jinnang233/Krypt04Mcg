@@ -15,6 +15,11 @@ final class CryptoEnvelopeKatTest {
     private static LocalKeyMaterial alice;
     private static LocalKeyMaterial bob;
 
+    /**
+     * Provides the keys fixture operation used by the crypto envelope kat test regression scenarios.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @BeforeAll
     static void keys() throws Exception {
         crypto = new CryptoService();
@@ -22,6 +27,11 @@ final class CryptoEnvelopeKatTest {
         bob = crypto.generateLocalKeys("bob", "bob-uuid");
     }
 
+    /**
+     * Verifies that gcm ciphertext contains appended tag and round trips.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void gcmCiphertextContainsAppendedTagAndRoundTrips() throws Exception {
         String plaintext = "known envelope plaintext";
@@ -32,6 +42,11 @@ final class CryptoEnvelopeKatTest {
         assertEquals(plaintext, crypto.decrypt(packet, bob, publicIdentity(alice)));
     }
 
+    /**
+     * Verifies that modified tag fails decryption.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void modifiedTagFailsDecryption() throws Exception {
         EncryptedPacket packet = crypto.encryptFor(publicIdentity(bob), alice, "alice", "tag kat", true, false);
@@ -41,6 +56,11 @@ final class CryptoEnvelopeKatTest {
         assertThrows(CryptoException.class, () -> crypto.decrypt(replaceCiphertext(packet, changed), bob, publicIdentity(alice)));
     }
 
+    /**
+     * Verifies that modified authenticated timestamp fails decryption.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void modifiedAuthenticatedTimestampFailsDecryption() throws Exception {
         EncryptedPacket packet = crypto.encryptFor(publicIdentity(bob), alice, "alice", "aad kat", true, false);
@@ -52,6 +72,11 @@ final class CryptoEnvelopeKatTest {
         assertThrows(CryptoException.class, () -> crypto.decrypt(changedAad, bob, publicIdentity(alice)));
     }
 
+    /**
+     * Verifies that modified ciphertext fails decryption.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void modifiedCiphertextFailsDecryption() throws Exception {
         EncryptedPacket packet = crypto.encryptFor(publicIdentity(bob), alice, "alice", "ciphertext kat", true, false);
@@ -61,6 +86,11 @@ final class CryptoEnvelopeKatTest {
         assertThrows(CryptoException.class, () -> crypto.decrypt(replaceCiphertext(packet, changed), bob, publicIdentity(alice)));
     }
 
+    /**
+     * Verifies that key export import round trip keeps fingerprints.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void keyExportImportRoundTripKeepsFingerprints() throws Exception {
         PublicIdentity identity = publicIdentity(alice);
@@ -71,6 +101,14 @@ final class CryptoEnvelopeKatTest {
         assertTrue(alice.signaturePublicKey().keyData().length() > 0);
     }
 
+    /**
+     * Provides the replace ciphertext fixture operation used by the crypto envelope kat test regression
+     * scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param ciphertext the encoded ciphertext to authenticate or decode
+     * @return the result described above
+     */
     private static EncryptedPacket replaceCiphertext(EncryptedPacket packet, byte[] ciphertext) {
         return new EncryptedPacket(packet.protocolVersion(), packet.type(), packet.flags(), packet.sender(),
                 packet.receiver(), packet.timestampMillis(), packet.messageId(), packet.aadFragmentIndex(),
@@ -78,6 +116,13 @@ final class CryptoEnvelopeKatTest {
                 packet.signature());
     }
 
+    /**
+     * Provides the public identity fixture operation used by the crypto envelope kat test regression
+     * scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

@@ -1,3 +1,6 @@
+/**
+ * Loads the build plugins that supply Minecraft integration and artifact tasks.
+ */
 plugins {
     id "net.fabricmc.fabric-loom" version "${loom_version}"
     id "maven-publish"
@@ -6,16 +9,25 @@ plugins {
 version = project.mod_version
 group = project.maven_group
 
+/**
+ * Sets artifact naming from the existing project properties.
+ */
 base {
     archivesName = project.archives_base_name
 }
 
+/**
+ * Declares dependency repositories used by the build tool.
+ */
 repositories {
     maven { url = "https://maven.terraformersmc.com/" }
     maven { url = "https://maven.shedaniel.me/" }
     mavenCentral()
 }
 
+/**
+ * Configures Fabric source sets and loader integration.
+ */
 loom {
     splitEnvironmentSourceSets()
 
@@ -27,6 +39,9 @@ loom {
     }
 }
 
+/**
+ * Declares external libraries and test dependencies; cryptographic behavior belongs to runtime code.
+ */
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -43,6 +58,9 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
+/**
+ * Expands build metadata in resources without changing runtime protocol settings.
+ */
 processResources {
     inputs.property "version", project.version
     filesMatching("fabric.mod.json") {
@@ -50,16 +68,25 @@ processResources {
     }
 }
 
+/**
+ * Configures the named build task with the existing compilation, verification or packaging settings.
+ */
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 25
 }
 
+/**
+ * Configures the Java toolchain compatibility and source artifact generation.
+ */
 java {
     withSourcesJar()
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
 }
 
+/**
+ * Runs the configured tests through the JUnit Platform.
+ */
 test {
     useJUnitPlatform()
 }

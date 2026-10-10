@@ -25,6 +25,11 @@ final class KeyStoreServiceTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that generates and reloads local keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void generatesAndReloadsLocalKeys() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -50,6 +55,11 @@ final class KeyStoreServiceTest {
         assertEquals(first.local().signaturePublicKey().fingerprint(), second.local().signaturePublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that config changes do not replace existing keys until fingerprint confirmed regeneration.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void configChangesDoNotReplaceExistingKeysUntilFingerprintConfirmedRegeneration() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -80,6 +90,11 @@ final class KeyStoreServiceTest {
         assertEquals("ML-KEM-512/public", afterRestart.local().kemPublicKey().algorithm());
     }
 
+    /**
+     * Verifies that exports public identity to export directory.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void exportsPublicIdentityToExportDirectory() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -99,6 +114,11 @@ final class KeyStoreServiceTest {
         assertEquals(exportedIdentity.kemPublicKey().fingerprint(), exported.identity().kemPublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that finds public identity by owner when filename differs.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void findsPublicIdentityByOwnerWhenFilenameDiffers() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -114,6 +134,11 @@ final class KeyStoreServiceTest {
         assertEquals(peer.kemPublicKey().fingerprint(), found.kemPublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that imports public identity from config relative file.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void importsPublicIdentityFromConfigRelativeFile() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -129,6 +154,11 @@ final class KeyStoreServiceTest {
         assertEquals(peer.signaturePublicKey().fingerprint(), found.signaturePublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that imports public identity from quoted config relative file.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void importsPublicIdentityFromQuotedConfigRelativeFile() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -144,6 +174,11 @@ final class KeyStoreServiceTest {
         assertEquals(peer.signaturePublicKey().fingerprint(), found.signaturePublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that imports from legacy config root after account isolation.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void importsFromLegacyConfigRootAfterAccountIsolation() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -162,6 +197,11 @@ final class KeyStoreServiceTest {
         assertEquals(peer.signaturePublicKey().fingerprint(), found.signaturePublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that imports from game relative path after account isolation.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void importsFromGameRelativePathAfterAccountIsolation() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -180,6 +220,11 @@ final class KeyStoreServiceTest {
         assertEquals(peer.signaturePublicKey().fingerprint(), found.signaturePublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that imports from quoted absolute windows path.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void importsFromQuotedAbsoluteWindowsPath() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -195,6 +240,11 @@ final class KeyStoreServiceTest {
         assertEquals(peer.signaturePublicKey().fingerprint(), found.signaturePublicKey().fingerprint());
     }
 
+    /**
+     * Verifies that reports missing import file as a file error.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void reportsMissingImportFileAsAFileError() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -207,6 +257,11 @@ final class KeyStoreServiceTest {
         assertTrue(error.getMessage().contains("Import file was not found or is not readable"));
     }
 
+    /**
+     * Verifies that rejects config relative import path traversal.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsConfigRelativeImportPathTraversal() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -223,6 +278,11 @@ final class KeyStoreServiceTest {
         }
     }
 
+    /**
+     * Verifies that recomputes imported fingerprints from decoded public keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void recomputesImportedFingerprintsFromDecodedPublicKeys() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -244,6 +304,11 @@ final class KeyStoreServiceTest {
                 JsonSupport.prettyGson().toJson(peer).replace("bob-uuid", "another-uuid")));
     }
 
+    /**
+     * Verifies that rejects inner identity and public role mismatches.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsInnerIdentityAndPublicRoleMismatches() throws Exception {
         CryptoService cryptoService = new CryptoService();
@@ -266,6 +331,11 @@ final class KeyStoreServiceTest {
                 JsonSupport.prettyGson().toJson(roleMismatch)));
     }
 
+    /**
+     * Verifies that filename cannot substitute another players identity.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void filenameCannotSubstituteAnotherPlayersIdentity() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -278,6 +348,11 @@ final class KeyStoreServiceTest {
         assertThrows(java.io.IOException.class, () -> store.findPublicIdentity("alice"));
     }
 
+    /**
+     * Verifies that removes all peer records and allows replacement without changing own keys.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void removesAllPeerRecordsAndAllowsReplacementWithoutChangingOwnKeys() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -309,6 +384,13 @@ final class KeyStoreServiceTest {
         assertEquals(replacement, reloaded.findPublicIdentity("bob").orElseThrow());
     }
 
+    /**
+     * Provides the public identity fixture operation used by the key store service test regression
+     * scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());

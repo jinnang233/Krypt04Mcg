@@ -16,10 +16,27 @@ public final class FragmentService {
     private static final Pattern UNPREFIXED_FRAGMENT_PATTERN =
             Pattern.compile("(?<![0-9A-Fa-f])([0-9A-Fa-f]{32}\\s+\\d+\\s+\\d+\\s+[A-Za-z0-9_-]+)");
 
+    /**
+     * Performs the fragment operation for the chat wire fragmentation.
+     *
+     * @param packetBytes the packet bytes supplied to this operation
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @param configuredPayloadSize the configured payload size supplied to this operation
+     * @return the result described above
+     */
     public List<String> fragment(byte[] packetBytes, byte[] messageId, int configuredPayloadSize) {
         return fragment(packetBytes, messageId, configuredPayloadSize, PREFIX);
     }
 
+    /**
+     * Returns the recorded result for the chat wire fragmentation.
+     *
+     * @param packetBytes the packet bytes supplied to this operation
+     * @param messageId the message identifier used for correlation or key-derivation context
+     * @param configuredPayloadSize the configured payload size supplied to this operation
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     public List<String> fragment(byte[] packetBytes, byte[] messageId, int configuredPayloadSize, String prefix) {
         if (packetBytes.length > ChatTransferLimits.MAX_PACKET_BYTES) {
             throw new IllegalArgumentException("Encrypted chat packet exceeds 256 KiB");
@@ -45,10 +62,23 @@ public final class FragmentService {
         return result;
     }
 
+    /**
+     * Reports whether fragment holds for the chat wire fragmentation.
+     *
+     * @param message the message supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean isFragment(String message) {
         return isFragment(message, PREFIX);
     }
 
+    /**
+     * Reports whether fragment holds for the chat wire fragmentation.
+     *
+     * @param message the message supplied to this operation
+     * @param prefix the prefix supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean isFragment(String message, String prefix) {
         if (message == null || message.length() > MAX_CHAT_MESSAGE_LENGTH) {
             return false;
@@ -78,10 +108,23 @@ public final class FragmentService {
         }
     }
 
+    /**
+     * Parses the supplied representation for the chat wire fragmentation.
+     *
+     * @param message the message supplied to this operation
+     * @return the result described above
+     */
     public Fragment parse(String message) {
         return parse(message, PREFIX);
     }
 
+    /**
+     * Parses the supplied representation for the chat wire fragmentation.
+     *
+     * @param message the message supplied to this operation
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     public Fragment parse(String message, String prefix) {
         String normalizedPrefix = normalizePrefix(prefix);
         if (!isFragment(message, normalizedPrefix)) {
@@ -102,6 +145,13 @@ public final class FragmentService {
         return new Fragment(parts.messageId(), index, total, parts.payload());
     }
 
+    /**
+     * Looks up fragment in the chat wire fragmentation without creating a replacement.
+     *
+     * @param message the message supplied to this operation
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     public String findFragment(String message, String prefix) {
         if (message == null) {
             return null;
@@ -115,6 +165,15 @@ public final class FragmentService {
         return matcher.find() ? matcher.group(1) : null;
     }
 
+    /**
+     * Returns the recorded adjusted for the chat wire fragmentation.
+     *
+     * @param encodedLength the encoded length supplied to this operation
+     * @param id the id supplied to this operation
+     * @param configuredPayloadSize the configured payload size supplied to this operation
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     private static int payloadSizeFor(int encodedLength, String id, int configuredPayloadSize, String prefix) {
         int requested = Math.max(MIN_PAYLOAD_SIZE, configuredPayloadSize);
         // Small configured slices must not prevent otherwise valid large packets.
@@ -135,6 +194,15 @@ public final class FragmentService {
         }
     }
 
+    /**
+     * Performs the max payload for operation for the chat wire fragmentation.
+     *
+     * @param id the id supplied to this operation
+     * @param index the index supplied to this operation
+     * @param total the total supplied to this operation
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     private static int maxPayloadFor(String id, int index, int total, String prefix) {
         int headerLength = headerPrefix(prefix).length()
                 + id.length()
@@ -144,20 +212,45 @@ public final class FragmentService {
         return MAX_CHAT_MESSAGE_LENGTH - headerLength;
     }
 
+    /**
+     * Performs the parts operation for the chat wire fragmentation.
+     *
+     * @param message the message supplied to this operation
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     private static FragmentParts parts(String message, String prefix) {
         String body = prefix.isEmpty() ? message : message.substring(prefix.length() + 1);
         String[] parts = body.split("\\s+", 4);
         return parts.length == 4 ? new FragmentParts(parts[0], parts[1], parts[2], parts[3]) : null;
     }
 
+    /**
+     * Performs the header prefix operation for the chat wire fragmentation.
+     *
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     private static String headerPrefix(String prefix) {
         return prefix.isEmpty() ? "" : prefix + " ";
     }
 
+    /**
+     * Normalizes prefix into the comparison/storage form used by the chat wire fragmentation.
+     *
+     * @param prefix the prefix supplied to this operation
+     * @return the result described above
+     */
     private static String normalizePrefix(String prefix) {
         return prefix == null ? PREFIX : prefix;
     }
 
+    /**
+     * Performs the digits operation for the chat wire fragmentation.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     */
     private static int digits(int value) {
         return Integer.toString(value).length();
     }

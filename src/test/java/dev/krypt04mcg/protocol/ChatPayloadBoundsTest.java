@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChatPayloadBoundsTest {
+    /**
+     * Verifies that bounds are enforced when reading and writing both directions.
+     */
     @Test void boundsAreEnforcedWhenReadingAndWritingBothDirections() {
         for (String[] fields : new String[][]{{"a".repeat(17), "fragment"}, {"Alice", "x".repeat(257)}}) {
             var buffer = new FriendlyByteBuf(Unpooled.buffer());
@@ -25,6 +28,9 @@ class ChatPayloadBoundsTest {
         }
     }
 
+    /**
+     * Verifies that maximum legal fragment keeps the existing wire format.
+     */
     @Test void maximumLegalFragmentKeepsTheExistingWireFormat() {
         var buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {

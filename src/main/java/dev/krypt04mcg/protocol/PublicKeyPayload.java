@@ -8,5 +8,10 @@ public record PublicKeyPayload(String peer, String fragment, int version) implem
     public static final StreamCodec<FriendlyByteBuf, PublicKeyPayload> CODEC = StreamCodec.of(
         (buf, p) -> { buf.writeUtf(p.peer(), 16); buf.writeUtf(p.fragment(), 12100); buf.writeVarInt(p.version()); },
         buf -> new PublicKeyPayload(buf.readUtf(16), buf.readUtf(12100), buf.readVarInt()));
+    /**
+     * Returns the type value used by the public key payload.
+     *
+     * @return the result described above
+     */
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 }

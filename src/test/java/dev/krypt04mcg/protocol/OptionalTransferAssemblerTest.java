@@ -5,6 +5,9 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptionalTransferAssemblerTest {
+    /**
+     * Verifies that denied admission does not reserve the only file slot.
+     */
     @Test void deniedAdmissionDoesNotReserveTheOnlyFileSlot() {
         var assembler = new OptionalTransferAssembler(2048, 1);
         String fragment = UUID.randomUUID() + ":0:2048:x";
@@ -13,6 +16,9 @@ class OptionalTransferAssemblerTest {
         assertTrue(assembler.accept("Mallory", fragment, 2, () -> true).isEmpty());
     }
 
+    /**
+     * Verifies that one sender cannot reserve every slot and duplicates do not complete transfer.
+     */
     @Test void oneSenderCannotReserveEverySlotAndDuplicatesDoNotCompleteTransfer() {
         var assembler = new OptionalTransferAssembler(128, 2);
         String id = UUID.randomUUID().toString();
@@ -26,6 +32,9 @@ class OptionalTransferAssemblerTest {
                 () -> { fail("Admission must run only once"); return false; }).orElseThrow());
     }
 
+    /**
+     * Verifies that conflicts retire transfer and immediately release storage.
+     */
     @Test void conflictsRetireTransferAndImmediatelyReleaseStorage() {
         var assembler = new OptionalTransferAssembler(128, 1);
         for (String conflicting : List.of(":0:2:y", ":1:3:y")) {
@@ -37,6 +46,9 @@ class OptionalTransferAssemblerTest {
         }
     }
 
+    /**
+     * Verifies that rejects malformed headers and empty chunks before admission.
+     */
     @Test void rejectsMalformedHeadersAndEmptyChunksBeforeAdmission() {
         var assembler = new OptionalTransferAssembler();
         String id = UUID.randomUUID().toString();
@@ -48,6 +60,9 @@ class OptionalTransferAssemblerTest {
         assertThrows(IllegalArgumentException.class, () -> assembler.accept("x".repeat(1000), id + ":0:1:x", 0));
     }
 
+    /**
+     * Verifies that completed transfer cannot be replayed under different sender case.
+     */
     @Test void completedTransferCannotBeReplayedUnderDifferentSenderCase() {
         var assembler = new OptionalTransferAssembler();
         String fragment = OptionalTransferAssembler.split("public-key").getFirst();
@@ -55,6 +70,9 @@ class OptionalTransferAssemblerTest {
         assertTrue(assembler.accept("ALICE", fragment, 1).isEmpty());
     }
 
+    /**
+     * Verifies that idle expiry releases incomplete file slot and rejects its late chunks.
+     */
     @Test void idleExpiryReleasesIncompleteFileSlotAndRejectsItsLateChunks() {
         var assembler = new OptionalTransferAssembler(2048, 1);
         var parts = OptionalTransferAssembler.split("x".repeat(24000));
@@ -63,6 +81,9 @@ class OptionalTransferAssemblerTest {
         assertTrue(assembler.accept("Alice", parts.getLast(), 60002).isEmpty());
         assertEquals("new", assembler.accept("Bob", OptionalTransferAssembler.split("new").getFirst(), 60003).orElseThrow());
     }
+    /**
+     * Verifies that assembles large keys out of order and isolates senders.
+     */
     @Test void assemblesLargeKeysOutOfOrderAndIsolatesSenders() {
         String data = "x".repeat(400000);
         List<String> parts = new ArrayList<>(OptionalTransferAssembler.split(data));
@@ -74,6 +95,9 @@ class OptionalTransferAssemblerTest {
         assertTrue(assembler.accept("Bob", parts.getFirst(), 1000).isEmpty());
     }
 
+    /**
+     * Verifies that rejects unbounded and conflicting transfers.
+     */
     @Test void rejectsUnboundedAndConflictingTransfers() {
         var assembler = new OptionalTransferAssembler();
         String id = UUID.randomUUID().toString();
@@ -86,6 +110,9 @@ class OptionalTransferAssemblerTest {
         assertTrue(assembler.accept("Alice", id + ":0:2:x", 60002).isEmpty());
     }
 
+    /**
+     * Verifies that assembles largest cmce sized public identity.
+     */
     @Test void assemblesLargestCmceSizedPublicIdentity() {
         String data = "x".repeat(1_850_000);
         List<String> parts = OptionalTransferAssembler.split(data, OptionalTransferAssembler.MAX_KEY_CHUNKS);

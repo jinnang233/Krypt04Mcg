@@ -1157,6 +1157,14 @@ public enum SignatureAlgorithm {
     private final SignatureAlgorithm postQuantumComponent;
     private final String classicalAlgorithm;
 
+    /**
+     * Creates a signature algorithm with the supplied dependencies and initial state.
+     *
+     * @param identifier the identifier supplied to this operation
+     * @param jcaName the jca name supplied to this operation
+     * @param provider the explicitly selected JCA provider name
+     * @param parameterSpec the parameter spec supplied to this operation
+     */
     SignatureAlgorithm(String identifier, String jcaName, String provider, AlgorithmParameterSpec parameterSpec) {
         this.identifier = identifier;
         this.jcaName = jcaName;
@@ -1166,6 +1174,13 @@ public enum SignatureAlgorithm {
         this.classicalAlgorithm = null;
     }
 
+    /**
+     * Creates a signature algorithm with the supplied dependencies and initial state.
+     *
+     * @param identifier the identifier supplied to this operation
+     * @param postQuantumComponent the post quantum component supplied to this operation
+     * @param classicalAlgorithm the classical algorithm supplied to this operation
+     */
     SignatureAlgorithm(String identifier, SignatureAlgorithm postQuantumComponent, String classicalAlgorithm) {
         this.identifier = identifier;
         this.jcaName = postQuantumComponent.jcaName;
@@ -1175,42 +1190,93 @@ public enum SignatureAlgorithm {
         this.classicalAlgorithm = classicalAlgorithm;
     }
 
+    /**
+     * Returns the hybrid value used by the signature algorithm.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean hybrid() {
         return nativeHybrid() || customHybrid();
     }
 
+    /**
+     * Returns the native hybrid value used by the signature algorithm.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean nativeHybrid() {
         return parameterSpec == null && postQuantumComponent == null;
     }
 
+    /**
+     * Returns the custom hybrid value used by the signature algorithm.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     public boolean customHybrid() {
         return postQuantumComponent != null;
     }
 
+    /**
+     * Returns the post quantum component value used by the signature algorithm.
+     *
+     * @return the result described above
+     */
     public SignatureAlgorithm postQuantumComponent() {
         return customHybrid() ? postQuantumComponent : this;
     }
 
+    /**
+     * Returns the classical algorithm value used by the signature algorithm.
+     *
+     * @return the result described above
+     */
     public String classicalAlgorithm() {
         return classicalAlgorithm;
     }
 
+    /**
+     * Returns the identifier value used by the signature algorithm.
+     *
+     * @return the result described above
+     */
     public String identifier() {
         return identifier;
     }
 
+    /**
+     * Returns the jca name value used by the signature algorithm.
+     *
+     * @return the result described above
+     */
     public String jcaName() {
         return jcaName;
     }
 
+    /**
+     * Returns the provider value used by the signature algorithm.
+     *
+     * @return the result described above
+     */
     public String provider() {
         return provider;
     }
 
+    /**
+     * Returns the parameter spec value used by the signature algorithm.
+     *
+     * @return the result described above
+     */
     public AlgorithmParameterSpec parameterSpec() {
         return parameterSpec;
     }
 
+    /**
+     * Resolves the supplied values into the definition used by the signature algorithm.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     */
     public static SignatureAlgorithm fromIdentifier(String value) {
         String normalized = withoutKeyRole(value);
         return Arrays.stream(values())
@@ -1219,6 +1285,12 @@ public enum SignatureAlgorithm {
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported signature algorithm: " + value));
     }
 
+    /**
+     * Returns a value with the supplied out key role while retaining the other recorded fields.
+     *
+     * @param value the value supplied to this operation
+     * @return the result described above
+     */
     private static String withoutKeyRole(String value) {
         if (value == null) {
             throw new IllegalArgumentException("Signature algorithm is missing");

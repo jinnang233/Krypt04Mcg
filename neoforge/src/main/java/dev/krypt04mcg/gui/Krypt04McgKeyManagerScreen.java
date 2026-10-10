@@ -41,6 +41,15 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
     private int detailTop, detailBottom, detailHeight, kemCopyY, signatureCopyY;
     private Button kemCopy, signatureCopy, verify, distrust, delete;
 
+    /**
+     * Creates a krypt04 mcg key manager screen with the supplied dependencies and initial state.
+     *
+     * @param parent the parent supplied to this operation
+     * @param keys the keys supplied to this operation
+     * @param trust the trust supplied to this operation
+     * @param sessions the sessions supplied to this operation
+     * @param config the config supplied to this operation
+     */
     public Krypt04McgKeyManagerScreen(Screen parent, KeyStoreService keys, KeyTrustService trust,
                                      SessionService sessions, Krypt04McgConfig config) {
         super(label("title"));
@@ -51,10 +60,20 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         this.config = config;
     }
 
+    /**
+     * Returns the label value used by the krypt04 mcg key manager screen.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param args the args supplied to this operation
+     * @return the result described above
+     */
     private static Component label(String key, Object... args) {
         return Component.translatable(PREFIX + key, args);
     }
 
+    /**
+     * Performs the init operation for the krypt04 mcg key manager screen.
+     */
     @Override
     protected void init() {
         loadEntries();
@@ -108,6 +127,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         refreshSelection();
     }
 
+    /**
+     * Performs the load entries operation for the krypt04 mcg key manager screen.
+     */
     private void loadEntries() {
         entries.clear();
         try {
@@ -132,11 +154,19 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         }
     }
 
+    /**
+     * Performs the selected operation for the krypt04 mcg key manager screen.
+     *
+     * @return the result described above
+     */
     private Entry selected() {
         return entries.stream().filter(entry -> entry.identity().owner().equalsIgnoreCase(
                 selectedOwner == null ? "" : selectedOwner)).findFirst().orElse(null);
     }
 
+    /**
+     * Performs the refresh selection operation for the krypt04 mcg key manager screen.
+     */
     private void refreshSelection() {
         listOffset = Math.clamp(listOffset, 0, Math.max(0, entries.size() - rows.size()));
         refreshRows();
@@ -175,6 +205,13 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         refreshCopyButtons();
     }
 
+    /**
+     * Performs the append detail operation for the krypt04 mcg key manager screen.
+     *
+     * @param text the text supplied to this operation
+     * @param width the width supplied to this operation
+     * @param color the color supplied to this operation
+     */
     private void appendDetail(Component text, int width, int color) {
         for (var line : font.split(text, Math.max(1, width))) {
             details.add(new DetailLine(line, detailHeight, color));
@@ -182,6 +219,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         }
     }
 
+    /**
+     * Performs the refresh rows operation for the krypt04 mcg key manager screen.
+     */
     private void refreshRows() {
         for (int i = 0; i < rows.size(); i++) {
             Button row = rows.get(i);
@@ -203,17 +243,34 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         }
     }
 
+    /**
+     * Performs the refresh copy buttons operation for the krypt04 mcg key manager screen.
+     */
     private void refreshCopyButtons() {
         detailOffset = Math.clamp(detailOffset, 0, Math.max(0, detailHeight - (detailBottom - detailTop)));
         positionCopyButton(kemCopy, kemCopyY);
         positionCopyButton(signatureCopy, signatureCopyY);
     }
 
+    /**
+     * Performs the position copy button operation for the krypt04 mcg key manager screen.
+     *
+     * @param button the button supplied to this operation
+     * @param offset the offset supplied to this operation
+     */
     private void positionCopyButton(Button button, int offset) {
         button.setY(detailTop + offset - detailOffset);
         button.visible = selected() != null && button.getY() >= detailTop && button.getBottom() <= detailBottom;
     }
 
+    /**
+     * Performs the extract render state operation for the krypt04 mcg key manager screen.
+     *
+     * @param graphics the graphics supplied to this operation
+     * @param mouseX the mouse x supplied to this operation
+     * @param mouseY the mouse y supplied to this operation
+     * @param partialTick the partial tick supplied to this operation
+     */
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(x, y, x + panelWidth, y + panelHeight, 0xE812171C);
@@ -249,6 +306,15 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
+    /**
+     * Returns the recorded true for the krypt04 mcg key manager screen.
+     *
+     * @param mouseX the mouse x supplied to this operation
+     * @param mouseY the mouse y supplied to this operation
+     * @param scrollX the scroll x supplied to this operation
+     * @param scrollY the scroll y supplied to this operation
+     * @return whether the condition or operation described above succeeds
+     */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mouseX >= x && mouseX < x + listWidth && mouseY >= y + 28 && mouseY < y + panelHeight - 52) {
@@ -264,6 +330,11 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
+    /**
+     * Performs the copy operation for the krypt04 mcg key manager screen.
+     *
+     * @param signature the signature bytes or signature representation to verify
+     */
     private void copy(boolean signature) {
         Entry entry = selected();
         if (entry == null) return;
@@ -272,6 +343,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         success(label("copied"));
     }
 
+    /**
+     * Performs the import key operation for the krypt04 mcg key manager screen.
+     */
     private void importKey() {
         openDialog("import", label("import_help"), List.of(label("player"), label("import_data")), values -> {
             PublicIdentity imported = keys.importPublicIdentity(values.get(0).trim(), values.get(1));
@@ -281,6 +355,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         });
     }
 
+    /**
+     * Performs the export key operation for the krypt04 mcg key manager screen.
+     */
     private void exportKey() {
         try {
             var exported = keys.exportOwnPublicFile();
@@ -291,6 +368,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         }
     }
 
+    /**
+     * Performs the verify operation for the krypt04 mcg key manager screen.
+     */
     private void verify() {
         Entry entry = selected();
         if (entry == null || entry.own()) return;
@@ -305,6 +385,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         });
     }
 
+    /**
+     * Performs the distrust operation for the krypt04 mcg key manager screen.
+     */
     private void distrust() {
         Entry entry = selected();
         if (entry == null || entry.own()) return;
@@ -318,6 +401,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         }
     }
 
+    /**
+     * Performs the delete operation for the krypt04 mcg key manager screen.
+     */
     private void delete() {
         Entry entry = selected();
         if (entry == null || entry.own()) return;
@@ -330,6 +416,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         });
     }
 
+    /**
+     * Performs the regenerate operation for the krypt04 mcg key manager screen.
+     */
     private void regenerate() {
         String fingerprint = keys.regenerationFingerprint();
         openDialog("regenerate", label("regenerate_help", config.kemAlgorithm.identifier(),
@@ -340,6 +429,13 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         });
     }
 
+    /**
+     * Returns the recorded current for the krypt04 mcg key manager screen.
+     *
+     * @param displayed the displayed supplied to this operation
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private PublicIdentity currentIdentity(PublicIdentity displayed) throws Exception {
         PublicIdentity current = keys.findPublicIdentity(displayed.owner()).orElseThrow(() -> new IllegalStateException(
                 Component.translatable("text.krypt04mcg.error.no_public_key", displayed.owner()).getString()));
@@ -349,34 +445,72 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         return current;
     }
 
+    /**
+     * Performs the success operation for the krypt04 mcg key manager screen.
+     *
+     * @param message the message supplied to this operation
+     */
     private void success(Component message) {
         status = message;
         failed = false;
     }
 
+    /**
+     * Performs the error operation for the krypt04 mcg key manager screen.
+     *
+     * @param e the e supplied to this operation
+     */
     private void error(Exception e) {
         status = Component.translatable("text.krypt04mcg.error.generic", e.getMessage());
         failed = true;
     }
 
+    /**
+     * Performs the open dialog operation for the krypt04 mcg key manager screen.
+     *
+     * @param action the action supplied to this operation
+     * @param help the help supplied to this operation
+     * @param fields the fields supplied to this operation
+     * @param handler the handler supplied to this operation
+     */
     private void openDialog(String action, Component help, List<Component> fields, DialogAction handler) {
         Minecraft.getInstance().gui.setScreen(new KeyDialog(label(action), help, fields, handler));
     }
 
+    /**
+     * Handles the close callback for the krypt04 mcg key manager screen.
+     */
     @Override
     public void onClose() {
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
+    /**
+     * Reports whether pause screen holds for the krypt04 mcg key manager screen.
+     *
+     * @return whether the condition or operation described above succeeds
+     */
     @Override
     public boolean isPauseScreen() {
         return false;
     }
 
+    /**
+     * Performs the trust label operation for the krypt04 mcg key manager screen.
+     *
+     * @param state the state supplied to this operation
+     * @return the result described above
+     */
     private static Component trustLabel(TrustState state) {
         return Component.translatable("text.krypt04mcg.trust." + state.name());
     }
 
+    /**
+     * Performs the trust color operation for the krypt04 mcg key manager screen.
+     *
+     * @param state the state supplied to this operation
+     * @return the result described above
+     */
     private static int trustColor(TrustState state) {
         return switch (state) {
             case VERIFIED -> 0x8DDBA4;
@@ -387,6 +521,11 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
     }
 
     private record Entry(PublicIdentity identity, TrustState state) {
+        /**
+         * Performs the own operation for the krypt04 mcg key manager screen.
+         *
+         * @return whether the condition or operation described above succeeds
+         */
         private boolean own() { return state == null; }
     }
 
@@ -394,6 +533,12 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
 
     @FunctionalInterface
     private interface DialogAction {
+        /**
+         * Performs the run operation for the krypt04 mcg key manager screen.
+         *
+         * @param values the values supplied to this operation
+         * @throws Exception if the delegated operation cannot complete successfully
+         */
         void run(List<String> values) throws Exception;
     }
 
@@ -405,6 +550,14 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
         private Component error = Component.empty();
         private int left, top, dialogWidth, bottom, helpBottom, helpOffset;
 
+        /**
+         * Creates a key dialog with the supplied dependencies and initial state.
+         *
+         * @param title the title supplied to this operation
+         * @param help the help supplied to this operation
+         * @param fields the fields supplied to this operation
+         * @param handler the handler supplied to this operation
+         */
         private KeyDialog(Component title, Component help, List<Component> fields, DialogAction handler) {
             super(title);
             this.help = help;
@@ -412,6 +565,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
             this.handler = handler;
         }
 
+        /**
+         * Performs the init operation for the krypt04 mcg key manager screen.
+         */
         @Override
         protected void init() {
             List<String> saved = inputs.stream().map(EditBox::getValue).toList();
@@ -445,6 +601,9 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
             }
         }
 
+        /**
+         * Performs the submit operation for the krypt04 mcg key manager screen.
+         */
         private void submit() {
             if (inputs.stream().anyMatch(input -> input.getValue().isBlank())) return;
             try {
@@ -456,6 +615,14 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
             }
         }
 
+        /**
+         * Performs the extract render state operation for the krypt04 mcg key manager screen.
+         *
+         * @param graphics the graphics supplied to this operation
+         * @param mouseX the mouse x supplied to this operation
+         * @param mouseY the mouse y supplied to this operation
+         * @param partialTick the partial tick supplied to this operation
+         */
         @Override
         public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             graphics.fill(left, top, left + dialogWidth, bottom, 0xF012171C);
@@ -488,6 +655,15 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
             super.extractRenderState(graphics, mouseX, mouseY, partialTick);
         }
 
+        /**
+         * Returns the recorded true for the krypt04 mcg key manager screen.
+         *
+         * @param mouseX the mouse x supplied to this operation
+         * @param mouseY the mouse y supplied to this operation
+         * @param scrollX the scroll x supplied to this operation
+         * @param scrollY the scroll y supplied to this operation
+         * @return whether the condition or operation described above succeeds
+         */
         @Override
         public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
             if (mouseX >= left && mouseX < left + dialogWidth && mouseY >= top + 28 && mouseY < helpBottom) {
@@ -499,6 +675,12 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
             return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }
 
+        /**
+         * Returns the recorded true for the krypt04 mcg key manager screen.
+         *
+         * @param event the event supplied to this operation
+         * @return whether the condition or operation described above succeeds
+         */
         @Override
         public boolean keyPressed(KeyEvent event) {
             if (inputs.stream().anyMatch(EditBox::isFocused) && (event.key() == 257 || event.key() == 335)) {
@@ -508,11 +690,19 @@ public final class Krypt04McgKeyManagerScreen extends Screen {
             return super.keyPressed(event);
         }
 
+        /**
+         * Handles the close callback for the krypt04 mcg key manager screen.
+         */
         @Override
         public void onClose() {
             Minecraft.getInstance().gui.setScreen(Krypt04McgKeyManagerScreen.this);
         }
 
+        /**
+         * Reports whether pause screen holds for the krypt04 mcg key manager screen.
+         *
+         * @return whether the condition or operation described above succeeds
+         */
         @Override
         public boolean isPauseScreen() { return false; }
     }

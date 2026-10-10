@@ -16,6 +16,9 @@ final class RceSafetyFuzzTest {
     private static final SecureRandom SEED_RANDOM = new SecureRandom();
     private static final int CASES = 500;
 
+    /**
+     * Verifies that randomized command like payloads never produce command chat lines.
+     */
     @Test
     void randomizedCommandLikePayloadsNeverProduceCommandChatLines() {
         FragmentService fragmentService = new FragmentService();
@@ -32,6 +35,11 @@ final class RceSafetyFuzzTest {
         }
     }
 
+    /**
+     * Verifies that production sources do not use execution or dynamic loading apis.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void productionSourcesDoNotUseExecutionOrDynamicLoadingApis() throws Exception {
         List<String> forbidden = List.of(
@@ -55,6 +63,11 @@ final class RceSafetyFuzzTest {
         }
     }
 
+    /**
+     * Verifies that minecraft chat sender keeps fragment only guard.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void minecraftChatSenderKeepsFragmentOnlyGuard() throws Exception {
         String modSource = Files.readString(Path.of("src/client/java/dev/krypt04mcg/Krypt04McgMod.java"));
@@ -64,6 +77,13 @@ final class RceSafetyFuzzTest {
         assertTrue(modSource.contains("sendCommand(formatServerCommand"));
     }
 
+    /**
+     * Provides the production java sources fixture operation used by the rce safety fuzz test regression
+     * scenarios.
+     *
+     * @return the result described above
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     private static List<Path> productionJavaSources() throws Exception {
         try (var paths = Files.walk(Path.of("src"))) {
             return paths
@@ -74,6 +94,13 @@ final class RceSafetyFuzzTest {
         }
     }
 
+    /**
+     * Provides the random command like payload fixture operation used by the rce safety fuzz test
+     * regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomCommandLikePayload(Random random) {
         String[] prefixes = {
                 "/op ",
@@ -97,12 +124,25 @@ final class RceSafetyFuzzTest {
         return builder.toString();
     }
 
+    /**
+     * Provides the random fixture operation used by the rce safety fuzz test regression scenarios.
+     *
+     * @param testName the test name supplied to this operation
+     * @return the result described above
+     */
     private static Random random(String testName) {
         long seed = SEED_RANDOM.nextLong();
         System.out.println(RceSafetyFuzzTest.class.getSimpleName() + "." + testName + " seed=" + seed);
         return new Random(seed);
     }
 
+    /**
+     * Provides the random bytes fixture operation used by the rce safety fuzz test regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @param length the requested or declared byte count
+     * @return the resulting array produced by this operation
+     */
     private static byte[] randomBytes(Random random, int length) {
         byte[] bytes = new byte[length];
         random.nextBytes(bytes);

@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class ChatSendPolicyTest {
+    /**
+     * Verifies that large chat uses available payload without relaxing freshness.
+     */
     @Test void largeChatUsesAvailablePayloadWithoutRelaxingFreshness() {
         for (var mode : ChatSendMode.values()) {
             var plan = ChatSendPolicy.plan(mode, 250, 300, 2048, true);
@@ -15,6 +18,9 @@ final class ChatSendPolicyTest {
         }
     }
 
+    /**
+     * Verifies that unavailable large payload fails before sending.
+     */
     @Test void unavailableLargePayloadFailsBeforeSending() {
         assertTrue(assertThrows(IllegalStateException.class,
                 () -> ChatSendPolicy.plan(ChatSendMode.CHAT, 250, 300, 1000, false))
@@ -23,6 +29,9 @@ final class ChatSendPolicyTest {
                 () -> ChatSendPolicy.plan(ChatSendMode.CUSTOM_PAYLOAD, 250, 30, 2048, true));
     }
 
+    /**
+     * Verifies that short messages keep their configured transport and safe pacing.
+     */
     @Test void shortMessagesKeepTheirConfiguredTransportAndSafePacing() {
         assertFalse(ChatSendPolicy.plan(ChatSendMode.CHAT, 250, 300, 3, true).customPayload());
         assertEquals(1000, ChatSendPolicy.plan(ChatSendMode.SERVER_COMMAND, 250, 300, 3, true).delayMillis());

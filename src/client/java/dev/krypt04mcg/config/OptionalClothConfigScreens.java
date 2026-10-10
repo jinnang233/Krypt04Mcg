@@ -7,9 +7,17 @@ import net.fabricmc.loader.api.FabricLoader;
 public final class OptionalClothConfigScreens {
     private static final String CLOTH_CONFIG_MOD_ID = "cloth-config";
 
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private OptionalClothConfigScreens() {
     }
 
+    /**
+     * Performs the config screen factory operation for the optional cloth config screens.
+     *
+     * @return the result described above
+     */
     public static ConfigScreenFactory<?> configScreenFactory() {
         if (!FabricLoader.getInstance().isModLoaded(CLOTH_CONFIG_MOD_ID)) {
             return parent -> null;

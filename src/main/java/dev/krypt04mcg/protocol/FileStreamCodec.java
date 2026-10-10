@@ -7,7 +7,19 @@ import java.nio.file.*;
 public final class FileStreamCodec {
     public static final int MAX_FILE_BYTES = 10 * 1024 * 1024;
     public record FileData(String name, byte[] data) {}
+    /**
+     * Prevents direct instantiation of this stateless utility.
+     */
     private FileStreamCodec() {}
+    /**
+     * Serializes a bounded built-in file envelope with explicit name/data lengths for transport inside an
+     * authenticated encrypted stream. The envelope itself is framing, not encryption; file/stream
+     * configuration and limits are enforced by their callers.
+     *
+     * @param path the filesystem path used by this operation
+     * @return the resulting array produced by this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public static byte[] encode(Path path) throws IOException {
         if (!Files.isRegularFile(path)) throw new IOException("Not a regular file");
         byte[] contents;
@@ -20,6 +32,16 @@ public final class FileStreamCodec {
         out.writeUTF(name); out.writeInt(contents.length); out.write(contents);
         return buffer.toByteArray();
     }
+    /**
+     * Parses the bounded file name and content lengths and requires complete bytes and end-of-stream
+     * before returning a FileData value. The surrounding encrypted socket verifies records; size checks
+     * and EOF validation prevent truncated or extra application framing from being treated as a complete
+     * file.
+     *
+     * @param input the input bytes or stream consumed by the operation
+     * @return the result described above
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     public static FileData read(InputStream input) throws IOException {
         var in = new DataInputStream(input);
         int nameBytes = in.readUnsignedShort();

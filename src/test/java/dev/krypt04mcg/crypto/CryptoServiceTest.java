@@ -20,6 +20,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class CryptoServiceTest {
+    /**
+     * Verifies that rejects valid signatures under another players name.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsValidSignaturesUnderAnotherPlayersName() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -35,6 +40,11 @@ final class CryptoServiceTest {
                 () -> crypto.decryptWithSession(session, "bob", "mallory", secret, "AAAAAAAAAAAAAAAAAAAAAA", 0));
     }
 
+    /**
+     * Verifies that encrypt decrypt and sign verify.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void encryptDecryptAndSignVerify() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -52,6 +62,11 @@ final class CryptoServiceTest {
         assertTrue(packet.signed());
     }
 
+    /**
+     * Verifies that null algorithm selections use hybrid defaults.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void nullAlgorithmSelectionsUseHybridDefaults() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -63,6 +78,11 @@ final class CryptoServiceTest {
         }
     }
 
+    /**
+     * Verifies that wrong receiver is rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void wrongReceiverIsRejected() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -75,6 +95,11 @@ final class CryptoServiceTest {
         assertThrows(CryptoException.class, () -> crypto.decrypt(packet, charlie, publicIdentity(alice)));
     }
 
+    /**
+     * Verifies that modified ciphertext is rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void modifiedCiphertextIsRejected() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -91,6 +116,11 @@ final class CryptoServiceTest {
         assertThrows(CryptoException.class, () -> crypto.decrypt(tampered, bob, publicIdentity(alice)));
     }
 
+    /**
+     * Verifies that compressed messages round trip.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void compressedMessagesRoundTrip() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -105,6 +135,11 @@ final class CryptoServiceTest {
         assertTrue((packet.flags() & CryptoService.FLAG_COMPRESSED) != 0);
     }
 
+    /**
+     * Verifies that packet and key records select mixed post quantum parameter sets.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void packetAndKeyRecordsSelectMixedPostQuantumParameterSets() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -122,6 +157,11 @@ final class CryptoServiceTest {
         assertEquals("mixed suite", crypto.decrypt(packet, bob, publicIdentity(alice)));
     }
 
+    /**
+     * Verifies that compressed empty message round trips.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void compressedEmptyMessageRoundTrips() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -135,6 +175,11 @@ final class CryptoServiceTest {
         assertTrue((packet.flags() & CryptoService.FLAG_COMPRESSED) != 0);
     }
 
+    /**
+     * Verifies that session messages use session secret.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void sessionMessagesUseSessionSecret() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -153,6 +198,11 @@ final class CryptoServiceTest {
         assertTrue(packet.ciphertext().length > 0);
     }
 
+    /**
+     * Verifies that session message with wrong secret is rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void sessionMessageWithWrongSecretIsRejected() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -170,6 +220,11 @@ final class CryptoServiceTest {
                 crypto.decryptWithSession(packet, "bob", "alice", wrongSecret, "AAAAAAAAAAAAAAAAAAAAAA", 0));
     }
 
+    /**
+     * Verifies that oversized plaintext encryption is rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void oversizedPlaintextEncryptionIsRejected() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -181,6 +236,11 @@ final class CryptoServiceTest {
                 crypto.encryptFor(publicIdentity(bob), alice, "alice", message, true, true));
     }
 
+    /**
+     * Verifies that oversized compressed payload inflation is rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void oversizedCompressedPayloadInflationIsRejected() throws Exception {
         Method inflate = CryptoService.class.getDeclaredMethod("inflate", byte[].class);
@@ -193,6 +253,11 @@ final class CryptoServiceTest {
         assertTrue(exception.getCause() instanceof CryptoException);
     }
 
+    /**
+     * Verifies that oversized uncompressed decryption is rejected.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void oversizedUncompressedDecryptionIsRejected() throws Exception {
         CryptoService crypto = new CryptoService();
@@ -201,11 +266,26 @@ final class CryptoServiceTest {
         byte[] secret = new byte[32];
         EncryptedPacket template = crypto.encryptWithSession("bob", "bob", secret, "AAAAAAAAAAAAAAAAAAAAAA", 0, "", false, dev.krypt04mcg.config.AeadAlgorithm.AES_256_GCM);
         var codec = new dev.krypt04mcg.protocol.PacketCodec();
+        /*
+         * Requests the explicit authenticated-encryption transformation from JCA. Mode-specific key/nonce
+         * parameters and AAD are supplied before finalization; there is no unauthenticated-mode fallback on
+         * provider or tag failure.
+         */
         javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,
                 new javax.crypto.spec.SecretKeySpec(crypto.deriveSessionSecret(secret, template.messageId()), "AES"),
                 new javax.crypto.spec.GCMParameterSpec(128, template.nonce()));
+        /*
+         * Authenticates these canonical metadata bytes without encrypting them. Both sides must reproduce
+         * identical AAD; changing an identity, epoch or other covered field invalidates the authentication
+         * tag.
+         */
         cipher.updateAAD(codec.aadFor(template));
+        /*
+         * Finalizes the authenticated cipher operation. Decryption must not expose its result before tag
+         * verification succeeds; streaming adapters can already hold tentative plaintext and must erase that
+         * output when finalization fails.
+         */
         byte[] ciphertext = cipher.doFinal(new byte[CryptoService.MAX_PLAINTEXT_BYTES + 1]);
         EncryptedPacket oversized = new EncryptedPacket(template.protocolVersion(), template.type(), template.flags(),
                 template.sender(), template.receiver(), template.timestampMillis(), template.messageId(),
@@ -215,12 +295,29 @@ final class CryptoServiceTest {
                 () -> crypto.decryptWithSession(oversized, "bob", "bob", secret, "AAAAAAAAAAAAAAAAAAAAAA", 0));
     }
 
+    /**
+     * Provides the public identity fixture operation used by the crypto service test regression scenarios.
+     *
+     * @param material the material supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity publicIdentity(LocalKeyMaterial material) {
         return new PublicIdentity(material.kemPublicKey().owner(), material.kemPublicKey().uuid(),
                 material.kemPublicKey(), material.signaturePublicKey());
     }
 
+    /**
+     * Provides the deflate fixture operation used by the crypto service test regression scenarios.
+     *
+     * @param plaintext the plaintext bytes to encrypt or process
+     * @return the resulting array produced by this operation
+     */
     private static byte[] deflate(byte[] plaintext) {
+        /*
+         * Uses JDK DEFLATE after plaintext size admission and releases compressor resources in the surrounding
+         * lifecycle. Compression changes visible ciphertext length and is not an authentication or
+         * confidentiality primitive.
+         */
         Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
         deflater.setInput(plaintext);
         deflater.finish();

@@ -20,6 +20,9 @@ final class PacketCodecFuzzTest {
     private static final SecureRandom SEED_RANDOM = new SecureRandom();
     private static final int CASES = 250;
 
+    /**
+     * Verifies that randomized packets round trip.
+     */
     @Test
     void randomizedPacketsRoundTrip() {
         PacketCodec codec = new PacketCodec();
@@ -34,6 +37,9 @@ final class PacketCodecFuzzTest {
         }
     }
 
+    /**
+     * Verifies that truncated packets are rejected.
+     */
     @Test
     void truncatedPacketsAreRejected() {
         PacketCodec codec = new PacketCodec();
@@ -48,6 +54,11 @@ final class PacketCodecFuzzTest {
         }
     }
 
+    /**
+     * Verifies that oversized length fields are rejected before allocation.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void oversizedLengthFieldsAreRejectedBeforeAllocation() throws Exception {
         PacketCodec codec = new PacketCodec();
@@ -62,6 +73,13 @@ final class PacketCodecFuzzTest {
         }
     }
 
+    /**
+     * Provides the random packet fixture operation used by the packet codec fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static EncryptedPacket randomPacket(Random random) {
         PacketType[] types = PacketType.values();
         byte version = (byte) (1 + random.nextInt(4));
@@ -95,6 +113,14 @@ final class PacketCodecFuzzTest {
                 version >= EncryptedPacket.VERSION && type == PacketType.SESSION_MESSAGE ? random.nextLong(Long.MAX_VALUE) : 0);
     }
 
+    /**
+     * Provides the packet with oversized sender fixture operation used by the packet codec fuzz test
+     * regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the resulting array produced by this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static byte[] packetWithOversizedSender(Random random) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bytes);
@@ -105,6 +131,14 @@ final class PacketCodecFuzzTest {
         return bytes.toByteArray();
     }
 
+    /**
+     * Provides the packet with oversized kem ciphertext fixture operation used by the packet codec fuzz
+     * test regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the resulting array produced by this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static byte[] packetWithOversizedKemCiphertext(Random random) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bytes);
@@ -127,29 +161,68 @@ final class PacketCodecFuzzTest {
         return bytes.toByteArray();
     }
 
+    /**
+     * Provides the write string fixture operation used by the packet codec fuzz test regression scenarios.
+     *
+     * @param out the out supplied to this operation
+     * @param value the value supplied to this operation
+     * @throws IOException if input/output, stored-state validation or resource handling fails
+     */
     private static void writeString(DataOutputStream out, String value) throws IOException {
         out.writeShort(value.length());
         out.writeBytes(value);
     }
 
+    /**
+     * Provides the random fixture operation used by the packet codec fuzz test regression scenarios.
+     *
+     * @param testName the test name supplied to this operation
+     * @return the result described above
+     */
     private static Random random(String testName) {
         long seed = SEED_RANDOM.nextLong();
         System.out.println(PacketCodecFuzzTest.class.getSimpleName() + "." + testName + " seed=" + seed);
         return new Random(seed);
     }
 
+    /**
+     * Provides the random algorithms fixture operation used by the packet codec fuzz test regression
+     * scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static AlgorithmSuite randomAlgorithms(Random random) {
         return new AlgorithmSuite(randomToken(random), randomToken(random), randomToken(random), randomToken(random));
     }
 
+    /**
+     * Provides the random name fixture operation used by the packet codec fuzz test regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomName(Random random) {
         return randomAscii(random, random.nextInt(33));
     }
 
+    /**
+     * Provides the random token fixture operation used by the packet codec fuzz test regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @return the result described above
+     */
     private static String randomToken(Random random) {
         return randomAscii(random, 1 + random.nextInt(32));
     }
 
+    /**
+     * Provides the random ascii fixture operation used by the packet codec fuzz test regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @param length the requested or declared byte count
+     * @return the result described above
+     */
     private static String randomAscii(Random random, int length) {
         StringBuilder builder = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
@@ -158,12 +231,26 @@ final class PacketCodecFuzzTest {
         return builder.toString();
     }
 
+    /**
+     * Provides the random bytes fixture operation used by the packet codec fuzz test regression scenarios.
+     *
+     * @param random the randomness source supplied to the cryptographic provider
+     * @param length the requested or declared byte count
+     * @return the resulting array produced by this operation
+     */
     private static byte[] randomBytes(Random random, int length) {
         byte[] bytes = new byte[length];
         random.nextBytes(bytes);
         return bytes;
     }
 
+    /**
+     * Provides the assert packet equals fixture operation used by the packet codec fuzz test regression
+     * scenarios.
+     *
+     * @param expected the expected supplied to this operation
+     * @param actual the actual supplied to this operation
+     */
     private static void assertPacketEquals(EncryptedPacket expected, EncryptedPacket actual) {
         assertEquals(expected.protocolVersion(), actual.protocolVersion());
         assertEquals(expected.type(), actual.type());

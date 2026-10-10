@@ -8,6 +8,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class FileStreamCodecTest {
     @TempDir Path root;
+    /**
+     * Verifies that round trips binary content and rejects truncation and trailing data.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void roundTripsBinaryContentAndRejectsTruncationAndTrailingData() throws Exception {
         Path file = root.resolve("文件.bin"); byte[] bytes = {0, -1, 42}; Files.write(file, bytes);
         byte[] encoded = FileStreamCodec.encode(file);
@@ -16,6 +21,11 @@ class FileStreamCodecTest {
         assertThrows(IOException.class, () -> FileStreamCodec.read(new ByteArrayInputStream(java.util.Arrays.copyOf(encoded, encoded.length - 1))));
         assertThrows(IOException.class, () -> FileStreamCodec.read(new ByteArrayInputStream(java.util.Arrays.copyOf(encoded, encoded.length + 1))));
     }
+    /**
+     * Verifies that rejects oversize file and announced length before allocation.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test void rejectsOversizeFileAndAnnouncedLengthBeforeAllocation() throws Exception {
         Path file = root.resolve("large.bin");
         try (var out = new RandomAccessFile(file.toFile(), "rw")) { out.setLength(FileStreamCodec.MAX_FILE_BYTES + 1L); }

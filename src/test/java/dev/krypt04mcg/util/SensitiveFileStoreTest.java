@@ -17,6 +17,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 final class SensitiveFileStoreTest {
     @TempDir Path temp;
 
+    /**
+     * Verifies that authenticates content and relative path.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void authenticatesContentAndRelativePath() throws Exception {
         SensitiveFileStore store = new SensitiveFileStore(temp);
@@ -32,6 +37,11 @@ final class SensitiveFileStoreTest {
         assertThrows(IOException.class, () -> store.readString(original));
     }
 
+    /**
+     * Verifies that missing master key does not create a replacement.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void missingMasterKeyDoesNotCreateAReplacement() throws Exception {
         Path file = temp.resolve("secret.json");
@@ -48,6 +58,11 @@ final class SensitiveFileStoreTest {
         assertEquals("secret", new SensitiveFileStore(temp).readString(file));
     }
 
+    /**
+     * Verifies that plaintext compatibility cannot escape root.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void plaintextCompatibilityCannotEscapeRoot() throws Exception {
         Path root = temp.resolve("account");
@@ -60,6 +75,11 @@ final class SensitiveFileStoreTest {
         assertFalse(Files.exists(root));
     }
 
+    /**
+     * Verifies that missing master key cannot be replaced by writing a new file.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void missingMasterKeyCannotBeReplacedByWritingANewFile() throws Exception {
         Path existing = temp.resolve("sessions/old.json");
@@ -77,6 +97,11 @@ final class SensitiveFileStoreTest {
         assertEquals("old secret", new SensitiveFileStore(temp).readString(existing));
     }
 
+    /**
+     * Verifies that concurrent stores use one persistent master key.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void concurrentStoresUseOnePersistentMasterKey() throws Exception {
         CountDownLatch start = new CountDownLatch(1);
@@ -100,6 +125,11 @@ final class SensitiveFileStoreTest {
         }
     }
 
+    /**
+     * Verifies that rejects linked storage directories.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void rejectsLinkedStorageDirectories() throws Exception {
         Path outside = Files.createDirectory(temp.resolve("outside"));

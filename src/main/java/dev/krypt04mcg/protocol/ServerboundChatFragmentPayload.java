@@ -15,6 +15,11 @@ public record ServerboundChatFragmentPayload(String receiver, String fragment, i
             },
             buf -> new ServerboundChatFragmentPayload(buf.readUtf(16), buf.readUtf(dev.krypt04mcg.fragment.FragmentService.MAX_CHAT_MESSAGE_LENGTH), buf.readVarInt()));
 
+    /**
+     * Returns the type value used by the serverbound chat fragment payload.
+     *
+     * @return the result described above
+     */
     @Override
     public Type<? extends CustomPacketPayload> type() {
         return TYPE;

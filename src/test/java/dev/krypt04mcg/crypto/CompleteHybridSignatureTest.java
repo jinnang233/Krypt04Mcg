@@ -32,11 +32,23 @@ final class CompleteHybridSignatureTest {
             SLHDSAParameterSpec.class, SQIsignParameterSpec.class, SnovaParameterSpec.class);
     @TempDir Path directory;
 
+    /**
+     * Provides the additions fixture operation used by the complete hybrid signature test regression
+     * scenarios.
+     *
+     * @return the result described above
+     */
     static Stream<SignatureAlgorithm> additions() {
         return Arrays.stream(SignatureAlgorithm.values()).filter(SignatureAlgorithm::customHybrid)
                 .filter(a -> SPECS.contains(a.parameterSpec().getClass()));
     }
 
+    /**
+     * Provides the representatives fixture operation used by the complete hybrid signature test regression
+     * scenarios.
+     *
+     * @return the result described above
+     */
     static Stream<SignatureAlgorithm> representatives() {
         return Stream.of(SignatureAlgorithm.FALCON_512, SignatureAlgorithm.ML_DSA_65,
                         SignatureAlgorithm.SLH_DSA_SHA2_128F, SignatureAlgorithm.SLH_DSA_SHAKE_128F_WITH_SHAKE128,
@@ -45,6 +57,9 @@ final class CompleteHybridSignatureTest {
                         .map(c -> SignatureAlgorithm.fromIdentifier(a.identifier() + "+" + c)));
     }
 
+    /**
+     * Verifies that every pqc selection has both classical pairings.
+     */
     @Test
     void everyPqcSelectionHasBothClassicalPairings() {
         assertEquals(152, additions().count());
@@ -66,6 +81,12 @@ final class CompleteHybridSignatureTest {
         }
     }
 
+    /**
+     * Verifies that every new suite signs transports and requires both components.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @MethodSource("additions")
     void everyNewSuiteSignsTransportsAndRequiresBothComponents(SignatureAlgorithm algorithm) throws Exception {
@@ -117,6 +138,12 @@ final class CompleteHybridSignatureTest {
                 new PublicIdentity("alice", "a", keys.kemPublicKey(), wrongPublic)));
     }
 
+    /**
+     * Verifies that new families persist and complete signed handshakes.
+     *
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @ParameterizedTest
     @MethodSource("representatives")
     void newFamiliesPersistAndCompleteSignedHandshakes(SignatureAlgorithm algorithm) throws Exception {
@@ -149,15 +176,38 @@ final class CompleteHybridSignatureTest {
         }
     }
 
+    /**
+     * Provides the identity fixture operation used by the complete hybrid signature test regression
+     * scenarios.
+     *
+     * @param keys the keys supplied to this operation
+     * @return the result described above
+     */
     private static PublicIdentity identity(LocalKeyMaterial keys) {
         return new PublicIdentity(keys.kemPublicKey().owner(), keys.kemPublicKey().uuid(), keys.kemPublicKey(), keys.signaturePublicKey());
     }
 
+    /**
+     * Provides the relabel fixture operation used by the complete hybrid signature test regression
+     * scenarios.
+     *
+     * @param key the cryptographic key material for this operation
+     * @param algorithm the selected algorithm and parameter-set definition
+     * @return the result described above
+     */
     private static KeyRecord relabel(KeyRecord key, SignatureAlgorithm algorithm) {
         String role = key.algorithm().endsWith("/private") ? "/private" : "/public";
         return new KeyRecord(algorithm.identifier() + role, key.owner(), key.uuid(), key.fingerprint(), key.createdAt(), key.keyData());
     }
 
+    /**
+     * Provides the with signature fixture operation used by the complete hybrid signature test regression
+     * scenarios.
+     *
+     * @param packet the packet being serialized, authenticated or processed
+     * @param signature the signature bytes or signature representation to verify
+     * @return the result described above
+     */
     private static EncryptedPacket withSignature(EncryptedPacket packet, byte[] signature) {
         return new EncryptedPacket(packet.protocolVersion(), packet.type(), packet.flags(), packet.sender(), packet.receiver(),
                 packet.timestampMillis(), packet.messageId(), packet.aadFragmentIndex(), packet.aadFragmentTotal(),

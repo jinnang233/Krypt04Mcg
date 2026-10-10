@@ -16,6 +16,9 @@ final class AccountStorageTest {
     @TempDir
     private Path tempDir;
 
+    /**
+     * Verifies that rejects escaping or colliding account identifiers.
+     */
     @Test
     void rejectsEscapingOrCollidingAccountIdentifiers() {
         for (String uuid : java.util.List.of(".", "..", "../alice", "alice/uuid", "alice?uuid")) {
@@ -25,6 +28,11 @@ final class AccountStorageTest {
         assertFalse(Files.exists(tempDir.resolve("accounts")));
     }
 
+    /**
+     * Verifies that migrates matching legacy storage into account namespace.
+     *
+     * @throws Exception if the delegated operation cannot complete successfully
+     */
     @Test
     void migratesMatchingLegacyStorageIntoAccountNamespace() throws Exception {
         CryptoService crypto = new CryptoService();
