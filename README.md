@@ -51,7 +51,7 @@ This implementation targets:
 - Gradle `9.8.0`
 - ModDevGradle `2.0.148`
 - JUnit `6.1.3`
-- NeoForge `26.3.0.52-beta` (separate client build)
+- NeoForge `26.3.0.77` (separate client build)
 - Bouncy Castle `1.86`
 - Java `25`
 
