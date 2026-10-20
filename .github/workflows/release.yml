@@ -250,9 +250,15 @@ jobs:
           set -euo pipefail
 
           PREVIOUS_TAG="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
-
+          MOD_RELEASE_TYPE_FABRIC="$(sed -n 's/^release_type=//p' gradle.properties)"
+          MOD_RELEASE_TYPE_NEOFORGE="$(sed -n 's/^release_type=//p' neoforge/gradle.properties)"
           {
             echo "# ${RELEASE_NAME}"
+            echo
+            echo "## Release type"
+            echo 
+            echo "Krypt04Mcg-fabric: $MOD_RELEASE_TYPE_FABRIC"
+            echo "Krypt04Mcg-neoforge: $MOD_RELEASE_TYPE_NEOFORGE"
             echo
             echo "## Changelog"
             echo
