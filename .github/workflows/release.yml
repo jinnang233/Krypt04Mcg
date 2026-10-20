@@ -257,8 +257,8 @@ jobs:
             echo
             echo "## Release type"
             echo
-            echo "Krypt04Mcg-fabric: $MOD_RELEASE_TYPE_FABRIC"
-            echo "Krypt04Mcg-neoforge: $MOD_RELEASE_TYPE_NEOFORGE"
+            echo "Krypt04Mcg-fabric: \`$MOD_RELEASE_TYPE_FABRIC\`"
+            echo "Krypt04Mcg-neoforge: \`$MOD_RELEASE_TYPE_NEOFORGE\`"
             echo
             echo "## Changelog"
             echo
