@@ -232,7 +232,9 @@ jobs:
             --arg mod_neoforge_url "$MOD_NEOFORGE_URL" \
             --arg signature_postfix "$SIGNATURE_POSTFIX" \
             --arg release_name "$RELEASE_NAME" \
-            '{release_name:$release_name ,tag: $tag,mod_version_fabric: $mod_version_fabric, mod_version_neoforge: $mod_version_neoforge,mod_release_type_fabric: $mod_release_type_fabric, mod_release_type_neoforge: $mod_release_type_neoforge,mod_fabric_url:$mod_fabric_url,mod_neoforge_url:$mod_neoforge_url,mod_fabric_signature_url:$mod_fabric_url$signature_postfix,mod_neoforge_signature_url:$mod_neoforge_url$signature_postfix}' \
+            --arg mod_fabric_signature_url "$MOD_FABRIC_URL$SIGNATURE_POSTFIX" \
+            --arg mod_neoforge_signature_url "$MOD_NEOFORGE_URL$SIGNATURE_POSTFIX" \
+            '{release_name:$release_name ,tag: $tag,mod_version_fabric: $mod_version_fabric, mod_version_neoforge: $mod_version_neoforge,mod_release_type_fabric: $mod_release_type_fabric, mod_release_type_neoforge: $mod_release_type_neoforge,mod_fabric_url:$mod_fabric_url,mod_neoforge_url:$mod_neoforge_url,mod_fabric_signature_url:$mod_fabric_signature_url,mod_neoforge_signature_url:$mod_neoforge_signature_url}' \
             > release-artifacts/latest.json
       - name: VirusTotal Scan
         uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5
