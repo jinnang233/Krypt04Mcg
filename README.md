@@ -10,7 +10,7 @@ The project was renamed from ObscuraLink-MC/ObscuraLink because "Obscura" is alr
 > [!WARNING]
 > This codebase was **generated with AI assistance**. Review the implementation carefully, especially the cryptography, key storage, networking behavior, and dependency configuration, before using it in any real environment.
 > 
-> If possible, please run it in an **ISOLATED** environment, such as a virtual machine, to avoid potential security risks from build artifacts, such as the possibility that the maintainer’s computer has been infected with malware.
+> If possible, please run it in an **ISOLATED** environment, such as a virtual machine, **to avoid potential security risks from build artifacts, such as the possibility that the maintainer’s computer has been infected with malware.**
 >
 > If you discover any code security issues, or any copyright or licensing concerns, please report them in Issues. Thank you for your understanding.
 
@@ -45,13 +45,13 @@ Krypt04Mcg is a Fabric or NeoForge client mod that transports post-quantum encry
 This implementation targets:
 
 - Minecraft Java `26.3`
-- Fabric Loader `0.19.5`
-- Fabric API `0.162.0+26.3`
-- Loom `1.18.2`
+- Fabric Loader `0.20.1`
+- Fabric API `0.164.0+26.3`
+- Loom `1.19.2`
 - Gradle `9.8.0`
 - ModDevGradle `2.0.148`
 - JUnit `6.1.3`
-- NeoForge `26.3.0.83` (separate client build)
+- NeoForge `26.3.0.95` (separate client build)
 - Bouncy Castle `1.86`
 - Java `25`
 
@@ -103,14 +103,14 @@ large four-digit fragment counts. Existing relay configs should set `max-fragmen
 to `2048`. Relay aggregate/per-player/outbox text quotas are removed; packet size, message counts,
 fixed expiry and traffic budgets still apply. Raw stream API/file protocols are unchanged.
 
-Current version: **0.29.0** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
+Current version: **0.29.4** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
 for the new progress HUD, sender quotas, and upgrade notes in this release.
 
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag -a v0.29.0 -m "Release 0.29.0"
-git push origin v0.29.0
+git tag -a v0.29.4 -m "Release 0.29.4"
+git push origin v0.29.4
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -124,7 +124,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.29.0.jar.sign krypt04mcg-0.29.0.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.29.4.jar.sign krypt04mcg-0.29.4.jar
 ```
 
 ## License
