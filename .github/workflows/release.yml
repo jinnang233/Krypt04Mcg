@@ -199,14 +199,41 @@ jobs:
           done
 
           ls -la release-artifacts
-
+      
       - name: Generate snapshot tag
         id: snapshot
         shell: bash
         run: |
           echo "tag=snapshot-$(date -u +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
           echo "name=Snapshot $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_OUTPUT"
+      - name: Generate latest json
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.tag }}
+          RELEASE_NAME: ${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.name }}
+        run: |
+          MOD_VERSION_FABRIC="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          MOD_VERSION_NEOFORGE="$(sed -n 's/^mod_version=//p' neoforge/gradle.properties)"
+          MOD_RELEASE_TYPE_FABRIC="$(sed -n 's/^release_type=//p' gradle.properties)"
+          MOD_RELEASE_TYPE_NEOFORGE="$(sed -n 's/^release_type=//p' neoforge/gradle.properties)"
+          MOD_FABRIC_URL="https://github.com/${REPO}/releases/download/${TAG}/krypt04mcg-${MOD_VERSION_FABRIC}.jar"
+          MOD_NEOFORGE_URL="https://github.com/${REPO}/releases/download/${TAG}/krypt04mcg-neoforge-${MOD_VERSION_NEOFORGE}.jar"
+          SIGNATURE_POSTFIX=".sign"
 
+          version="${TAG#v}"
+          jq -n \
+            --arg tag "$TAG" \
+            --arg mod_version_fabric "$MOD_VERSION_FABRIC" \
+            --arg mod_version_neoforge "$MOD_VERSION_NEOFORGE" \
+            --arg mod_release_type_fabric "$MOD_RELEASE_TYPE_FABRIC" \
+            --arg mod_release_type_neoforge "$MOD_RELEASE_TYPE_NEOFORGE" \
+            --arg mod_fabric_url "$MOD_FABRIC_URL" \
+            --arg mod_neoforge_url "$MOD_NEOFORGE_URL" \
+            --arg signature_postfix "$SIGNATURE_POSTFIX" \
+            --arg release_name "$RELEASE_NAME" \
+            '{release_name:$release_name ,tag: $tag,mod_version_fabric: $mod_version_fabric, mod_version_neoforge: $mod_version_neoforge,mod_release_type_fabric: $mod_release_type_fabric, mod_release_type_neoforge: $mod_release_type_neoforge,mod_fabric_url:$mod_fabric_url,mod_neoforge_url:$mod_neoforge_url,mod_fabric_signature_url:$mod_fabric_url$signature_postfix,mod_neoforge_signature_url:$mod_neoforge_url$signature_postfix}' \
+            > release-artifacts/latest.json
       - name: VirusTotal Scan
         uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5
         with:
@@ -278,7 +305,7 @@ jobs:
           umask 077
           printf '%s\n' "$SIGN_PRIVATE_KEY" >private_key.pem
 
-          files=(release-artifacts/*.jar)
+          files=(release-artifacts/*.jar release-artifacts/latest.json)
           if [ ${#files[@]} -eq 0 ]; then
             echo "No JAR files found to sign"
             exit 1
@@ -311,4 +338,6 @@ jobs:
             release-artifacts/*.jar
             release-artifacts/*.jar.sign
             release-artifacts/THIRD_PARTY_NOTICES.md
+            release-artifacts/latest.json
+            release-artifacts/latest.json.sign
             public_key.pem
