@@ -38,7 +38,6 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
-import net.minecraft.locale.Language;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
@@ -145,7 +144,6 @@ public final class Krypt04McgMod implements ClientModInitializer {
                 sessionHandshakeService, chatSendService::sendPacket, this::system, conversationStore::incoming);
         chatReceiveHandler.setProgressListener(transferProgress);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> {
-            startUpdateCheckWhenReady(c);
             chatSendService.tick();
             chatReceiveHandler.tick();
         });
@@ -204,36 +202,24 @@ public final class Krypt04McgMod implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, joinedClient) -> {
             clearChatTransfers();
             showDisclaimer(joinedClient);
+            runUpdateCheck(joinedClient);
         });
         LOGGER.info("Krypt04Mcg initialized");
     }
 
     /**
-     * Starts the update check once the initial language load has completed. The chat HUD resolves
-     * translatable components when a message is added, so announcing an update during client
-     * initialization (before the language reload finishes) would leave the raw translation keys
-     * displayed in the chat.
-     *
-     * @param client the client used to determine whether the language is available
-     */
-    private void startUpdateCheckWhenReady(Minecraft client) {
-        if (updateCheckStarted || Language.getInstance() == Language.DEFAULT_INSTANCE) {
-            return;
-        }
-        updateCheckStarted = true;
-        runUpdateCheck(client);
-    }
-
-    /**
      * Checks the signed release metadata in the background. A verified newer release is only
-     * announced; no artifact is downloaded or installed automatically.
+     * announced; no artifact is downloaded or installed automatically. The check runs once, on the
+     * first join: joining implies the initial language load has completed, so the chat HUD can
+     * resolve the translatable notification instead of showing raw translation keys.
      *
      * @param client the client used to schedule the notification on the game thread
      */
     private void runUpdateCheck(Minecraft client) {
-        if (!config.enableUpdateCheck) {
+        if (updateCheckStarted || !config.enableUpdateCheck) {
             return;
         }
+        updateCheckStarted = true;
         String currentVersion = FabricLoader.getInstance().getModContainer(MOD_ID)
                 .map(container -> container.getMetadata().getVersion().getFriendlyString())
                 .orElse("");
