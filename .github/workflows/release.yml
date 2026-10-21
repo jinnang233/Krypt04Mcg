@@ -245,60 +245,78 @@ jobs:
       - name: Generate release notes
         shell: bash
         env:
-          RELEASE_NAME: ${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.name }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || steps.snapshot.outputs.tag }}
         run: |
           set -euo pipefail
 
           PREVIOUS_TAG="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
+          MINECRAFT_VERSION="$(sed -n 's/^minecraft_version=//p' gradle.properties)"
+          MOD_VERSION_FABRIC="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          MOD_VERSION_NEOFORGE="$(sed -n 's/^mod_version=//p' neoforge/gradle.properties)"
           MOD_RELEASE_TYPE_FABRIC="$(sed -n 's/^release_type=//p' gradle.properties)"
           MOD_RELEASE_TYPE_NEOFORGE="$(sed -n 's/^release_type=//p' neoforge/gradle.properties)"
+
+          FABRIC_JAR="krypt04mcg-${MOD_VERSION_FABRIC}.jar"
+          NEOFORGE_JAR="krypt04mcg-neoforge-${MOD_VERSION_NEOFORGE}.jar"
+          DOWNLOAD_BASE="https://github.com/${REPO}/releases/download/${TAG}"
+
           {
-            echo "# ${RELEASE_NAME}"
+            echo "Post-quantum encrypted messaging over ordinary Minecraft chat — Fabric and NeoForge builds for Minecraft ${MINECRAFT_VERSION}."
             echo
-            echo "## Release type"
+            echo "| Loader | Release type | Artifact |"
+            echo "| :--- | :--- | :--- |"
+            echo "| Fabric | \`${MOD_RELEASE_TYPE_FABRIC}\` | [\`${FABRIC_JAR}\`](${DOWNLOAD_BASE}/${FABRIC_JAR}) |"
+            echo "| NeoForge | \`${MOD_RELEASE_TYPE_NEOFORGE}\` | [\`${NEOFORGE_JAR}\`](${DOWNLOAD_BASE}/${NEOFORGE_JAR}) |"
             echo
-            echo "Krypt04Mcg-fabric: \`$MOD_RELEASE_TYPE_FABRIC\`"
-            echo "Krypt04Mcg-neoforge: \`$MOD_RELEASE_TYPE_NEOFORGE\`"
-            echo
-            echo "## Changelog"
+            echo "## What's Changed"
             echo
 
             if [ -n "$PREVIOUS_TAG" ]; then
               echo "Changes since \`${PREVIOUS_TAG}\`:"
               echo
-              git log "${PREVIOUS_TAG}..HEAD" --pretty=format:'- %s (%h)' || true
-            else
-              echo "No previous tag was found. Recent changes:"
+              git log "${PREVIOUS_TAG}..HEAD" --pretty=format:'- %s (%h)' | sed 's/ \[skip ci\]//g' || true
               echo
-              git log -20 --pretty=format:'- %s (%h)' || true
+              echo
+              echo "**Full Changelog**: https://github.com/${REPO}/compare/${PREVIOUS_TAG}...${TAG}"
+            else
+              echo "Recent changes:"
+              echo
+              git log -20 --pretty=format:'- %s (%h)' | sed 's/ \[skip ci\]//g' || true
+              echo
             fi
 
             echo
+            echo "## Verifying Downloads"
             echo
-            echo "## Build Artifacts"
+            echo "Each JAR has a detached \`.sign\` signature. Verify it with the attached \`public_key.pem\`:"
             echo
+            echo '```bash'
+            echo 'openssl dgst -sha256 -verify public_key.pem \'
+            echo '  -signature <artifact>.jar.sign <artifact>.jar'
+            echo '```'
+            echo
+            echo "<details>"
+            echo "<summary>SHA-256 checksums and VirusTotal scans</summary>"
+            echo
+            echo "| Artifact | SHA-256 | Scan |"
+            echo "| :--- | :--- | :--- |"
 
             shopt -s nullglob
             for file in release-artifacts/*.jar; do
               sha256="$(sha256sum "$file" | awk '{print $1}')"
               filename="$(basename "$file")"
-
-              echo "### ${filename}"
-              echo
-              echo "- SHA256: \`${sha256}\`"
-              echo "- VirusTotal: https://www.virustotal.com/gui/file/${sha256}"
-              echo
+              echo "| \`${filename}\` | \`${sha256}\` | [VirusTotal](https://www.virustotal.com/gui/file/${sha256}) |"
             done
 
-            echo "## Third-party Notices"
             echo
-            echo "Release JARs include bundled dependency notices at \`META-INF/THIRD-PARTY-NOTICES.md\`."
-            echo "The same notice file is attached as \`THIRD_PARTY_NOTICES.md\`."
+            echo "</details>"
             echo
-            echo "## Signature"
+            echo "Signed update metadata (\`latest.json\`) is attached for the in-game update check."
             echo
-            echo "Each JAR file is signed with the detached \`.sign\` file."
-            echo "The public key is included as \`public_key.pem\`."
+            echo "Third-party licenses are bundled in each JAR at \`META-INF/THIRD-PARTY-NOTICES.md\` and attached as \`THIRD_PARTY_NOTICES.md\`."
+            echo
+            echo "See the [README](https://github.com/${REPO}#readme) for installation, commands, and security notes."
           } > RELEASE_NOTE.md
 
           cat RELEASE_NOTE.md
