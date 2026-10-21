@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.29.7 — 2026-10-21 (joke build)
+
+- Add the `jokeMode` setting, enabled by default. While active, every player-initiated feature — commands, the encrypted chat panel, the key manager, file sharing, and the binary API — is suspended, and each attempt receives one of six randomly selected parental-complaint notices.
+- Show a clearly marked joke-build notice on every world join, including the installed version, a reminder that features are suspended, and how to switch joke mode off.
+- This release is typed `joke` and is never announced by the in-game update check. It is not a security update and is not intended for the regular release line.
+
 ## 0.29.0 — 2026-10-08
 
 - Increase encrypted chat capacity to 256 KiB per complete packet and 2,048 fragments, accepting four-digit indices/totals. Enlarge small configured slices when needed without exceeding the 256-character line limit. Reject oversized binary/encoded packets before retaining an entire oversized assembly.

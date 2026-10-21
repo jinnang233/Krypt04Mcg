@@ -2,6 +2,7 @@ package dev.krypt04mcg.chat;
 
 import com.google.gson.Gson;
 import dev.krypt04mcg.client.ClientMessages;
+import dev.krypt04mcg.client.JokeMode;
 import dev.krypt04mcg.config.Krypt04McgConfig;
 import dev.krypt04mcg.crypto.CryptoService;
 import dev.krypt04mcg.fragment.FragmentService;
@@ -139,6 +140,9 @@ public final class ChatSendService {
      * @return whether the condition or operation described above succeeds
      */
     public boolean sendKemMessage(String receiver, String message, boolean sign) {
+        if (jokeBlocked()) {
+            return false;
+        }
         try {
             PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
                     .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_public_key", receiver)));
@@ -156,12 +160,28 @@ public final class ChatSendService {
     }
 
     /**
+     * Reports whether joke mode blocks a player-initiated feature and emits the corresponding notice.
+     *
+     * @return true when the caller must stop without sending anything
+     */
+    private boolean jokeBlocked() {
+        if (!JokeMode.active(config)) {
+            return false;
+        }
+        system.accept(JokeMode.message());
+        return true;
+    }
+
+    /**
      * Returns the recorded true for the encrypted chat send service.
      *
      * @param receiver the intended recipient associated with this operation
      * @return whether the condition or operation described above succeeds
      */
     public boolean exchange(String receiver) {
+        if (jokeBlocked()) {
+            return false;
+        }
         try {
             PublicIdentity identity = keyStoreService.findPublicIdentity(receiver)
                     .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_public_key", receiver)));
@@ -186,6 +206,9 @@ public final class ChatSendService {
      * @return whether the condition or operation described above succeeds
      */
     public boolean sendSessionMessage(String receiver, String message) {
+        if (jokeBlocked()) {
+            return false;
+        }
         try {
             SessionRecord session = sessionService.find(receiver)
                     .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_session", receiver)));
@@ -229,6 +252,9 @@ public final class ChatSendService {
      * @param message the message supplied to this operation
      */
     public void sendGroupMessage(String groupName, List<String> members, String message) {
+        if (jokeBlocked()) {
+            return;
+        }
         if (members.isEmpty()) {
             system.accept(ClientMessages.tr("text.krypt04mcg.error.group_empty", groupName));
             return;
@@ -243,6 +269,9 @@ public final class ChatSendService {
      * Performs the resend latest operation for the encrypted chat send service.
      */
     public void resendLatest() {
+        if (jokeBlocked()) {
+            return;
+        }
         try {
             CachedSentMessage cached = sentMessageCacheService.latest()
                     .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_cached_message")));
@@ -258,6 +287,9 @@ public final class ChatSendService {
      * @param messageId the message identifier used for correlation or key-derivation context
      */
     public void resend(String messageId) {
+        if (jokeBlocked()) {
+            return;
+        }
         try {
             CachedSentMessage cached = sentMessageCacheService.find(messageId)
                     .orElseThrow(() -> new IllegalStateException(ClientMessages.tr("text.krypt04mcg.error.no_cached_message_id", messageId)));

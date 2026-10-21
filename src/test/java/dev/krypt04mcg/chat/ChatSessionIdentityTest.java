@@ -110,6 +110,7 @@ class ChatSessionIdentityTest {
         var sessions = new SessionService(root.resolve("bob"));
         var trust = new KeyTrustService(root.resolve("bob"));
         var config = new Krypt04McgConfig();
+        config.jokeMode = false;
         config.chatSendMode = ChatSendMode.CUSTOM_PAYLOAD;
         config.sendDelayMs = 0;
         var codec = new PacketCodec();

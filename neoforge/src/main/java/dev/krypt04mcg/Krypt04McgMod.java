@@ -4,6 +4,7 @@ import dev.krypt04mcg.chat.ChatReceiveHandler;
 import dev.krypt04mcg.chat.ChatConversationStore;
 import dev.krypt04mcg.chat.ChatSendService;
 import dev.krypt04mcg.chat.TransferProgressTracker;
+import dev.krypt04mcg.client.JokeMode;
 import dev.krypt04mcg.client.TransferProgressHud;
 import dev.krypt04mcg.client.ClientMessages;
 import dev.krypt04mcg.command.CommandRegistrar;
@@ -218,8 +219,12 @@ public final class Krypt04McgMod {
         });
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> {
             clearChatTransfers();
+            JokeMode.showJoinNotice(Minecraft.getInstance(), currentVersion(), JokeMode.active(config));
             showDisclaimer(Minecraft.getInstance());
         });
+        if (JokeMode.active(config)) {
+            LOGGER.warn("Krypt04Mcg joke build: every player-initiated feature is suspended (jokeMode=true)");
+        }
         runUpdateCheck(client);
         LOGGER.info("Krypt04Mcg initialized");
     }
@@ -234,13 +239,22 @@ public final class Krypt04McgMod {
         if (!config.enableUpdateCheck) {
             return;
         }
-        String currentVersion = container.getModInfo().getVersion().toString();
+        String currentVersion = currentVersion();
         UpdateChecker.checkAsync(currentVersion, UpdateChecker.Loader.NEOFORGE, update ->
                 client.execute(() -> {
                     if (config.enableUpdateCheck) {
                         showUpdateAvailable(client, update, currentVersion);
                     }
                 }));
+    }
+
+    /**
+     * Returns the installed mod version for notices and update checks.
+     *
+     * @return the version string reported by the mod container
+     */
+    private String currentVersion() {
+        return container.getModInfo().getVersion().toString();
     }
 
     /**
@@ -272,6 +286,10 @@ public final class Krypt04McgMod {
      */
     public void openKeyManagerScreen() {
         Minecraft client = Minecraft.getInstance();
+        if (JokeMode.active(config)) {
+            system(JokeMode.message());
+            return;
+        }
         if (chatSendService == null || keyStoreService == null) {
             return;
         }
@@ -284,6 +302,10 @@ public final class Krypt04McgMod {
      */
     public void openChatScreen() {
         Minecraft client = Minecraft.getInstance();
+        if (JokeMode.active(config)) {
+            system(JokeMode.message());
+            return;
+        }
         if (chatSendService == null || keyStoreService == null || client.player == null) {
             return;
         }

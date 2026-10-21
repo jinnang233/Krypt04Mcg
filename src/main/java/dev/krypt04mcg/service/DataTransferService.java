@@ -74,7 +74,7 @@ public final class DataTransferService implements AutoCloseable {
      *
      * @return whether the condition or operation described above succeeds
      */
-    private boolean active() { return !closed && available.getAsBoolean(); }
+    private boolean active() { return !closed && !config.jokeMode && available.getAsBoolean(); }
     /**
      * Performs the own operation for the encrypted API stream service.
      *

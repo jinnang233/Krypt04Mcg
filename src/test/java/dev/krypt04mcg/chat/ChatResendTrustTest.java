@@ -27,6 +27,7 @@ class ChatResendTrustTest {
         keys.init("Bob", "bob", KemAlgorithm.ML_KEM_768, SignatureAlgorithm.ML_DSA_44);
         keys.importPublicIdentity("Bob", JsonSupport.prettyGson().toJson(keys.ownPublicIdentity()));
         var config = new Krypt04McgConfig();
+        config.jokeMode = false;
         config.enableCompression = false;
         var chat = new ArrayList<ChatSendFragment>();
         var payload = new ArrayList<ChatSendFragment>();
@@ -62,6 +63,7 @@ class ChatResendTrustTest {
         keys.importPublicIdentity("Bob", JsonSupport.prettyGson().toJson(identity));
         var cache = new SentMessageCacheService(root);
         var config = new Krypt04McgConfig();
+        config.jokeMode = false;
         config.chatSendMode = ChatSendMode.CUSTOM_PAYLOAD;
         config.sendDelayMs = 0;
         var sent = new ArrayList<ChatSendFragment>();
@@ -96,6 +98,7 @@ class ChatResendTrustTest {
         cache.remember("cached", "Bob", List.of("encrypted-fragment"), KeyTrustService.fingerprintPair(identity));
         var sent = new ArrayList<ChatSendFragment>();
         var config = new Krypt04McgConfig();
+        config.jokeMode = false;
         config.chatSendMode = ChatSendMode.CUSTOM_PAYLOAD;
         config.sendDelayMs = 0;
         Object connection = new Object();
@@ -130,6 +133,7 @@ class ChatResendTrustTest {
         cache.remember("cached", "Bob", List.of("first", "remaining"), KeyTrustService.fingerprintPair(identity));
         var sent = new ArrayList<ChatSendFragment>();
         var config = new Krypt04McgConfig();
+        config.jokeMode = false;
         config.chatSendMode = ChatSendMode.CUSTOM_PAYLOAD;
         config.sendDelayMs = 0;
         Object connection = new Object();
@@ -179,7 +183,9 @@ class ChatResendTrustTest {
         assertNull(cache.find("legacy").orElseThrow().recipientFingerprint());
         var sent = new ArrayList<ChatSendFragment>();
         Object connection = new Object();
-        var service = new ChatSendService(new Krypt04McgConfig(), keys, new KeyTrustService(root),
+        var config = new Krypt04McgConfig();
+        config.jokeMode = false;
+        var service = new ChatSendService(config, keys, new KeyTrustService(root),
                 null, null, cache, crypto, null, null, sent::add, ignored -> {}, () -> connection);
         service.resendLatest();
         service.resend("legacy");

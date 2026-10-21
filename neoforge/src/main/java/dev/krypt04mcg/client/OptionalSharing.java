@@ -391,6 +391,7 @@ public final class OptionalSharing {
      * @return the result described above
      */
     private int run(Action action) {
+        if (JokeMode.active(config)) { message(JokeMode.plainMessage()); return 0; }
         try { action.run(); return 1; }
         catch (SharingProblem e) { message(e.getMessage()); return 0; }
         catch (Exception e) {

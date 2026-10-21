@@ -6,6 +6,8 @@ import me.shedaniel.autoconfig.annotation.ConfigEntry;
 
 @Config(name = "krypt04mcg")
 public final class ClothKrypt04McgConfig implements ConfigData {
+    @ConfigEntry.Gui.Tooltip
+    public boolean jokeMode = true;
     public boolean enableDataApi = false;
     /** Pre-registered raw channels, 1..256. Restart required when changed. */
     public int apiChannelCount = 16;
@@ -80,6 +82,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
      * @param config the config supplied to this operation
      */
     void copyTo(Krypt04McgConfig config) {
+        config.jokeMode = jokeMode;
         config.enableDataApi = enableDataApi;
         config.apiChannelCount = Math.clamp(apiChannelCount, 1, 256);
         config.apiReceiver = apiReceiver;

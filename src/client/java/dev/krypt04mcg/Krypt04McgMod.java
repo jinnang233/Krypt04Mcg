@@ -4,6 +4,7 @@ import dev.krypt04mcg.chat.ChatReceiveHandler;
 import dev.krypt04mcg.chat.ChatConversationStore;
 import dev.krypt04mcg.chat.ChatSendService;
 import dev.krypt04mcg.chat.TransferProgressTracker;
+import dev.krypt04mcg.client.JokeMode;
 import dev.krypt04mcg.client.TransferProgressHud;
 import dev.krypt04mcg.client.ClientMessages;
 import dev.krypt04mcg.command.CommandRegistrar;
@@ -200,8 +201,12 @@ public final class Krypt04McgMod implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, joinedClient) -> {
             clearChatTransfers();
+            JokeMode.showJoinNotice(joinedClient, currentVersion(), JokeMode.active(config));
             showDisclaimer(joinedClient);
         });
+        if (JokeMode.active(config)) {
+            LOGGER.warn("Krypt04Mcg joke build: every player-initiated feature is suspended (jokeMode=true)");
+        }
         runUpdateCheck(client);
         LOGGER.info("Krypt04Mcg initialized");
     }
@@ -216,15 +221,24 @@ public final class Krypt04McgMod implements ClientModInitializer {
         if (!config.enableUpdateCheck) {
             return;
         }
-        String currentVersion = FabricLoader.getInstance().getModContainer(MOD_ID)
-                .map(container -> container.getMetadata().getVersion().getFriendlyString())
-                .orElse("");
+        String currentVersion = currentVersion();
         UpdateChecker.checkAsync(currentVersion, UpdateChecker.Loader.FABRIC, update ->
                 client.execute(() -> {
                     if (config.enableUpdateCheck) {
                         showUpdateAvailable(client, update, currentVersion);
                     }
                 }));
+    }
+
+    /**
+     * Returns the installed mod version for notices and update checks.
+     *
+     * @return the friendly version string, or an empty string when the container is unavailable
+     */
+    private static String currentVersion() {
+        return FabricLoader.getInstance().getModContainer(MOD_ID)
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("");
     }
 
     /**
@@ -256,6 +270,10 @@ public final class Krypt04McgMod implements ClientModInitializer {
      */
     public void openKeyManagerScreen() {
         Minecraft client = Minecraft.getInstance();
+        if (JokeMode.active(config)) {
+            system(JokeMode.message());
+            return;
+        }
         if (chatSendService == null || keyStoreService == null) {
             return;
         }
@@ -268,6 +286,10 @@ public final class Krypt04McgMod implements ClientModInitializer {
      */
     public void openChatScreen() {
         Minecraft client = Minecraft.getInstance();
+        if (JokeMode.active(config)) {
+            system(JokeMode.message());
+            return;
+        }
         if (chatSendService == null || keyStoreService == null || client.player == null) {
             return;
         }

@@ -1,11 +1,15 @@
 package dev.krypt04mcg.command;
 
+import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.context.StringRange;
+import com.mojang.brigadier.tree.CommandNode;
 import dev.krypt04mcg.chat.ChatSendService;
+import dev.krypt04mcg.client.JokeMode;
 import dev.krypt04mcg.Krypt04McgMod;
 import dev.krypt04mcg.config.Krypt04McgConfig;
 import dev.krypt04mcg.model.GroupRecord;
@@ -62,13 +66,76 @@ public final class CommandRegistrar {
                                 Krypt04McgConfig config) {
         NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent event) -> {
             var dispatcher = event.getDispatcher();
-            dispatcher.register(rootCommand("Krypt04Mcg:enc", chatSendService, keyStoreService, keyTrustService,
-                    sessionService, decryptionHistoryService, groupService, config));
-            dispatcher.register(rootCommand("Krypt04Mcg:k04m", chatSendService, keyStoreService, keyTrustService,
-                    sessionService, decryptionHistoryService, groupService, config));
-            dispatcher.register(rootCommand("k04m", chatSendService, keyStoreService, keyTrustService,
-                    sessionService, decryptionHistoryService, groupService, config));
+            registerRoot(dispatcher, "Krypt04Mcg:enc", chatSendService, keyStoreService, keyTrustService,
+                    sessionService, decryptionHistoryService, groupService, config);
+            registerRoot(dispatcher, "Krypt04Mcg:k04m", chatSendService, keyStoreService, keyTrustService,
+                    sessionService, decryptionHistoryService, groupService, config);
+            registerRoot(dispatcher, "k04m", chatSendService, keyStoreService, keyTrustService,
+                    sessionService, decryptionHistoryService, groupService, config);
         });
+    }
+
+    /**
+     * Registers one command root and suspends all of its executable nodes while joke mode is enabled.
+     *
+     * @param dispatcher the client command dispatcher
+     * @param name the command root name
+     * @param chatSendService the chat send service supplied to this operation
+     * @param keyStoreService the key store service supplied to this operation
+     * @param keyTrustService the key trust service supplied to this operation
+     * @param sessionService the session service supplied to this operation
+     * @param decryptionHistoryService the decryption history service supplied to this operation
+     * @param groupService the group service supplied to this operation
+     * @param config the config supplied to this operation
+     */
+    private static void registerRoot(CommandDispatcher<CommandSourceStack> dispatcher, String name,
+                                     ChatSendService chatSendService, KeyStoreService keyStoreService,
+                                     KeyTrustService keyTrustService, SessionService sessionService,
+                                     DecryptionHistoryService decryptionHistoryService, GroupService groupService,
+                                     Krypt04McgConfig config) {
+        CommandNode<CommandSourceStack> root = rootCommand(name, chatSendService, keyStoreService,
+                keyTrustService, sessionService, decryptionHistoryService, groupService, config).build();
+        dispatcher.register(guardedRoot(root, config));
+    }
+
+    /**
+     * Restores the concrete literal type required by the dispatcher registration API.
+     *
+     * @param root the literal command root
+     * @param config the config supplied to this operation
+     * @return the guarded literal root
+     */
+    @SuppressWarnings("unchecked")
+    private static LiteralArgumentBuilder<CommandSourceStack> guardedRoot(
+            CommandNode<CommandSourceStack> root, Krypt04McgConfig config) {
+        return (LiteralArgumentBuilder<CommandSourceStack>) suspendInJokeMode(root, config);
+    }
+
+    /**
+     * Rebuilds a command subtree and replaces every executable node with a joke-mode gate that
+     * delegates normally when the switch is off.
+     *
+     * @param node the command node to guard
+     * @param config the config supplied to this operation
+     * @return the rebuilt, guarded subtree
+     */
+    private static ArgumentBuilder<CommandSourceStack, ?> suspendInJokeMode(
+            CommandNode<CommandSourceStack> node, Krypt04McgConfig config) {
+        ArgumentBuilder<CommandSourceStack, ?> builder = node.createBuilder();
+        var original = node.getCommand();
+        if (original != null) {
+            builder.executes(context -> {
+                if (JokeMode.active(config)) {
+                    context.getSource().sendSystemMessage(Component.literal(JokeMode.message()));
+                    return 0;
+                }
+                return original.run(context);
+            });
+        }
+        for (CommandNode<CommandSourceStack> child : node.getChildren()) {
+            builder.then(suspendInJokeMode(child, config));
+        }
+        return builder;
     }
     /**
      * Performs the open key manager operation for the command registrar.

@@ -1,6 +1,11 @@
 package dev.krypt04mcg.config;
 
 public class Krypt04McgConfig {
+    /**
+     * Joke-build switch. While enabled, every player-initiated mod feature is suspended
+     * and answered with a parental-complaint notice.
+     */
+    public boolean jokeMode = true;
     public boolean enableDataApi = false;
     /** Pre-registered raw channels, 1..256. Restart required when changed. */
     public int apiChannelCount = 16;

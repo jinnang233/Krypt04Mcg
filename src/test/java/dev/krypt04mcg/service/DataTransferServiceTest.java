@@ -595,7 +595,7 @@ class DataTransferServiceTest {
          * @throws Exception if the delegated operation cannot complete successfully
          */
         Pair() throws Exception {
-            config.enableDataApi = true; config.apiChannelCount = 2;
+            config.jokeMode = false; config.enableDataApi = true; config.apiChannelCount = 2;
             var crypto = new CryptoService();
             var a = new KeyStoreService(root.resolve("alice"), crypto);
             var b = new KeyStoreService(root.resolve("bob"), crypto);
