@@ -28,6 +28,7 @@ import dev.krypt04mcg.service.KeyTrustService;
 import dev.krypt04mcg.service.SentMessageCacheService;
 import dev.krypt04mcg.service.SessionService;
 import dev.krypt04mcg.service.SessionHandshakeService;
+import dev.krypt04mcg.update.UpdateChecker;
 import dev.krypt04mcg.util.AccountStorage;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.api.distmarker.Dist;
@@ -49,10 +50,12 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -82,6 +85,7 @@ public final class Krypt04McgMod {
     private TransferProgressTracker transferProgress;
     private TransferProgressHud transferProgressHud;
     private dev.krypt04mcg.service.DataTransferService dataApi;
+    private final ModContainer container;
 
     /**
      * Returns the recorded instance for the krypt04 mcg mod.
@@ -100,6 +104,7 @@ public final class Krypt04McgMod {
      */
     public Krypt04McgMod(IEventBus modBus, ModContainer container) {
         instance = this;
+        this.container = container;
         modBus.addListener(this::registerPayloads);
         modBus.addListener(this::registerClientPayloads);
         modBus.addListener((net.neoforged.neoforge.client.event.RegisterGuiLayersEvent event) ->
@@ -215,7 +220,51 @@ public final class Krypt04McgMod {
             clearChatTransfers();
             showDisclaimer(Minecraft.getInstance());
         });
+        runUpdateCheck(client);
         LOGGER.info("Krypt04Mcg initialized");
+    }
+
+    /**
+     * Checks the signed release metadata in the background. A verified newer release is only
+     * announced; no artifact is downloaded or installed automatically.
+     *
+     * @param client the client used to schedule the notification on the game thread
+     */
+    private void runUpdateCheck(Minecraft client) {
+        if (!config.enableUpdateCheck) {
+            return;
+        }
+        String currentVersion = container.getModInfo().getVersion().toString();
+        UpdateChecker.checkAsync(currentVersion, UpdateChecker.Loader.NEOFORGE, update ->
+                client.execute(() -> {
+                    if (config.enableUpdateCheck) {
+                        showUpdateAvailable(client, update, currentVersion);
+                    }
+                }));
+    }
+
+    /**
+     * Shows the verified newer release and its release-page link in chat.
+     *
+     * @param client the client whose chat HUD receives the notice
+     * @param update the verified newer release
+     * @param currentVersion the installed version
+     */
+    private void showUpdateAvailable(Minecraft client, UpdateChecker.UpdateInfo update, String currentVersion) {
+        if (client.gui == null) {
+            return;
+        }
+        Component link = Component.literal(update.releasePageUrl()).withStyle(style -> style
+                .withColor(ChatFormatting.AQUA)
+                .withUnderlined(true)
+                .withClickEvent(new ClickEvent.OpenUrl(URI.create(update.releasePageUrl()))));
+        client.gui.hud.getChat().addClientSystemMessage(Component.empty()
+                .append(Component.literal(ClientMessages.messagePrefixWithSpace()).withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
+                .append(Component.translatable("text.krypt04mcg.update.available", update.version(), currentVersion)
+                        .withStyle(ChatFormatting.GOLD)));
+        client.gui.hud.getChat().addClientSystemMessage(Component.empty()
+                .append(Component.literal(ClientMessages.messagePrefixWithSpace()).withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
+                .append(Component.translatable("text.krypt04mcg.update.link", link).withStyle(ChatFormatting.GRAY)));
     }
 
     /**
