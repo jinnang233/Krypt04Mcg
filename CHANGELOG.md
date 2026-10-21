@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.29.7 — 2026-10-21 (joke build)
+## 0.29.8 — 2026-10-21 (joke build)
 
+- Delay the update-check announcement until the client language has loaded, so announcements are no longer shown as raw translation keys.
 - Add the `jokeMode` setting, enabled by default. While active, every player-initiated feature — commands, the encrypted chat panel, the key manager, file sharing, and the binary API — is suspended, and each attempt receives one of six randomly selected parental-complaint notices.
 - Show a clearly marked joke-build notice on every world join, including the installed version, a reminder that features are suspended, and how to switch joke mode off.
 - This release is typed `joke` and is never announced by the in-game update check. It is not a security update and is not intended for the regular release line.

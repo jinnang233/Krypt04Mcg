@@ -26,7 +26,7 @@ Krypt04Mcg is an **EXPERIMENTAL** mod project. Its build environment, release ar
 Krypt04Mcg is a Fabric or NeoForge client mod that transports post-quantum encrypted chat packets through ordinary Minecraft chat. It uses compact binary packets, Base64URL transport encoding, automatic fragmentation, TOFU public-key storage, and authenticated AEAD encryption.
 
 > [!NOTE]
-> **Joke build.** This branch publishes version `0.29.7` with the `joke` release type. It adds a `jokeMode` setting that is enabled by default: every player-initiated mod feature is suspended, and each attempt is answered with a randomly selected parental-complaint notice. The in-game join notice clearly marks the build as a joke version. Turn `jokeMode` off in the Cloth Config screen to restore normal behavior. Joke releases are never announced by the update check, and this branch is not meant to be merged into the regular release line.
+> **Joke build.** This branch publishes version `0.29.8` with the `joke` release type. It adds a `jokeMode` setting that is enabled by default: every player-initiated mod feature is suspended, and each attempt is answered with a randomly selected parental-complaint notice. The in-game join notice clearly marks the build as a joke version. Turn `jokeMode` off in the Cloth Config screen to restore normal behavior. Joke releases are never announced by the update check, and this branch is not meant to be merged into the regular release line.
 
 ## Features
 
