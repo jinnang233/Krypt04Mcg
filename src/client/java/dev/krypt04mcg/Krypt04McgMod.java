@@ -38,6 +38,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
@@ -71,6 +72,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
     private ChatConversationStore conversationStore;
     private TransferProgressTracker transferProgress;
     private TransferProgressHud transferProgressHud;
+    private boolean updateCheckStarted;
 
     /**
      * Returns the recorded instance for the krypt04 mcg mod.
@@ -143,6 +145,7 @@ public final class Krypt04McgMod implements ClientModInitializer {
                 sessionHandshakeService, chatSendService::sendPacket, this::system, conversationStore::incoming);
         chatReceiveHandler.setProgressListener(transferProgress);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> {
+            startUpdateCheckWhenReady(c);
             chatSendService.tick();
             chatReceiveHandler.tick();
         });
@@ -202,8 +205,23 @@ public final class Krypt04McgMod implements ClientModInitializer {
             clearChatTransfers();
             showDisclaimer(joinedClient);
         });
-        runUpdateCheck(client);
         LOGGER.info("Krypt04Mcg initialized");
+    }
+
+    /**
+     * Starts the update check once the initial language load has completed. The chat HUD resolves
+     * translatable components when a message is added, so announcing an update during client
+     * initialization (before the language reload finishes) would leave the raw translation keys
+     * displayed in the chat.
+     *
+     * @param client the client used to determine whether the language is available
+     */
+    private void startUpdateCheckWhenReady(Minecraft client) {
+        if (updateCheckStarted || Language.getInstance() == Language.DEFAULT_INSTANCE) {
+            return;
+        }
+        updateCheckStarted = true;
+        runUpdateCheck(client);
     }
 
     /**
