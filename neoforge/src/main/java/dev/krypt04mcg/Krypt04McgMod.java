@@ -86,6 +86,7 @@ public final class Krypt04McgMod {
     private TransferProgressTracker transferProgress;
     private TransferProgressHud transferProgressHud;
     private dev.krypt04mcg.service.DataTransferService dataApi;
+    private boolean updateCheckStarted;
     private final ModContainer container;
 
     /**
@@ -221,24 +222,27 @@ public final class Krypt04McgMod {
             clearChatTransfers();
             JokeMode.showJoinNotice(Minecraft.getInstance(), currentVersion(), JokeMode.active(config));
             showDisclaimer(Minecraft.getInstance());
+            runUpdateCheck(Minecraft.getInstance());
         });
         if (JokeMode.active(config)) {
             LOGGER.warn("Krypt04Mcg joke build: every player-initiated feature is suspended (jokeMode=true)");
         }
-        runUpdateCheck(client);
         LOGGER.info("Krypt04Mcg initialized");
     }
 
     /**
      * Checks the signed release metadata in the background. A verified newer release is only
-     * announced; no artifact is downloaded or installed automatically.
+     * announced; no artifact is downloaded or installed automatically. The check runs once, on the
+     * first login: logging in implies the initial language load has completed, so the chat HUD can
+     * resolve the translatable notification instead of showing raw translation keys.
      *
      * @param client the client used to schedule the notification on the game thread
      */
     private void runUpdateCheck(Minecraft client) {
-        if (!config.enableUpdateCheck) {
+        if (updateCheckStarted || !config.enableUpdateCheck) {
             return;
         }
+        updateCheckStarted = true;
         String currentVersion = currentVersion();
         UpdateChecker.checkAsync(currentVersion, UpdateChecker.Loader.NEOFORGE, update ->
                 client.execute(() -> {
