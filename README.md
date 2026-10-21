@@ -40,6 +40,7 @@ Krypt04Mcg is a Fabric or NeoForge client mod that transports post-quantum encry
 - Optional Cloth AutoConfig-backed configuration.
 - Startup update check against the signed GitHub release metadata, with the SLH-DSA-SHAKE-256f signature verified against a public key bundled in the mod. It only announces a newer release and links to its release page; it never downloads or installs an artifact. Releases typed `joke`, `snapshot`, `alpha` or `beta` are not announced. Disable it with the `enableUpdateCheck` Cloth Config option.
 - Local plaintext echo for outgoing encrypted chat, enabled by default, showing the sender, recipient, and message. Toggle `showSentPlaintext` ("Show Sent Plaintext") in the Cloth Config screen to show or hide message contents in send notifications. Applies to unsigned, signed, session, and group messages sent through commands or the chat panel; network messages remain encrypted.
+- Bundled translations for 24 locales, including Arabic, Czech, Dutch, English, French, German, Greek, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese (Brazil and Portugal), Russian, Simplified and Traditional Chinese, Spanish (Spain and Mexico), Swedish, Turkish, Ukrainian and Vietnamese.
 
 ## Supported Versions
 
@@ -104,14 +105,14 @@ large four-digit fragment counts. Existing relay configs should set `max-fragmen
 to `2048`. Relay aggregate/per-player/outbox text quotas are removed; packet size, message counts,
 fixed expiry and traffic budgets still apply. Raw stream API/file protocols are unchanged.
 
-Current version: **0.29.4** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
-for the new progress HUD, sender quotas, and upgrade notes in this release.
+Current version: **0.29.10** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
+for release history and upgrade notes.
 
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag -a v0.29.4 -m "Release 0.29.4"
-git push origin v0.29.4
+git tag -a v0.29.10 -m "Release 0.29.10"
+git push origin v0.29.10
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -125,7 +126,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.29.4.jar.sign krypt04mcg-0.29.4.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.29.10.jar.sign krypt04mcg-0.29.10.jar
 ```
 
 ## License
