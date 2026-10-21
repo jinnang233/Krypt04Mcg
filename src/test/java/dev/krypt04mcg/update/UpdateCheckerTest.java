@@ -19,7 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class UpdateCheckerTest {
     private static final String METADATA_JSON =
-            "{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.3\",\"mod_version_neoforge\":\"1.2.3\"}";
+            "{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.3\","
+                    + "\"mod_version_neoforge\":\"1.2.3\","
+                    + "\"mod_release_type_fabric\":\"release\","
+                    + "\"mod_release_type_neoforge\":\"beta\"}";
 
     /**
      * Installs the Bouncy Castle provider used by the update-signature regression scenarios.
@@ -56,18 +59,56 @@ final class UpdateCheckerTest {
         assertEquals("1.2.3", UpdateChecker.parseMetadata(metadata, UpdateChecker.Loader.FABRIC).version());
         assertEquals("1.2.3", UpdateChecker.parseMetadata(metadata, UpdateChecker.Loader.NEOFORGE).version());
         assertEquals("v1.2.3", UpdateChecker.parseMetadata(metadata, UpdateChecker.Loader.FABRIC).tag());
+        assertEquals("release", UpdateChecker.parseMetadata(metadata, UpdateChecker.Loader.FABRIC).releaseType());
+        assertEquals("beta", UpdateChecker.parseMetadata(metadata, UpdateChecker.Loader.NEOFORGE).releaseType());
     }
 
     /**
-     * Verifies that snapshot tags, malformed versions and tag/version disagreements are rejected.
+     * Verifies that snapshot tags, malformed versions, missing release types and tag/version
+     * disagreements are rejected.
      */
     @Test
     void rejectsMetadataThatIsNotAStableMatchingRelease() {
-        assertRejected("{\"tag\":\"snapshot-20260101-000000\",\"mod_version_fabric\":\"1.2.3\"}");
-        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.4\"}");
-        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.3-beta\"}");
-        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":1.2}");
+        assertRejected("{\"tag\":\"snapshot-20260101-000000\",\"mod_version_fabric\":\"1.2.3\","
+                + "\"mod_release_type_fabric\":\"snapshot\"}");
+        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.4\","
+                + "\"mod_release_type_fabric\":\"release\"}");
+        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.3-beta\","
+                + "\"mod_release_type_fabric\":\"beta\"}");
+        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":1.2,"
+                + "\"mod_release_type_fabric\":\"release\"}");
+        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.3\"}");
+        assertRejected("{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.3\","
+                + "\"mod_release_type_fabric\":\" \"}");
         assertRejected("not json");
+    }
+
+    /**
+     * Verifies that joke, snapshot, alpha and beta releases are never announced, while stable
+     * release types still are.
+     *
+     * @throws Exception if the fixture signature cannot be produced
+     */
+    @Test
+    void suppressesPrereleaseTypesFromUpdatePrompt() throws Exception {
+        KeyPair pair = generateKeyPair();
+        for (String releaseType : new String[]{"joke", "snapshot", "alpha", "beta", "ALPHA", " Beta "}) {
+            byte[] metadata = metadataWithReleaseType(releaseType).getBytes(StandardCharsets.UTF_8);
+            assertTrue(UpdateChecker.evaluate(metadata, sign(pair, metadata), pair.getPublic(),
+                    "1.2.2", UpdateChecker.Loader.FABRIC).isEmpty(), releaseType);
+        }
+        for (String releaseType : new String[]{"release", "stable", "lts", "patch"}) {
+            byte[] metadata = metadataWithReleaseType(releaseType).getBytes(StandardCharsets.UTF_8);
+            assertTrue(UpdateChecker.evaluate(metadata, sign(pair, metadata), pair.getPublic(),
+                    "1.2.2", UpdateChecker.Loader.FABRIC).isPresent(), releaseType);
+        }
+
+        byte[] loaderSpecific = METADATA_JSON.getBytes(StandardCharsets.UTF_8);
+        byte[] loaderSpecificSignature = sign(pair, loaderSpecific);
+        assertTrue(UpdateChecker.evaluate(loaderSpecific, loaderSpecificSignature, pair.getPublic(),
+                "1.2.2", UpdateChecker.Loader.FABRIC).isPresent());
+        assertTrue(UpdateChecker.evaluate(loaderSpecific, loaderSpecificSignature, pair.getPublic(),
+                "1.2.2", UpdateChecker.Loader.NEOFORGE).isEmpty());
     }
 
     /**
@@ -105,7 +146,8 @@ final class UpdateCheckerTest {
         assertTrue(UpdateChecker.evaluate(tampered, signature, pair.getPublic(), "1.2.2",
                 UpdateChecker.Loader.FABRIC).isEmpty());
 
-        byte[] mismatched = "{\"tag\":\"v1.2.4\",\"mod_version_fabric\":\"1.2.3\"}"
+        byte[] mismatched = ("{\"tag\":\"v1.2.4\",\"mod_version_fabric\":\"1.2.3\","
+                + "\"mod_release_type_fabric\":\"release\"}")
                 .getBytes(StandardCharsets.UTF_8);
         assertTrue(UpdateChecker.evaluate(mismatched, sign(pair, mismatched), pair.getPublic(), "1.2.2",
                 UpdateChecker.Loader.FABRIC).isEmpty());
@@ -120,6 +162,17 @@ final class UpdateCheckerTest {
     void loadsBundledSlhDsaSigningKey() throws Exception {
         PublicKey key = UpdateChecker.loadPublicKey();
         assertTrue(key.getAlgorithm().toUpperCase(java.util.Locale.ROOT).contains("SLH-DSA-SHAKE-256F"));
+    }
+
+    /**
+     * Builds a signed-metadata fixture with the supplied Fabric release type.
+     *
+     * @param releaseType the release type to embed
+     * @return the metadata JSON
+     */
+    private static String metadataWithReleaseType(String releaseType) {
+        return "{\"tag\":\"v1.2.3\",\"mod_version_fabric\":\"1.2.3\","
+                + "\"mod_release_type_fabric\":\"" + releaseType + "\"}";
     }
 
     /**

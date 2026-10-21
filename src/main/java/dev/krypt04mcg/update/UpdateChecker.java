@@ -22,7 +22,9 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -32,7 +34,8 @@ import java.util.regex.Pattern;
  * <p>The release metadata and its detached signature are fetched over HTTPS, and the signature is
  * verified with the public key bundled in this mod before any field is used. The downloaded key
  * shown on the release page is intentionally not trusted for verification. The check never
- * downloads or executes a release artifact; it only reports the release page to the player.</p>
+ * downloads or executes a release artifact; it only reports the release page to the player.
+ * Releases typed {@code joke}, {@code snapshot}, {@code alpha} or {@code beta} are not announced.</p>
  */
 public final class UpdateChecker {
     public static final String LATEST_METADATA_URL =
@@ -47,10 +50,16 @@ public final class UpdateChecker {
     private static final String KEY_ALGORITHM = "SLH-DSA";
     private static final String BC = BouncyCastleProvider.PROVIDER_NAME;
 
+    /**
+     * Release types that are not announced by the in-game update check.
+     */
+    private static final Set<String> SUPPRESSED_RELEASE_TYPES = Set.of("joke", "snapshot", "alpha", "beta");
+
     private static final int MAX_METADATA_BYTES = 16 * 1024;
     private static final int MAX_SIGNATURE_BYTES = 64 * 1024;
     private static final int MAX_PUBLIC_KEY_BYTES = 4 * 1024;
     private static final int MAX_VERSION_LENGTH = 64;
+    private static final int MAX_RELEASE_TYPE_LENGTH = 32;
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
     private static final Pattern VERSION_TAG = Pattern.compile("^v[0-9]+(?:\\.[0-9]+)*$");
@@ -66,20 +75,26 @@ public final class UpdateChecker {
     }
 
     /**
-     * Selects the loader-specific version field in the signed release metadata.
+     * Selects the loader-specific version and release-type fields in the signed release metadata.
      */
     public enum Loader {
-        FABRIC("mod_version_fabric"),
-        NEOFORGE("mod_version_neoforge");
+        FABRIC("mod_version_fabric", "mod_release_type_fabric"),
+        NEOFORGE("mod_version_neoforge", "mod_release_type_neoforge");
 
         private final String versionField;
+        private final String releaseTypeField;
 
-        Loader(String versionField) {
+        Loader(String versionField, String releaseTypeField) {
             this.versionField = versionField;
+            this.releaseTypeField = releaseTypeField;
         }
 
         String versionField() {
             return versionField;
+        }
+
+        String releaseTypeField() {
+            return releaseTypeField;
         }
     }
 
@@ -158,6 +173,10 @@ public final class UpdateChecker {
         if (!isNewer(latest.version(), currentVersion)) {
             return Optional.empty();
         }
+        if (isSuppressedReleaseType(latest.releaseType())) {
+            LOGGER.debug("Not announcing Krypt04Mcg {} release {}", latest.releaseType(), latest.tag());
+            return Optional.empty();
+        }
         return Optional.of(new UpdateInfo(latest.tag(), latest.version(), RELEASE_PAGE_PREFIX + latest.tag()));
     }
 
@@ -214,11 +233,12 @@ public final class UpdateChecker {
     }
 
     /**
-     * Parses the already-verified release metadata and requires the tag and version field to
-     * describe the same numeric version. Snapshot tags are ignored.
+     * Parses the already-verified release metadata and requires the tag, version and release-type
+     * fields to be well formed. The tag and version field must describe the same numeric version.
+     * Snapshot tags are ignored.
      *
      * @param metadata the verified metadata bytes
-     * @param loader the loader whose metadata version field applies
+     * @param loader the loader whose metadata fields apply
      * @return the parsed release metadata
      * @throws IOException if a required field is missing or malformed
      */
@@ -235,16 +255,32 @@ public final class UpdateChecker {
         }
         String tag = requireString(object, "tag");
         String version = requireString(object, loader.versionField());
+        String releaseType = requireString(object, loader.releaseTypeField());
         if (tag.length() > MAX_VERSION_LENGTH || !VERSION_TAG.matcher(tag).matches()) {
             throw new IOException("Update metadata tag is not a supported release tag");
         }
         if (version.length() > MAX_VERSION_LENGTH || !VERSION_FIELD.matcher(version).matches()) {
             throw new IOException("Update metadata version is malformed");
         }
+        if (releaseType.isBlank() || releaseType.length() > MAX_RELEASE_TYPE_LENGTH) {
+            throw new IOException("Update metadata release type is malformed");
+        }
         if (compareVersions(tag.substring(1), version) != 0) {
             throw new IOException("Update metadata tag and version disagree");
         }
-        return new LatestMetadata(tag, version);
+        return new LatestMetadata(tag, version, releaseType);
+    }
+
+    /**
+     * Reports whether an update prompt should be suppressed for the given release type. Joke,
+     * snapshot, alpha and beta releases are never announced as available updates.
+     *
+     * @param releaseType the verified release type
+     * @return whether the release should not be announced
+     */
+    static boolean isSuppressedReleaseType(String releaseType) {
+        return releaseType != null
+                && SUPPRESSED_RELEASE_TYPES.contains(releaseType.trim().toLowerCase(Locale.ROOT));
     }
 
     /**
@@ -389,7 +425,8 @@ public final class UpdateChecker {
      *
      * @param tag the release tag
      * @param version the loader-specific version
+     * @param releaseType the loader-specific release type
      */
-    record LatestMetadata(String tag, String version) {
+    record LatestMetadata(String tag, String version, String releaseType) {
     }
 }
