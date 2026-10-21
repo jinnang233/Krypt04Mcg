@@ -1,0 +1,144 @@
+# Verifies that every bundled language file defines exactly the same keys as
+# the canonical English file, so no locale silently falls back to en_us.
+name: Language Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  language:
+    name: Check language completeness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Verify language files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          LANG_DIR = Path("src/main/resources/assets/krypt04mcg/lang")
+          REFERENCE = LANG_DIR / "en_us.json"
+          MAX_LISTED = 20
+
+
+          def load_entries(path):
+              """Parse a language file, collecting duplicate keys along the way."""
+              duplicates = []
+
+              def collect_pairs(pairs):
+                  entries = {}
+                  for key, value in pairs:
+                      if key in entries:
+                          duplicates.append(key)
+                      entries[key] = value
+                  return entries
+
+              with path.open(encoding="utf-8-sig") as handle:
+                  return json.load(handle, object_pairs_hook=collect_pairs), duplicates
+
+
+          def short_list(keys):
+              shown = ", ".join(keys[:MAX_LISTED])
+              if len(keys) > MAX_LISTED:
+                  shown += f", ... (+{len(keys) - MAX_LISTED} more)"
+              return shown
+
+
+          def validate(path, entries, duplicates, reference_keys):
+              problems = []
+              if not isinstance(entries, dict):
+                  return ["top-level JSON value must be an object"]
+
+              problems.extend(f"duplicate key: {key}" for key in duplicates)
+
+              for key, value in entries.items():
+                  if not isinstance(value, str):
+                      problems.append(f"non-string value for key: {key}")
+                  elif not value.strip():
+                      problems.append(f"empty value for key: {key}")
+
+              if reference_keys is not None:
+                  missing = sorted(reference_keys - entries.keys())
+                  extra = sorted(entries.keys() - reference_keys)
+                  if missing:
+                      problems.append(
+                          f"{len(missing)} key(s) missing compared to {REFERENCE.name}: "
+                          f"{short_list(missing)}"
+                      )
+                  if extra:
+                      problems.append(
+                          f"{len(extra)} key(s) not present in {REFERENCE.name}: "
+                          f"{short_list(extra)}"
+                      )
+
+              return problems
+
+
+          def report(path, message):
+              print(f"::error file={path}::{message}")
+
+
+          def main():
+              if not REFERENCE.is_file():
+                  report(REFERENCE, "Reference language file is missing.")
+                  return 1
+
+              try:
+                  reference, duplicates = load_entries(REFERENCE)
+              except json.JSONDecodeError as exc:
+                  report(REFERENCE, f"Invalid JSON: {exc}")
+                  return 1
+
+              problems = validate(REFERENCE, reference, duplicates, None)
+              if problems:
+                  for problem in problems:
+                      report(REFERENCE, problem)
+                  return 1
+
+              reference_keys = set(reference)
+              files = sorted(LANG_DIR.glob("*.json"))
+              print(f"Reference: {REFERENCE} ({len(reference_keys)} keys)")
+              print(f"Checking {len(files)} language file(s):\n")
+
+              failures = 0
+              for path in files:
+                  if path == REFERENCE:
+                      print(f"  {path.name}: OK ({len(reference)} keys)")
+                      continue
+
+                  try:
+                      entries, duplicates = load_entries(path)
+                  except json.JSONDecodeError as exc:
+                      failures += 1
+                      print(f"  {path.name}: FAILED")
+                      report(path, f"Invalid JSON: {exc}")
+                      continue
+
+                  problems = validate(path, entries, duplicates, reference_keys)
+                  if problems:
+                      failures += 1
+                      print(f"  {path.name}: FAILED")
+                      for problem in problems:
+                          report(path, problem)
+                  else:
+                      print(f"  {path.name}: OK ({len(entries)} keys)")
+
+              if failures:
+                  print(f"\n{failures} language file(s) failed validation.")
+                  return 1
+
+              print("\nAll language files are complete and consistent.")
+              return 0
+
+
+          sys.exit(main())
+          PY
