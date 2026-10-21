@@ -23,8 +23,9 @@ final class AlgorithmConfigTest {
      * @throws Exception if the delegated operation cannot complete successfully
      */
     @ParameterizedTest
-    @ValueSource(strings = {"ar_sa", "de_de", "en_us", "es_es", "fr_fr", "hi_in", "id_id", "it_it",
-            "ja_jp", "ko_kr", "pl_pl", "pt_br", "ru_ru", "tr_tr", "uk_ua", "vi_vn", "zh_cn", "zh_tw"})
+    @ValueSource(strings = {"ar_sa", "cs_cz", "de_de", "el_gr", "en_us", "es_es", "es_mx", "fr_fr",
+            "hi_in", "id_id", "it_it", "ja_jp", "ko_kr", "nl_nl", "pl_pl", "pt_br", "pt_pt", "ru_ru",
+            "sv_se", "tr_tr", "uk_ua", "vi_vn", "zh_cn", "zh_tw"})
     void everyAlgorithmHasLocalizedDropdownLabels(String locale) throws Exception {
         String resource = "/assets/krypt04mcg/lang/" + locale + ".json";
         try (var reader = new InputStreamReader(getClass().getResourceAsStream(resource), StandardCharsets.UTF_8)) {
