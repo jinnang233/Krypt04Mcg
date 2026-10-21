@@ -28,6 +28,7 @@ import dev.krypt04mcg.service.KeyTrustService;
 import dev.krypt04mcg.service.SentMessageCacheService;
 import dev.krypt04mcg.service.SessionService;
 import dev.krypt04mcg.service.SessionHandshakeService;
+import dev.krypt04mcg.update.UpdateChecker;
 import dev.krypt04mcg.util.AccountStorage;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
@@ -37,10 +38,12 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -199,7 +202,53 @@ public final class Krypt04McgMod implements ClientModInitializer {
             clearChatTransfers();
             showDisclaimer(joinedClient);
         });
+        runUpdateCheck(client);
         LOGGER.info("Krypt04Mcg initialized");
+    }
+
+    /**
+     * Checks the signed release metadata in the background. A verified newer release is only
+     * announced; no artifact is downloaded or installed automatically.
+     *
+     * @param client the client used to schedule the notification on the game thread
+     */
+    private void runUpdateCheck(Minecraft client) {
+        if (!config.enableUpdateCheck) {
+            return;
+        }
+        String currentVersion = FabricLoader.getInstance().getModContainer(MOD_ID)
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("");
+        UpdateChecker.checkAsync(currentVersion, UpdateChecker.Loader.FABRIC, update ->
+                client.execute(() -> {
+                    if (config.enableUpdateCheck) {
+                        showUpdateAvailable(client, update, currentVersion);
+                    }
+                }));
+    }
+
+    /**
+     * Shows the verified newer release and its release-page link in chat.
+     *
+     * @param client the client whose chat HUD receives the notice
+     * @param update the verified newer release
+     * @param currentVersion the installed version
+     */
+    private void showUpdateAvailable(Minecraft client, UpdateChecker.UpdateInfo update, String currentVersion) {
+        if (client.gui == null) {
+            return;
+        }
+        Component link = Component.literal(update.releasePageUrl()).withStyle(style -> style
+                .withColor(ChatFormatting.AQUA)
+                .withUnderlined(true)
+                .withClickEvent(new ClickEvent.OpenUrl(URI.create(update.releasePageUrl()))));
+        client.gui.hud.getChat().addClientSystemMessage(Component.empty()
+                .append(Component.literal(ClientMessages.messagePrefixWithSpace()).withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
+                .append(Component.translatable("text.krypt04mcg.update.available", update.version(), currentVersion)
+                        .withStyle(ChatFormatting.GOLD)));
+        client.gui.hud.getChat().addClientSystemMessage(Component.empty()
+                .append(Component.literal(ClientMessages.messagePrefixWithSpace()).withStyle(ChatFormatting.RED, ChatFormatting.BOLD))
+                .append(Component.translatable("text.krypt04mcg.update.link", link).withStyle(ChatFormatting.GRAY)));
     }
 
     /**

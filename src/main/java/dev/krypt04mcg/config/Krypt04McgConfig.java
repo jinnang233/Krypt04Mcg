@@ -16,6 +16,7 @@ public class Krypt04McgConfig {
     public boolean showReceiveProgress = true;
     public boolean enableConversationHistory = false;
     public boolean showDisclaimerWarning = true;
+    public boolean enableUpdateCheck = true;
 
     public int fragmentSize = 180;
 

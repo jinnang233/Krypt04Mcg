@@ -38,6 +38,7 @@ Krypt04Mcg is a Fabric or NeoForge client mod that transports post-quantum encry
 - Automatic chat fragmentation and out-of-order reassembly.
 - Timeout cleanup and bounded receive caches.
 - Optional Cloth AutoConfig-backed configuration.
+- Startup update check against the signed GitHub release metadata, with the SLH-DSA-SHAKE-256f signature verified against a public key bundled in the mod. It only announces a newer release and links to its release page; it never downloads or installs an artifact. Disable it with the `enableUpdateCheck` Cloth Config option.
 - Local plaintext echo for outgoing encrypted chat, enabled by default, showing the sender, recipient, and message. Toggle `showSentPlaintext` ("Show Sent Plaintext") in the Cloth Config screen to show or hide message contents in send notifications. Applies to unsigned, signed, session, and group messages sent through commands or the chat panel; network messages remain encrypted.
 
 ## Supported Versions

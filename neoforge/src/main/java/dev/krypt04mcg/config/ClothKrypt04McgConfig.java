@@ -21,6 +21,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
     public boolean showReceiveProgress = true;
     public boolean enableConversationHistory = false;
     public boolean showDisclaimerWarning = true;
+    public boolean enableUpdateCheck = true;
 
     @ConfigEntry.BoundedDiscrete(min = 64, max = 200)
     public int fragmentSize = 180;
@@ -93,6 +94,7 @@ public final class ClothKrypt04McgConfig implements ConfigData {
         config.showReceiveProgress = showReceiveProgress;
         config.enableConversationHistory = enableConversationHistory;
         config.showDisclaimerWarning = showDisclaimerWarning;
+        config.enableUpdateCheck = enableUpdateCheck;
         config.fragmentSize = fragmentSize;
         config.sendDelayMs = sendDelayMs;
         config.sessionTtlMinutes = sessionTtlMinutes;
