@@ -105,14 +105,14 @@ large four-digit fragment counts. Existing relay configs should set `max-fragmen
 to `2048`. Relay aggregate/per-player/outbox text quotas are removed; packet size, message counts,
 fixed expiry and traffic budgets still apply. Raw stream API/file protocols are unchanged.
 
-Current version: **0.29.10** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
+Current version: **0.29.11** for Fabric and NeoForge. See [CHANGELOG.md](CHANGELOG.md)
 for release history and upgrade notes.
 
 GitHub Actions builds the mod and publishes release artifacts automatically when a tag matching `v*` is pushed:
 
 ```bash
-git tag -a v0.29.10 -m "Release 0.29.10"
-git push origin v0.29.10
+git tag -a v0.29.11 -m "Release 0.29.11"
+git push origin v0.29.11
 ```
 
 The release workflow can also be triggered manually from the Actions tab. Manual builds are published under generated `snapshot-YYYYMMDD-HHMMSS` tags.
@@ -126,7 +126,7 @@ Release artifacts include:
 To verify a downloaded release JAR:
 
 ```bash
-openssl dgst -verify public_key.pem -signature krypt04mcg-0.29.10.jar.sign krypt04mcg-0.29.10.jar
+openssl dgst -verify public_key.pem -signature krypt04mcg-0.29.11.jar.sign krypt04mcg-0.29.11.jar
 ```
 
 ## License
