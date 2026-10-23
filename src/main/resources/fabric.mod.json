@@ -17,6 +17,9 @@
     ],
     "modmenu": [
       "dev.krypt04mcg.config.Krypt04McgModMenu"
+    ],
+    "preLaunch": [
+      "dev.krypt04mcg.prelaunch.BcprovClasspathBootstrap"
     ]
   },
   "depends": {
