@@ -39,6 +39,9 @@ loom {
     }
 }
 
+configurations {
+    bcprovEmbedded
+}
 /**
  * Declares external libraries and test dependencies; cryptographic behavior belongs to runtime code.
  */
@@ -50,12 +53,21 @@ dependencies {
     compileOnly "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
     compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 
-    implementation "org.bouncycastle:bcprov-jdk18on:${project.bouncycastle_version}"
-    include "org.bouncycastle:bcprov-jdk18on:${project.bouncycastle_version}"
+    
+    compileOnly(
+        "org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"
+    )
 
+    bcprovEmbedded(
+        "org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"
+    )
+    
     testImplementation platform("org.junit:junit-bom:${project.junit_version}")
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+    testImplementation(
+        "org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"
+    )
 }
 
 /**
@@ -89,4 +101,10 @@ java {
  */
 test {
     useJUnitPlatform()
+}
+tasks.named('jar', Jar) {
+    from(configurations.bcprovEmbedded) {
+        into('META-INF/krypt04mcg-libs')
+        rename { 'bcprov.jar' }
+    }
 }
